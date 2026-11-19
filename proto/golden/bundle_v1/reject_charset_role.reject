@@ -1,0 +1,3 @@
+reason: schema
+go: rbac "spiffe://ops/bob": role name empty, too long or with invalid characters
+cpp: role name has invalid characters or is too long

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miracache"
+version = "0.0.1"
+description = "Remote KV-cache tier over RDMA (ctypes binding over libmiracache.so)"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = []
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+packages = ["miracache", "miracache.vllm"]
+include-package-data = true
+
+# libmiracache.so must sit in python/miracache/ before `pip wheel --no-deps --no-build-isolation .`
+# (copy build/dev/client/libmiracache.so there). Offline / no-setuptools fallback that needs only
+# the standard library: build the wheel with a small script that bundles the .so itself.
+[tool.setuptools.package-data]
+miracache = ["libmiracache.so", "_core.pyi"]

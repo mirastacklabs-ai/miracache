@@ -1,0 +1,3 @@
+reason: schema
+go: node weight is required
+cpp: weight is required

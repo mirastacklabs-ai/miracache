@@ -1,0 +1,3 @@
+reason: schema
+go: node 0: admin must be printable ASCII host:port, at most 255 bytes
+cpp: admin must be printable ASCII host:port, at most 255 bytes

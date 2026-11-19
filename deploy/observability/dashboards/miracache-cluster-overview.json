@@ -1,0 +1,72 @@
+{
+  "__inputs": [
+    {"name": "DS_PROMETHEUS", "label": "Prometheus", "description": "Prometheus scraping the memory nodes (:9464)", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus"}
+  ],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}
+  ],
+  "title": "miracache / Cluster overview",
+  "uid": "miracache-overview",
+  "tags": ["miracache"],
+  "schemaVersion": 38,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "templating": {
+    "list": [
+      {"name": "node_id", "label": "Node ID", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": {"query": "label_values(miracache_node_info, node_id)", "refId": "v1"}, "definition": "label_values(miracache_node_info, node_id)", "refresh": 2, "multi": true, "includeAll": true, "allValue": ".+", "current": {"text": "All", "value": "$__all"}},
+      {"name": "hostname", "label": "Hostname", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": {"query": "label_values(miracache_node_info{node_id=~\"$node_id\"}, hostname)", "refId": "v2"}, "definition": "label_values(miracache_node_info{node_id=~\"$node_id\"}, hostname)", "refresh": 2, "multi": true, "includeAll": true, "allValue": ".+", "current": {"text": "All", "value": "$__all"}}
+    ]
+  },
+  "panels": [
+    {"id": 1, "type": "table", "title": "Memory nodes (hostname, node ID, addresses, build)", "gridPos": {"x": 0, "y": 0, "w": 24, "h": 7}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "instant": true, "format": "table", "expr": "miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"} * on(instance,node_id) group_left(version) miracache_build_info"}],
+      "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": true, "Value": true, "__name__": true, "job": true}}}]},
+    {"id": 2, "type": "timeseries", "title": "Hit rate per memory node", "gridPos": {"x": 0, "y": 7, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{hostname}} ({{node_id}})", "expr": "sum by (instance,node_id) (rate(miracache_lookup_keys_total{result=\"hit\", node_id=~\"$node_id\"}[5m])) / sum by (instance,node_id) (rate(miracache_lookup_keys_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 3, "type": "timeseries", "title": "Lookup keys/s per memory node (hit + miss)", "gridPos": {"x": 12, "y": 7, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{hostname}} ({{node_id}}) {{result}}", "expr": "sum by (instance,node_id,result) (rate(miracache_lookup_keys_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 4, "type": "timeseries", "title": "Fetch latency p50 / p99 (client-measured, end to end; targets in spec section 12)", "gridPos": {"x": 0, "y": 15, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "legendFormat": "p50 {{instance}}", "expr": "histogram_quantile(0.50, sum by (le,instance) (rate(miracache_client_fetch_seconds_bucket{stage=\"total\"}[5m])))"},
+        {"refId": "B", "legendFormat": "p99 {{instance}}", "expr": "histogram_quantile(0.99, sum by (le,instance) (rate(miracache_client_fetch_seconds_bucket{stage=\"total\"}[5m])))"}]},
+    {"id": 5, "type": "timeseries", "title": "Put commit latency p50 / p99 per memory node", "gridPos": {"x": 12, "y": 15, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "legendFormat": "p50 {{hostname}} ({{node_id}})", "expr": "histogram_quantile(0.50, sum by (le,instance,node_id) (rate(miracache_put_commit_seconds_bucket{node_id=~\"$node_id\"}[5m]))) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"},
+        {"refId": "B", "legendFormat": "p99 {{hostname}} ({{node_id}})", "expr": "histogram_quantile(0.99, sum by (le,instance,node_id) (rate(miracache_put_commit_seconds_bucket{node_id=~\"$node_id\"}[5m]))) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 6, "type": "timeseries", "title": "Bytes put per second per memory node (by result)", "gridPos": {"x": 0, "y": 23, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{hostname}} ({{node_id}}) {{result}}", "expr": "sum by (instance,node_id,result) (rate(miracache_put_bytes_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 7, "type": "timeseries", "title": "Bytes fetched per second (client-measured, by result)", "gridPos": {"x": 12, "y": 23, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{instance}} {{result}}", "expr": "sum by (instance,result) (rate(miracache_client_fetch_bytes_total[5m]))"}]},
+    {"id": 8, "type": "timeseries", "title": "Store bytes by state per memory node", "gridPos": {"x": 0, "y": 31, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{hostname}} ({{node_id}}) {{state}}", "expr": "sum by (instance,node_id,state) (miracache_store_bytes{node_id=~\"$node_id\"}) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 9, "type": "timeseries", "title": "Open scopes per memory node", "gridPos": {"x": 12, "y": 31, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "legendFormat": "{{hostname}} ({{node_id}})", "expr": "sum by (instance,node_id) (miracache_scope_open{node_id=~\"$node_id\"}) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 10, "type": "timeseries", "title": "Evicted bytes per second by reason", "gridPos": {"x": 0, "y": 39, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{hostname}} ({{node_id}}) {{reason}}", "expr": "sum by (instance,node_id,reason) (rate(miracache_evict_bytes_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 11, "type": "timeseries", "title": "Errors per memory node: failed requests, refused puts, digest mismatches, admin rejects", "gridPos": {"x": 12, "y": 39, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{hostname}} ({{node_id}}) request errors {{op}}", "expr": "sum by (instance,node_id,op) (rate(miracache_requests_total{status=\"error\", node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"},
+        {"refId": "B", "legendFormat": "{{hostname}} ({{node_id}}) refused {{reason}}", "expr": "sum by (instance,node_id,reason) (rate(miracache_put_refused_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"},
+        {"refId": "C", "legendFormat": "{{hostname}} ({{node_id}}) digest mismatch", "expr": "sum by (instance,node_id) (rate(miracache_put_digest_mismatch_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"},
+        {"refId": "D", "legendFormat": "{{hostname}} ({{node_id}}) admin conn rejected {{reason}}", "expr": "sum by (instance,node_id,reason) (rate(miracache_admin_conn_rejected_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 12, "type": "timeseries", "title": "Leases: active, granted/s, expired/s per memory node", "gridPos": {"x": 0, "y": 47, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{hostname}} ({{node_id}}) active", "expr": "sum by (instance,node_id) (miracache_lease_active{node_id=~\"$node_id\"}) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"},
+        {"refId": "B", "legendFormat": "{{hostname}} ({{node_id}}) expired/s", "expr": "sum by (instance,node_id) (rate(miracache_lease_expired_total{node_id=~\"$node_id\"}[5m])) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]},
+    {"id": 13, "type": "timeseries", "title": "Bytes held per principal (bounded top-K)", "gridPos": {"x": 12, "y": 47, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{hostname}} ({{node_id}}) principal {{principal}}", "expr": "sum by (instance,node_id,principal) (miracache_principal_bytes{node_id=~\"$node_id\"}) * on(instance,node_id) group_left(hostname) miracache_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"}"}]}
+  ]
+}

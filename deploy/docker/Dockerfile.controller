@@ -1,0 +1,31 @@
+# syntax=docker/dockerfile:1
+# miracache controller + mirctl image. Go is the version pinned in deploy/docker/go.sh (downloaded and
+# SHA-256 verified there); the binaries are static, so the runtime stage is the pinned Ubuntu base only.
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS build
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY deploy/docker/go.sh deploy/docker/go.sh
+COPY controller controller
+ENV CGO_ENABLED=0
+RUN install -d /out \
+ && deploy/docker/go.sh -C controller build -trimpath -ldflags=-s -o /out/mira-controller ./cmd/mira-controller \
+ && deploy/docker/go.sh -C controller build -trimpath -ldflags=-s -o /out/mirctl ./cmd/mirctl
+
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+ARG VERSION=dev
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="miracache-controller" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$GIT_SHA" \
+      org.opencontainers.image.licenses="Apache-2.0"
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin mira \
+    && install -d -m 0700 -o mira -g mira /var/lib/miracache-controller
+COPY --from=build /out/mira-controller /out/mirctl /usr/local/bin/
+USER mira
+VOLUME /var/lib/miracache-controller
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/usr/local/bin/mira-controller"]

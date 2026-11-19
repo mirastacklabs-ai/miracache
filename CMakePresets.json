@@ -1,0 +1,239 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "description": "Debug build for day-to-day work"
+    },
+    {
+      "name": "release",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      },
+      "description": "Optimised build"
+    },
+    {
+      "name": "asan",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MIRACACHE_SANITIZE": "address;undefined",
+        "MIRACACHE_STORE_SEEDS": "60",
+        "MIRACACHE_RELOAD_SEEDS": "40"
+      },
+      "description": "ASan + UBSan"
+    },
+    {
+      "name": "tsan",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "MIRACACHE_SANITIZE": "thread",
+        "MIRACACHE_STORE_SEEDS": "30",
+        "MIRACACHE_RELOAD_SEEDS": "50"
+      },
+      "description": "ThreadSanitizer"
+    },
+    {
+      "name": "fuzz",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "MIRACACHE_FUZZ": "ON",
+        "MIRACACHE_SANITIZE": "address;undefined",
+        "CMAKE_CXX_COMPILER": "clang++-18"
+      },
+      "description": "libFuzzer targets with ASan/UBSan (clang-18 pinned)"
+    },
+    {
+      "name": "sim",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "MIRACACHE_SIM": "ON",
+        "MIRACACHE_SIM_SEEDS": "2000",
+        "MIRACACHE_STORE_SEEDS": "2000",
+        "MIRACACHE_RELOAD_SEEDS": "2000",
+        "MIRACACHE_TEETH": "ON"
+      },
+      "description": "Per-PR simulation budget: 2000 seeds"
+    },
+    {
+      "name": "cpu",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "MIRACACHE_WITH_CUDA": "OFF",
+        "MIRACACHE_WITH_ROCM": "OFF"
+      },
+      "description": "CPU-only (no GPU-direct)"
+    },
+    {
+      "name": "cuda",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "MIRACACHE_WITH_CUDA": "ON"
+      },
+      "description": "Stub: only sets MIRACACHE_WITH_CUDA"
+    },
+    {
+      "name": "rocm",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "MIRACACHE_WITH_ROCM": "ON"
+      },
+      "description": "Stub: only sets MIRACACHE_WITH_ROCM"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "release",
+      "configurePreset": "release"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan"
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz"
+    },
+    {
+      "name": "sim",
+      "configurePreset": "sim"
+    },
+    {
+      "name": "cpu",
+      "configurePreset": "cpu"
+    },
+    {
+      "name": "cuda",
+      "configurePreset": "cuda"
+    },
+    {
+      "name": "rocm",
+      "configurePreset": "rocm"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "tsan",
+      "configurePreset": "tsan",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "sim",
+      "configurePreset": "sim",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "cpu",
+      "configurePreset": "cpu",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "cuda",
+      "configurePreset": "cuda",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "rocm",
+      "configurePreset": "rocm",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

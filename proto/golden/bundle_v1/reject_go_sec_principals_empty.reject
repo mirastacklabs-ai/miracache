@@ -1,0 +1,3 @@
+reason: schema
+go: principals must be a non-empty array of tables
+cpp: principals must be an array of tables

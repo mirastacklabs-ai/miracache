@@ -1,0 +1,3 @@
+reason: schema
+go: rbac must be a non-empty array of tables
+cpp: rbac must be an array of tables

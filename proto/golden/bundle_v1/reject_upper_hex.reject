@@ -1,0 +1,3 @@
+reason: envelope_format
+go: key_id must be exactly 16 lower-case hex characters
+cpp: bad key_id line

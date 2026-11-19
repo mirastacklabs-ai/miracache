@@ -1,0 +1,3 @@
+add_library(miracache_core_client STATIC landing_pool.cpp decrypt_pipeline.cpp)
+target_include_directories(miracache_core_client PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
+target_link_libraries(miracache_core_client PUBLIC miracache_fabric miracache_crypto miracache_util)

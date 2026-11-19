@@ -1,0 +1,66 @@
+mira-bundle-v1
+key_id: 65b60673d6ed884b
+sig: bc1988a55b96f411dae600a9c21f8efbcd0b0ca53832b2c4d9555db9fe83bf0eb7f31f435515e74f8aa5dfcce8ee4336a80a0e4b182906d4c0157637f9993d0a
+sec_key_id: c945cbf2a5602002
+sec_sig: 986c1ae0c1afa1ee0d18f6ffd9e6b76df3b90673a0a446e02a1bbd7749503c960b08e748517e1afbfab9d5f7762a6ac9294374ce80d8e94478d23c1eb3180b01
+sec_len: 386
+
+sec_generation = 5
+
+[[principals]]
+name = "prod-llama"
+identities = ["spiffe://prod/vllm-host-1"]
+quota_bytes = 2199023255552
+max_scopes = 4000000
+
+[[principals]]
+name = "lab"
+identities = ["spiffe://lab/client"]
+quota_bytes = 1073741824
+max_scopes = 1000
+
+[[rbac]]
+identity = "spiffe://ops/alice"
+roles = ["security-admin"]
+
+[[rbac]]
+identity = "spiffe://ops/alice"
+roles = ["viewer"]
+schema_version = 1
+generation = 42
+created_at = "2026-11-12T09:00:00Z"
+author = "spiffe://ops/alice"
+reason = "add hostD"
+
+[membership]
+epoch = 7
+previous_epoch = 6
+
+[[membership.nodes]]
+node_id = 3141592653
+hostname = "hostA"
+admin = "10.0.0.10:9465"
+rails = [{ addr = "10.0.0.10:7471", subnet = "10.0.0.0/24", protocol = "roce" }]
+weight = 1
+zone = "rack1"
+state = "active"
+
+[[membership.nodes]]
+node_id = 7
+hostname = "hostB"
+admin = "10.0.0.11:9465"
+rails = [{ addr = "10.0.0.11:7471", subnet = "10.0.0.0/24", protocol = "roce" }, { addr = "10.1.0.11:7471", subnet = "10.1.0.0/24", protocol = "roce" }]
+weight = 2
+zone = "rack2"
+state = "draining"
+
+[[membership.previous]]
+node_id = 3141592653
+weight = 1
+zone = "rack1"
+
+[config.cluster.placement]
+replicas = 2
+
+[config.cluster.memnode]
+log_level = "info"

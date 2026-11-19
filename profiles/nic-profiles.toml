@@ -1,0 +1,230 @@
+# miracache NIC profile registry (spec 4.3, task A3.3).
+#
+# Built into the binaries (compiled in from this file) and overridable with `profiles_file`
+# ([nic] on the memory node, [fabric] on the client). Unknown tables or keys are an error.
+#
+# Selection: the probe result (NicFacts, spec 4.1/4.2) is scored against every [profile.match].
+# A profile matches only if EVERY key it gives matches; its score is the sum of the points of
+# those keys (vendor_id 1, part_id 2, driver 2, device_prefix 2, transport 1). The highest
+# score wins; a tie goes to the profile that comes first in this file. A profile with no match
+# keys is refused (use the generic-* entries). `generic-roce` / `generic-iwarp` match on
+# transport alone, so every usable device matches something.
+#
+# Precedence of a value: explicit config key > profile > built-in default.
+#
+# verified = true  : the values were measured on (or are exercised by CI on) this hardware.
+# verified = false : taken from the spec's starting values (R/13 6.2) or a conservative guess;
+#                    to be replaced by a lab capture (spec 13.6). Reported as
+#                    miracache_nic_profile_info{verified="false"}.
+#
+# [profile.op]  the fixed operating point (spec 4.4). No auto-tuning, no AIMD in v1.
+#   fetch_qps        fetch QPs per rail
+#   ingest_qps       ingest QPs per rail
+#   slice_bytes      READ slice size (a power of two, 4 KiB .. 4 MiB)
+#   window_bytes     outstanding READ bytes per fetch QP: a multiple of slice_bytes and at
+#                    most read_depth * slice_bytes
+#   read_depth       outstanding READs per fetch QP (ORD asked at connect; clamped by the device)
+#   inline_bytes     max_inline for control frames (0..256; clamped by the device)
+#   ack_timeout_exp  QP ACK timeout, 4.096 us * 2^exp (RoCE only; 1..19; ignored on iWARP)
+#   retry_count      QP transport retries (0..7)
+#   rnr_retry_count  QP RNR retries (0..6; 7 would mean "forever" and is refused)
+#   mtu              HELLO MTU (256, 512, 1024, 2048, 4096); clamped to the port's active MTU
+#
+# [profile.loss_handling] require_any: how the fabric stays loss-free enough for RC READs.
+#   one of "pfc_ecn", "ztr_rttcc", "tcp", "soft". Preflight verifies at least one is in place.
+
+schema = 1
+registry_version = "2026.11.1"
+
+# ---------------------------------------------------------------- Tier 1 (spec 4.3 values)
+
+[[profile]]
+id = "mlx5-cx6dx-roce"
+tier = 1
+verified = false
+fw_min = "22.31.0"
+notes = "ConnectX-6 Dx, RoCEv2. Spec 4.3 starting values; ZTR/RTTCC allows operation without PFC. Not yet captured on hardware (lab L2)."
+[profile.match]
+vendor_id = [0x02c9]
+part_id = [4125]
+driver = ["mlx5_core"]
+transport = "roce"
+[profile.loss_handling]
+require_any = ["ztr_rttcc", "pfc_ecn"]
+[profile.op]
+fetch_qps = 4
+ingest_qps = 2
+slice_bytes = 1048576
+window_bytes = 16777216
+read_depth = 16
+inline_bytes = 220
+ack_timeout_exp = 14
+retry_count = 7
+rnr_retry_count = 6
+mtu = 4096
+
+[[profile]]
+id = "mlx5-cx7-roce"
+tier = 1
+verified = false
+fw_min = "28.35.0"
+notes = "ConnectX-7, RoCEv2. Same operating point as CX-6 Dx until a capture shows otherwise."
+[profile.match]
+vendor_id = [0x02c9]
+part_id = [4129]
+driver = ["mlx5_core"]
+transport = "roce"
+[profile.loss_handling]
+require_any = ["ztr_rttcc", "pfc_ecn"]
+[profile.op]
+fetch_qps = 4
+ingest_qps = 2
+slice_bytes = 1048576
+window_bytes = 16777216
+read_depth = 16
+inline_bytes = 220
+ack_timeout_exp = 14
+retry_count = 7
+rnr_retry_count = 6
+mtu = 4096
+
+[[profile]]
+id = "irdma-e810-roce"
+tier = 1
+verified = false
+fw_min = "4.40"
+notes = "Intel E810 in RoCEv2 mode (irdma, devlink enable_roce). Needs PFC+ECN (no ZTR). Read depth start value is a guess; irdma reports IRD 127 / ORD 255."
+[profile.match]
+vendor_id = [0x8086]
+driver = ["irdma", "ice"]
+transport = "roce"
+[profile.loss_handling]
+require_any = ["pfc_ecn"]
+[profile.op]
+fetch_qps = 4
+ingest_qps = 2
+slice_bytes = 1048576
+window_bytes = 16777216
+read_depth = 16
+inline_bytes = 96
+ack_timeout_exp = 16
+retry_count = 7
+rnr_retry_count = 6
+mtu = 4096
+
+[[profile]]
+id = "irdma-e810-iwarp"
+tier = 1
+verified = false
+fw_min = "4.40"
+notes = "Intel E810 in iWARP mode (irdma, devlink enable_iwarp). Spec 4.3 starting values; TCP handles loss, so the ACK timeout does not apply. READ sinks need REMOTE_WRITE (spec 3.2)."
+[profile.match]
+vendor_id = [0x8086]
+driver = ["irdma", "ice"]
+transport = "iwarp"
+[profile.loss_handling]
+require_any = ["tcp"]
+[profile.op]
+fetch_qps = 8
+ingest_qps = 2
+slice_bytes = 1048576
+window_bytes = 33554432
+read_depth = 32
+inline_bytes = 96
+ack_timeout_exp = 19
+retry_count = 7
+rnr_retry_count = 6
+mtu = 4096
+
+# ---------------------------------------------------------------- soft RDMA (CI and lab)
+
+[[profile]]
+id = "rxe"
+tier = 0
+verified = true
+notes = "Soft-RoCE (rdma_rxe) on any netdev. Exercised on every commit. Keeps the pre-profile operating point: one fetch QP per rail, read depth 16, ACK timeout exponent 19 (spec 3.7 watchdog grace is derived from it)."
+[profile.match]
+device_prefix = "rxe"
+transport = "roce"
+[profile.loss_handling]
+require_any = ["soft"]
+[profile.op]
+fetch_qps = 1
+ingest_qps = 1
+slice_bytes = 1048576
+window_bytes = 16777216
+read_depth = 16
+inline_bytes = 0
+ack_timeout_exp = 19
+retry_count = 7
+rnr_retry_count = 6
+mtu = 4096
+
+[[profile]]
+id = "siw"
+tier = 0
+verified = true
+notes = "Soft-iWARP (siw) on any netdev. Exercised on every commit. Same operating point as rxe."
+[profile.match]
+vendor_id = [0x626d74]
+device_prefix = "siw"
+transport = "iwarp"
+[profile.loss_handling]
+require_any = ["tcp"]
+[profile.op]
+fetch_qps = 1
+ingest_qps = 1
+slice_bytes = 1048576
+window_bytes = 16777216
+read_depth = 16
+inline_bytes = 0
+ack_timeout_exp = 19
+retry_count = 7
+rnr_retry_count = 6
+mtu = 4096
+
+# ---------------------------------------------------------------- fallbacks (spec 4.3 "generic")
+
+[[profile]]
+id = "generic-roce"
+tier = 0
+verified = false
+warn = "unprofiled NIC (RoCE)"
+notes = "Any RoCE device without a more specific profile. Conservative: unknown-NIC read depth 4 (spec 4.2), 256 KiB slices (spec 4.3)."
+[profile.match]
+transport = "roce"
+[profile.loss_handling]
+require_any = ["pfc_ecn", "ztr_rttcc"]
+[profile.op]
+fetch_qps = 2
+ingest_qps = 1
+slice_bytes = 262144
+window_bytes = 1048576
+read_depth = 4
+inline_bytes = 0
+ack_timeout_exp = 19
+retry_count = 7
+rnr_retry_count = 6
+mtu = 1024
+
+[[profile]]
+id = "generic-iwarp"
+tier = 0
+verified = false
+warn = "unprofiled NIC (iWARP)"
+notes = "Any iWARP device without a more specific profile. Conservative, as generic-roce."
+[profile.match]
+transport = "iwarp"
+[profile.loss_handling]
+require_any = ["tcp"]
+[profile.op]
+fetch_qps = 2
+ingest_qps = 1
+slice_bytes = 262144
+window_bytes = 1048576
+read_depth = 4
+inline_bytes = 0
+ack_timeout_exp = 19
+retry_count = 7
+rnr_retry_count = 6
+mtu = 1024

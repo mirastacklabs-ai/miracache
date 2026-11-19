@@ -1,0 +1,138 @@
+# miracache alert rules (Prometheus 2.x; last_over_time needs 2.26+).
+# Job names: "miracache-memnode" (memory nodes, :9464) and "miracache-client" (client processes);
+# see README.md. Every memory-node alert carries hostname and node_id by joining miracache_node_info
+# (memory-node series) or miracache_client_node_info (client series, joined on the rail address "node").
+# Our CI checks that every miracache_* name here is registered in code.
+groups:
+  - name: miracache-memnode
+    rules:
+      - alert: MiracacheMemoryNodeDown
+        expr: (up{job="miracache-memnode"} == 0) * on(instance) group_left(hostname, node_id) last_over_time(miracache_node_info[1h])
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "Memory node {{ $labels.hostname }} (node {{ $labels.node_id }}) is down"
+          description: "Scrape of {{ $labels.instance }} ({{ $labels.hostname }}, node ID {{ $labels.node_id }}) has failed for 2 minutes."
+
+      - alert: MiracacheMemoryNodeNotScraped
+        expr: absent(miracache_node_info{job="miracache-memnode"}) or (count(up{job="miracache-memnode"} == 1) < count(up{job="miracache-memnode"}))
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "No miracache memory node is being scraped, or some targets are missing"
+          description: "Either no miracache_node_info series exists for job miracache-memnode, or some targets of that job do not answer. Check the scrape config and the :9464 listener."
+
+      - alert: MiracacheHitRateCollapse
+        expr: |
+          ((
+            sum by (instance, node_id) (rate(miracache_lookup_keys_total{result="hit"}[10m]))
+              / sum by (instance, node_id) (rate(miracache_lookup_keys_total[10m]))
+              < 0.2
+          )
+          and on(instance, node_id) (sum by (instance, node_id) (rate(miracache_lookup_keys_total[10m])) > 10)
+          and on(instance, node_id) (
+            sum by (instance, node_id) (rate(miracache_lookup_keys_total{result="hit"}[10m] offset 1h))
+              / sum by (instance, node_id) (rate(miracache_lookup_keys_total[10m] offset 1h)) > 0.5
+          ))
+          * on(instance, node_id) group_left(hostname) miracache_node_info
+        for: 15m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Hit rate collapsed on {{ $labels.hostname }} (node {{ $labels.node_id }})"
+          description: "Lookup hit rate on {{ $labels.hostname }} (node ID {{ $labels.node_id }}, {{ $labels.instance }}) is below 20% (was above 50% an hour ago) with more than 10 keys/s. Look at evictions and restarts of the node (see its hostname in miracache_node_info)."
+
+      - alert: MiracacheFetchP99OverTarget
+        expr: histogram_quantile(0.99, sum by (le, instance) (rate(miracache_client_fetch_seconds_bucket{stage="total"}[10m]))) > 0.005
+        for: 15m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Fetch p99 above 5 ms on client {{ $labels.instance }}"
+          description: "End-to-end fetch p99 at client {{ $labels.instance }} has exceeded 5 ms for 15 minutes. 5 ms is the 16 MB / 1x100G p99 target of spec section 12 (the 1 MB target is 900 us; tune the threshold to your block size). Check the per-node dashboards for the memory node at fault."
+
+      - alert: MiracacheAdminRejectsSpike
+        expr: ((sum by (instance, node_id) (rate(miracache_admin_conn_rejected_total[5m])) > 1) or (sum by (instance, node_id) (rate(miracache_admin_tls_fail_total[5m])) > 1)) * on(instance, node_id) group_left(hostname) miracache_node_info
+        for: 5m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Admin rejects or TLS failures on {{ $labels.hostname }} (node {{ $labels.node_id }})"
+          description: "{{ $labels.hostname }} (node ID {{ $labels.node_id }}, {{ $labels.instance }}) rejects or fails more than 1 admin connection per second (miracache_admin_conn_rejected_total / miracache_admin_tls_fail_total). Likely a misconfigured client, an expired certificate or a scan."
+
+      - alert: MiracacheDigestMismatch
+        expr: (sum by (instance, node_id) (increase(miracache_put_digest_mismatch_total[10m])) > 0) * on(instance, node_id) group_left(hostname) miracache_node_info
+        labels:
+          severity: page
+        annotations:
+          summary: "Put digest mismatch on {{ $labels.hostname }} (node {{ $labels.node_id }})"
+          description: "A put's server-side CRC32C differed from the client's on {{ $labels.hostname }} (node ID {{ $labels.node_id }}, {{ $labels.instance }}). Suspect the fabric or memory on that host."
+
+  - name: miracache-client
+    rules:
+      - alert: MiracacheReplicaSkippedFull
+        expr: |
+          (sum by (instance, node) (rate(miracache_client_replica_legs_total{result="skipped_full"}[10m])) > 0.1)
+            * on(instance, node) group_left(hostname, node_id) (miracache_client_node_info == 1)
+        for: 15m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Replica legs to {{ $labels.hostname }} (node {{ $labels.node_id }}) skipped as full"
+          description: "Client {{ $labels.instance }} has skipped replica stores to {{ $labels.hostname }} (node ID {{ $labels.node_id }}, {{ $labels.node }}) for 15 minutes because the async buffer is full. That node is slow or its capacity is exhausted; replicas are falling behind."
+
+      - alert: MiracacheClientWatchdogTrip
+        expr: sum by (instance) (increase(miracache_client_watchdog_trips_total[10m])) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: "Client watchdog force-failed stuck jobs on {{ $labels.instance }}"
+          description: "Client {{ $labels.instance }} abandoned jobs after a watchdog trip in the last 10 minutes. Landing pool bytes stay quarantined until the endpoints are reaped; look at the memory node it was talking to (client logs carry node_id and addr)."
+
+      - alert: MiracacheNodeIdConflict
+        expr: |
+          (sum by (instance, node) (increase(miracache_client_node_id_conflicts_total[15m])) > 0)
+            * on(instance, node) group_left(hostname, node_id) topk by (instance, node) (1, miracache_client_node_info)
+        labels:
+          severity: page
+        annotations:
+          summary: "Node ID conflict at {{ $labels.node }} ({{ $labels.hostname }}, node {{ $labels.node_id }})"
+          description: "Client {{ $labels.instance }} refused {{ $labels.node }} ({{ $labels.hostname }}, node ID {{ $labels.node_id }}) because another memory node already holds that node ID. Two nodes share a state_dir copy or a cloned node-id file; the later node is excluded from placement."
+
+      - alert: MiracacheNodeIdMismatch
+        expr: |
+          (sum by (instance, node) (increase(miracache_client_node_id_mismatch_total[15m])) > 0)
+            * on(instance, node) group_left(hostname, node_id) topk by (instance, node) (1, miracache_client_node_info)
+        labels:
+          severity: warn
+        annotations:
+          summary: "Node ID mismatch at {{ $labels.node }} ({{ $labels.hostname }}, node {{ $labels.node_id }})"
+          description: "Client {{ $labels.instance }} saw a HELLO_ACK node ID that differs from the admin ticket answer for {{ $labels.node }} ({{ $labels.hostname }}, node ID {{ $labels.node_id }}). The HELLO_ACK wins. Usually a node was replaced behind the same address."
+
+      - alert: MiracacheUndrainedZombies
+        expr: min_over_time(miracache_client_undrained_zombies[10m]) > 0
+        labels:
+          severity: warn
+        annotations:
+          summary: "Undrained zombie endpoints on client {{ $labels.instance }}"
+          description: "Client {{ $labels.instance }} has had aborted endpoints waiting for the fabric to drain for 10 minutes (the value is normally 0 within milliseconds). A flush was lost."
+
+      - alert: MiracacheQuarantinedBytesGrowing
+        expr: miracache_client_quarantined_bytes > 0 and deriv(miracache_client_quarantined_bytes[30m]) > 0
+        for: 30m
+        labels:
+          severity: warn
+        annotations:
+          summary: "Quarantined landing bytes growing on client {{ $labels.instance }}"
+          description: "Client {{ $labels.instance }} holds {{ $value | humanize1024 }}B of landing pool quarantined after watchdog trips and the amount keeps growing. This is a leak that shrinks the pool; restart the client if it persists."
+
+      - alert: MiracacheClientSessionDown
+        expr: min_over_time(miracache_client_session_up[5m]) == 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Client {{ $labels.instance }} wire session is down"
+          description: "Client {{ $labels.instance }} has had no up wire session for 5 minutes (miracache_client_session_up = 0)."

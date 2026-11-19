@@ -1,0 +1,3 @@
+reason: schema
+go: membership.previous must be a non-empty array of tables
+cpp: membership.previous must be an array of tables

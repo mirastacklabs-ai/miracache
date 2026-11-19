@@ -1,0 +1,3 @@
+reason: schema
+go: body: leading UTF-8 BOM
+cpp: body starts with a UTF-8 BOM

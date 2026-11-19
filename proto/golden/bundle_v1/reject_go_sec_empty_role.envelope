@@ -1,0 +1,77 @@
+mira-bundle-v1
+key_id: 65b60673d6ed884b
+sig: 810f7cf30b7ec64ee9475ab6170539d77dc16c568806025df5bfe9d98fd14098c604e8dec77ef13066b4eef1440ae202b4c3155f1e8392f5acd51fd10002e80d
+sec_key_id: c945cbf2a5602002
+sec_sig: a5b313b77f3f518ab59fef5c66a287b3a0b357e8232a9d6813705c9780047140828da4b4ccd9e1a2055ecf628c0ff171fac020ae0cc942199852c9328a383103
+sec_len: 463
+
+sec_generation = 5
+
+[[principals]]
+name = "prod-llama"
+identities = ["spiffe://prod/vllm-host-1", "spiffe://prod/vllm-host-2"]
+quota_bytes = 2199023255552
+max_scopes = 4000000
+drop_before = "2026-11-01T00:00:00Z"
+
+[[principals]]
+name = "staging"
+identities = ["spiffe://staging/sglang-1"]
+quota_bytes = 549755813888
+max_scopes = 100000
+
+[[rbac]]
+identity = "spiffe://ops/alice"
+roles = [""]
+
+[[rbac]]
+identity = "spiffe://ops/bob"
+roles = ["operator", "auditor"]
+schema_version = 1
+generation = 42
+created_at = "2026-11-12T09:00:00Z"
+author = "spiffe://ops/alice"
+reason = "add hostB"
+
+[membership]
+epoch = 7
+previous_epoch = 6
+
+[[membership.nodes]]
+node_id = 3141592653
+hostname = "hostA"
+admin = "10.0.0.10:9465"
+rails = [{ addr = "10.0.0.10:7471", subnet = "10.0.0.0/24", protocol = "roce" }]
+weight = 1
+zone = "rack1"
+state = "active"
+
+[[membership.nodes]]
+node_id = 2718281828
+hostname = "hostB"
+admin = "10.0.0.11:9465"
+rails = [{ addr = "10.0.0.11:7471", subnet = "10.0.0.0/24", protocol = "roce" }, { addr = "10.1.0.11:7471", subnet = "10.1.0.0/24", protocol = "iwarp" }]
+weight = 2
+zone = "rack2"
+state = "draining"
+
+[[membership.previous]]
+node_id = 3141592653
+weight = 1
+zone = "rack1"
+
+[config.cluster.client]
+on = true
+poll_s = 30
+ratio = 0.5
+tags = ["a", "b"]
+
+[config.cluster.memnode]
+label = "café \"x\"\n"
+pool_bytes = 1073741824
+
+[config.cluster.placement]
+replicas = 2
+
+[config.node."10.0.0.10:9465".memnode]
+pool_bytes = 2147483648

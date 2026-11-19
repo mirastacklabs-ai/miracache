@@ -1,0 +1,7 @@
+/* Export only the C ABI. */
+{
+  global:
+    mira_*;
+  local:
+    *;
+};

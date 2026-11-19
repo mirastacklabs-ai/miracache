@@ -1,0 +1,3 @@
+reason: schema
+go: node 1: zone has invalid characters or is too long
+cpp: zone has invalid characters or is too long

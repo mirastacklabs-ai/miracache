@@ -1,0 +1,15 @@
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  clang-analyzer-*,
+  cppcoreguidelines-slicing,
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+  modernize-use-nullptr,
+  modernize-use-override,
+  performance-*,
+  readability-container-size-empty,
+  readability-misleading-indentation
+WarningsAsErrors: ''
+HeaderFilterRegex: '(core|sim|client|server)/.*'

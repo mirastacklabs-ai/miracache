@@ -1,0 +1,27 @@
+# Cross-compile x86_64 Linux with the native (aarch64) clang-18 + lld, against a sysroot extracted from the
+# amd64 dev image (extract it into build/x86-sysroot). Use:
+#   cmake --preset release -B build/x86-cross -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/x86_64-linux-gnu.cmake
+# Tests are not run natively: discovery is deferred to ctest time (run it in the amd64 image under emulation).
+set(CMAKE_SYSTEM_NAME Linux)
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+if(NOT DEFINED MIRA_X86_SYSROOT)
+  set(MIRA_X86_SYSROOT "${CMAKE_CURRENT_LIST_DIR}/../../build/x86-sysroot")
+endif()
+get_filename_component(MIRA_X86_SYSROOT "${MIRA_X86_SYSROOT}" ABSOLUTE)
+set(CMAKE_SYSROOT "${MIRA_X86_SYSROOT}")
+set(CMAKE_C_COMPILER clang-18)
+set(CMAKE_CXX_COMPILER clang++-18)
+set(CMAKE_C_COMPILER_TARGET x86_64-linux-gnu)
+set(CMAKE_CXX_COMPILER_TARGET x86_64-linux-gnu)
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+set(CMAKE_SHARED_LINKER_FLAGS_INIT "-fuse-ld=lld")
+set(CMAKE_MODULE_LINKER_FLAGS_INIT "-fuse-ld=lld")
+set(CMAKE_FIND_ROOT_PATH "${MIRA_X86_SYSROOT}")
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+set(CMAKE_LIBRARY_ARCHITECTURE x86_64-linux-gnu)
+set(ENV{PKG_CONFIG_SYSROOT_DIR} "${MIRA_X86_SYSROOT}")
+set(ENV{PKG_CONFIG_LIBDIR} "${MIRA_X86_SYSROOT}/usr/lib/x86_64-linux-gnu/pkgconfig:${MIRA_X86_SYSROOT}/usr/share/pkgconfig")
+set(CMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST CACHE STRING "")

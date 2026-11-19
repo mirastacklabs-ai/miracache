@@ -1,0 +1,3 @@
+reason: schema
+go: config.cluster must be a table
+cpp: config.cluster must be a table

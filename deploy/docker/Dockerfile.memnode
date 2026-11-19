@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+# miracache memory node image. Multi-stage: build in the pinned toolchain (same base and packages as
+# the dev image), run on the same pinned Ubuntu 24.04 with only the runtime libraries.
+# Build with deploy/docker/build.sh (context = repo root). Keep the digest in step with the dev image.
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS build
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates clang-18 clang-tools-18 libclang-rt-18-dev cmake ninja-build pkg-config git \
+      rdma-core libibverbs-dev librdmacm-dev libssl-dev python3 \
+    && rm -rf /var/lib/apt/lists/*
+ENV CC=clang-18 CXX=clang++-18
+WORKDIR /src
+COPY . /src
+RUN cmake --preset release -DMIRACACHE_WERROR=ON -DMIRACACHE_SIM=OFF >/dev/null \
+ && cmake --build --preset release -j"$(nproc)" --target mira-memnode mira-nicprobe \
+ && install -d /out \
+ && install -s -m 0755 build/release/server/mira-memnode build/release/core/fabric/mira-nicprobe /out/
+
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+ARG VERSION=dev
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="miracache-memnode" \
+      org.opencontainers.image.version="$VERSION" \
+      org.opencontainers.image.revision="$GIT_SHA" \
+      org.opencontainers.image.licenses="Apache-2.0"
+# ibverbs-providers carries the rxe/mlx5/siw userspace drivers libibverbs loads at run time.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libibverbs1 librdmacm1t64 ibverbs-providers libssl3t64 libstdc++6 ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin mira \
+    && install -d -m 0700 -o mira -g mira /var/lib/miracache
+COPY --from=build /out/mira-memnode /out/mira-nicprobe /usr/local/bin/
+# Non-root. The node needs CAP_IPC_LOCK (memlock), --device /dev/infiniband/{rdma_cm,uverbs*},
+# --network host and a state_dir volume at /var/lib/miracache: see deploy/docker/README.md.
+USER mira
+VOLUME /var/lib/miracache
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/usr/local/bin/mira-memnode"]
+CMD ["--config", "/etc/miracache/memnode.toml"]

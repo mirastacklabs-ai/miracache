@@ -1,0 +1,3 @@
+reason: schema
+go: node 1 rail 1: protocol must be roce or iwarp
+cpp: rail protocol must be roce or iwarp

@@ -1,0 +1,3 @@
+reason: schema
+go: identity "spiffe://lab/client" bound to both "lab" and "third"
+cpp: identity bound to two principals (or twice in one)

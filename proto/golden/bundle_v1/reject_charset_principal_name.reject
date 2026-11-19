@@ -1,0 +1,3 @@
+reason: schema
+go: principal "stag ing": name has invalid characters or is too long
+cpp: principal name has invalid characters or is too long

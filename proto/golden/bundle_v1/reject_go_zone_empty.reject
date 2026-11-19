@@ -1,0 +1,3 @@
+reason: schema
+go: node zone must not be empty
+cpp: zone must not be empty

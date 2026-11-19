@@ -1,0 +1,51 @@
+# miracache memory node. Install as /etc/systemd/system/mira-memnode.service (see README.md).
+[Unit]
+Description=miracache memory node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Runs as the system user `mira` (same name and privileges as the Docker image: no root, only CAP_IPC_LOCK).
+# Create it first (README.md). The TLS key must be mira:mira 0600 (exactly), memnode.toml root:mira 0640.
+User=mira
+Group=mira
+# Creates /var/lib/miracache owned by mira, mode 0700: [node] state_dir (the node's identity). Must match state_dir in the toml.
+StateDirectory=miracache
+StateDirectoryMode=0700
+ExecStart=/usr/local/bin/mira-memnode --config /etc/miracache/memnode.toml
+ExecReload=/bin/kill -HUP $MAINPID
+# The store is registered with the NIC (ibv_reg_mr pins it): no memlock limit.
+LimitMEMLOCK=infinity
+# CAP_IPC_LOCK lets a non-root process pin memory beyond the rlimit and use hugetlbfs pages.
+# Ambient so it survives the exec as a non-root user; the bounding set drops every other capability.
+AmbientCapabilities=CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_IPC_LOCK
+# No setuid/file-capability escalation after exec (the ambient capability above still works).
+NoNewPrivileges=yes
+# Light hardening that does not touch /dev/infiniband, sysfs, netlink or sockets (RDMA CM needs all of them).
+# Deliberately NOT set: PrivateDevices, ProtectKernelTunables, ProtectKernelModules, RestrictAddressFamilies, DevicePolicy.
+# Private /tmp, nothing shared with other services.
+PrivateTmp=yes
+# /home, /root and /run/user are not visible.
+ProtectHome=yes
+# /usr, /boot and /etc are read-only; /var and /mnt (state_dir, hugetlbfs store) stay writable.
+ProtectSystem=full
+# No personality(2) switching.
+LockPersonality=yes
+# The process cannot create setuid/setgid files.
+RestrictSUIDSGID=yes
+# Files it creates (node-id, logs) are private to mira.
+UMask=0077
+Restart=on-failure
+RestartSec=2
+# Exit 3 = stopped, but the superblock was not marked clean (the next start is cold, the cache is lost).
+# It is a completed stop, not a crash: do not restart-loop on it; alert on the log line instead.
+SuccessExitStatus=3
+# SIGTERM starts the drain (node.drain_ms, default 5000 ms). systemd must wait longer than the drain
+# before it sends SIGKILL: keep TimeoutStopSec > drain_ms / 1000 + a margin.
+TimeoutStopSec=30
+# NUMA: pin to the socket that owns the NIC and the hugepages (replace the ExecStart above with this line)
+# ExecStart=/usr/bin/numactl --cpunodebind=<n> --membind=<n> /usr/local/bin/mira-memnode --config /etc/miracache/memnode.toml
+
+[Install]
+WantedBy=multi-user.target

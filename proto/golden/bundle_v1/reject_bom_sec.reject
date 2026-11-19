@@ -1,0 +1,3 @@
+reason: schema
+go: sec: leading UTF-8 BOM
+cpp: sec starts with a UTF-8 BOM

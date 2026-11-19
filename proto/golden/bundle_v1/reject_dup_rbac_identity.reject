@@ -1,0 +1,3 @@
+reason: schema
+go: rbac: empty or duplicate identity "spiffe://ops/alice"
+cpp: duplicate rbac identity

@@ -1,0 +1,9 @@
+{
+  "backend_name": "miracache",
+  "module_path": "miracache.sglang",
+  "class_name": "MiraHiCacheStorage",
+  "interface_v1": 1,
+  "hicache_storage_pass_prefix_keys": true,
+  "miracache_expect_prefix_keys": true,
+  "miracache": {"config": "/etc/miracache/client.toml"}
+}

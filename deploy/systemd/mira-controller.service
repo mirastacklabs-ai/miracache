@@ -1,0 +1,40 @@
+# miracache controller (bundle mode). Install as /etc/systemd/system/mira-controller.service (see README.md).
+[Unit]
+Description=miracache controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mira
+Group=mira
+# Runs as the system user `mira` (README.md). StateDirectory creates /var/lib/miracache-controller (0700, owned by mira) for the store and the audit log.
+StateDirectory=miracache-controller
+StateDirectoryMode=0700
+# The controller needs no capabilities (it listens on :9470): drop them all and block privilege gain.
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+# Private /tmp; /home, /root and /run/user hidden.
+PrivateTmp=yes
+ProtectHome=yes
+# The whole file system is read-only except the StateDirectory above (store and audit log).
+ProtectSystem=strict
+LockPersonality=yes
+RestrictSUIDSGID=yes
+# Files it creates (store, audit log) are private to mira.
+UMask=0077
+ExecStart=/usr/local/bin/mira-controller \
+  --store-dir /var/lib/miracache-controller/store \
+  --audit-dir /var/lib/miracache-controller/audit \
+  --trust-keys /etc/miracache/trust.toml \
+  --publish-key /etc/miracache/publish.seed \
+  --security-key /etc/miracache/security.seed \
+  --cert /etc/miracache/pki/controller.pem \
+  --key /etc/miracache/pki/controller.key \
+  --ca /etc/miracache/pki/ca.pem \
+  --api-listen :9470
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

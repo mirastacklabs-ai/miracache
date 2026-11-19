@@ -1,0 +1,3 @@
+reason: schema
+go: principal "staging": identities must be a non-empty array of non-empty strings
+cpp: principal identities must be a non-empty array of strings

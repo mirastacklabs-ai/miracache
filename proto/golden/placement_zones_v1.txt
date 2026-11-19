@@ -1,0 +1,19 @@
+# Golden vectors for zone-aware replica order (design spec 7.7; A2.10 round 2A). New file: placement_v1.txt and
+# placement_order_v1.txt are frozen. A Go controller must reproduce these.
+# zorder <scope_id hex> <id:weight:zone,...> <r> <picked node ids joined by ','>
+# Rule: walk the score order (score descending, ties to the smaller node id) and take a node only if its zone is
+# not used yet. The first pick is the owner and never depends on zones. Fewer than r picks come back only when
+# there are fewer than r zones (a config error at load).
+# Derived by hand from the plain order lines of placement_order_v1.txt (same scope ids):
+#   2a35.. over 1,2,3,10 -> 2,10,3,1     4f5a.. over 1,2,3,10 -> 2,10,1,3     747f.. over 1,2,3,10 -> 3,1,10,2
+#   2a35.. over 1,2,3    -> 2,3,1
+# Zones below: 2 and 10 share zA, 3 is zB, 1 is zC (the 3-node lines: 1 and 2 share zA, 3 is zB).
+zorder 2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f 1:1:zC,2:1:zA,3:1:zB,10:1:zA 1 2
+zorder 2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f 1:1:zC,2:1:zA,3:1:zB,10:1:zA 2 2,3
+zorder 2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f 1:1:zC,2:1:zA,3:1:zB,10:1:zA 3 2,3,1
+zorder 4f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d78838e99a4 1:1:zC,2:1:zA,3:1:zB,10:1:zA 2 2,1
+zorder 4f5a65707b86919ca7b2bdc8d3dee9f4ff0a15202b36414c57626d78838e99a4 1:1:zC,2:1:zA,3:1:zB,10:1:zA 3 2,1,3
+zorder 747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c87929da8b3bec9 1:1:zC,2:1:zA,3:1:zB,10:1:zA 2 3,1
+zorder 747f8a95a0abb6c1ccd7e2edf8030e19242f3a45505b66717c87929da8b3bec9 1:1:zC,2:1:zA,3:1:zB,10:1:zA 3 3,1,10
+zorder 2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f 1:1:zA,2:1:zA,3:1:zB 2 2,3
+zorder 2a35404b56616c77828d98a3aeb9c4cfdae5f0fb06111c27323d48535e69747f 1:1:zA,2:1:zA,3:1:zB 3 2,3

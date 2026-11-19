@@ -1,0 +1,3 @@
+reason: schema
+go: node 0 rail 0: subnet must be CIDR text
+cpp: rail subnet must be CIDR text

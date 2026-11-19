@@ -1,0 +1,80 @@
+{
+  "__inputs": [
+    {"name": "DS_PROMETHEUS", "label": "Prometheus", "description": "Prometheus scraping the client processes", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus"}
+  ],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}
+  ],
+  "title": "miracache / Client view",
+  "uid": "miracache-client",
+  "tags": ["miracache"],
+  "schemaVersion": 38,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "templating": {
+    "list": [
+      {"name": "client_host", "label": "Client host", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": {"query": "label_values(miracache_client_session_up, instance)", "refId": "v1"}, "definition": "label_values(miracache_client_session_up, instance)", "refresh": 2, "multi": true, "includeAll": true, "allValue": ".+", "current": {"text": "All", "value": "$__all"}},
+      {"name": "node_id", "label": "Memory node ID", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": {"query": "label_values(miracache_client_node_info, node_id)", "refId": "v2"}, "definition": "label_values(miracache_client_node_info, node_id)", "refresh": 2, "multi": true, "includeAll": true, "allValue": ".*", "current": {"text": "All", "value": "$__all"}},
+      {"name": "hostname", "label": "Memory node hostname", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": {"query": "label_values(miracache_client_node_info{node_id=~\"$node_id\"}, hostname)", "refId": "v3"}, "definition": "label_values(miracache_client_node_info{node_id=~\"$node_id\"}, hostname)", "refresh": 2, "multi": true, "includeAll": true, "allValue": ".*", "current": {"text": "All", "value": "$__all"}}
+    ]
+  },
+  "panels": [
+    {"id": 1, "type": "table", "title": "Memory nodes as each client sees them (value 1 = in placement)", "gridPos": {"x": 0, "y": 0, "w": 24, "h": 7}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"refId": "A", "instant": true, "format": "table", "expr": "miracache_client_node_info{instance=~\"$client_host\", node_id=~\"$node_id\", hostname=~\"$hostname\"}"}],
+      "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": true, "__name__": true, "job": true}}}]},
+    {"id": 2, "type": "timeseries", "title": "Fetch latency p50 / p99 per client host (end to end)", "gridPos": {"x": 0, "y": 7, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "legendFormat": "p50 {{instance}}", "expr": "histogram_quantile(0.50, sum by (le,instance) (rate(miracache_client_fetch_seconds_bucket{stage=\"total\", instance=~\"$client_host\"}[5m])))"},
+        {"refId": "B", "legendFormat": "p99 {{instance}}", "expr": "histogram_quantile(0.99, sum by (le,instance) (rate(miracache_client_fetch_seconds_bucket{stage=\"total\", instance=~\"$client_host\"}[5m])))"}]},
+    {"id": 3, "type": "timeseries", "title": "Fetch p99 by stage (lease wait, read, decrypt)", "gridPos": {"x": 12, "y": 7, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{instance}} {{stage}}", "expr": "histogram_quantile(0.99, sum by (le,instance,stage) (rate(miracache_client_fetch_seconds_bucket{stage!=\"total\", instance=~\"$client_host\"}[5m])))"}]},
+    {"id": 4, "type": "timeseries", "title": "Store (put) latency p50 / p99 per client host", "gridPos": {"x": 0, "y": 15, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "legendFormat": "p50 {{instance}}", "expr": "histogram_quantile(0.50, sum by (le,instance) (rate(miracache_client_put_seconds_bucket{stage=\"total\", instance=~\"$client_host\"}[5m])))"},
+        {"refId": "B", "legendFormat": "p99 {{instance}}", "expr": "histogram_quantile(0.99, sum by (le,instance) (rate(miracache_client_put_seconds_bucket{stage=\"total\", instance=~\"$client_host\"}[5m])))"}]},
+    {"id": 5, "type": "timeseries", "title": "Fetch and put keys/s by result", "gridPos": {"x": 12, "y": 15, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{instance}} fetch {{result}}", "expr": "sum by (instance,result) (rate(miracache_client_fetch_ops_total{instance=~\"$client_host\"}[5m]))"},
+        {"refId": "B", "legendFormat": "{{instance}} put {{result}}", "expr": "sum by (instance,result) (rate(miracache_client_put_ops_total{instance=~\"$client_host\"}[5m]))"}]},
+    {"id": 6, "type": "timeseries", "title": "Failover reads per memory node (served by a non-primary)", "gridPos": {"x": 0, "y": 23, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{instance}} -> {{hostname}} ({{node_id}})", "expr": "sum by (instance,node) (rate(miracache_client_read_failover_total{instance=~\"$client_host\"}[5m])) * on(instance,node) group_left(hostname,node_id) (miracache_client_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"} == 1)"}]},
+    {"id": 7, "type": "timeseries", "title": "Replica legs by result per memory node", "gridPos": {"x": 12, "y": 23, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{instance}} -> {{hostname}} ({{node_id}}) {{result}}", "expr": "sum by (instance,node,result) (rate(miracache_client_replica_legs_total{instance=~\"$client_host\"}[5m])) * on(instance,node) group_left(hostname,node_id) (miracache_client_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"} == 1)"}]},
+    {"id": 8, "type": "timeseries", "title": "Replica legs skipped_full per memory node", "gridPos": {"x": 0, "y": 31, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [{"refId": "A", "legendFormat": "{{instance}} -> {{hostname}} ({{node_id}})", "expr": "sum by (instance,node) (rate(miracache_client_replica_legs_total{result=\"skipped_full\", instance=~\"$client_host\"}[5m])) * on(instance,node) group_left(hostname,node_id) (miracache_client_node_info{node_id=~\"$node_id\", hostname=~\"$hostname\"} == 1)"}]},
+    {"id": 9, "type": "timeseries", "title": "Ticket fetches by result, and cached tickets by class", "gridPos": {"x": 12, "y": 31, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{instance}} fetches/s {{result}}", "expr": "sum by (instance,result) (rate(miracache_client_ticket_fetch_total{instance=~\"$client_host\"}[5m]))"},
+        {"refId": "B", "legendFormat": "{{instance}} cached {{class}}", "expr": "sum by (instance,class) (miracache_client_ticket_cache{instance=~\"$client_host\"})"}]},
+    {"id": 10, "type": "timeseries", "title": "Reconnects by reason, failed reconnects, session state (1 = up)", "gridPos": {"x": 0, "y": 39, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{instance}} reconnects/s {{reason}}", "expr": "sum by (instance,reason) (rate(miracache_client_reconnect_total{instance=~\"$client_host\"}[5m]))"},
+        {"refId": "B", "legendFormat": "{{instance}} reconnect failures/s", "expr": "sum by (instance) (rate(miracache_client_reconnect_fail_total{instance=~\"$client_host\"}[5m]))"},
+        {"refId": "C", "legendFormat": "{{instance}} session up", "expr": "miracache_client_session_up{instance=~\"$client_host\"}"}]},
+    {"id": 11, "type": "timeseries", "title": "Watchdog trips, quarantined landing bytes, undrained zombies", "gridPos": {"x": 12, "y": 39, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{instance}} watchdog trips (increase 5m)", "expr": "sum by (instance) (increase(miracache_client_watchdog_trips_total{instance=~\"$client_host\"}[5m]))"},
+        {"refId": "B", "legendFormat": "{{instance}} quarantined bytes", "expr": "miracache_client_quarantined_bytes{instance=~\"$client_host\"}"},
+        {"refId": "C", "legendFormat": "{{instance}} undrained zombies", "expr": "miracache_client_undrained_zombies{instance=~\"$client_host\"}"}]},
+    {"id": 12, "type": "timeseries", "title": "Node ID conflicts and mismatches per memory node address (increase 15m; should be flat at zero)", "gridPos": {"x": 0, "y": 47, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{instance}} conflicts {{node}}", "expr": "sum by (instance,node) (increase(miracache_client_node_id_conflicts_total{instance=~\"$client_host\"}[15m]))"},
+        {"refId": "B", "legendFormat": "{{instance}} mismatches {{node}}", "expr": "sum by (instance,node) (increase(miracache_client_node_id_mismatch_total{instance=~\"$client_host\"}[15m]))"}]},
+    {"id": 13, "type": "timeseries", "title": "Integrity: AEAD failures, validation failures, INVALIDATEs sent (should be flat at zero)", "gridPos": {"x": 12, "y": 47, "w": 12, "h": 8}, "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"unit": "ops"}, "overrides": []},
+      "targets": [
+        {"refId": "A", "legendFormat": "{{instance}} aead fail", "expr": "sum by (instance) (rate(miracache_client_aead_fail_total{instance=~\"$client_host\"}[5m]))"},
+        {"refId": "B", "legendFormat": "{{instance}} validate fail {{kind}}", "expr": "sum by (instance,kind) (rate(miracache_client_validate_fail_total{instance=~\"$client_host\"}[5m]))"},
+        {"refId": "C", "legendFormat": "{{instance}} invalidate sent", "expr": "sum by (instance) (rate(miracache_client_invalidate_sent_total{instance=~\"$client_host\"}[5m]))"}]}
+  ]
+}

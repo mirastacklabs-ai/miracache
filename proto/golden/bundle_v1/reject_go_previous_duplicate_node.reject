@@ -1,0 +1,3 @@
+reason: schema
+go: previous 1: node_id 3141592653 invalid or duplicate
+cpp: duplicate previous node_id
