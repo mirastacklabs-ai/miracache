@@ -13,7 +13,14 @@
   <img alt="Transport: RoCEv2, iWARP" src="https://img.shields.io/badge/RDMA-RoCEv2%20%7C%20iWARP-informational.svg">
 </p>
 
-<p align="center">by <b>MIRASTACK LABS</b></p>
+<p align="center">
+  <a href="https://mirastacklabs.ai">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="assets/mirastack-labs-logo-dark.png">
+      <img alt="MIRASTACK LABS" src="assets/mirastack-labs-logo.png" width="260">
+    </picture>
+  </a>
+</p>
 
 ---
 
