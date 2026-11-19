@@ -1,0 +1,38 @@
+# mira-memnode: one memory node. Copy to /etc/miracache/memnode.toml (root:mira 0640) and run
+#   mira-memnode --config /etc/miracache/memnode.toml
+# Replace 10.0.0.10 with this host's RoCE / iWARP interface address. Run at least three memory nodes.
+
+[node]
+device    = "mlx5_0"             # see `ibv_devices`; empty = first RDMA device
+protocol  = "auto"               # "roce" or "iwarp" to force
+listen    = ["10.0.0.10:7471"]   # RDMA CM address the clients dial
+state_dir = "/var/lib/miracache" # this node's persisted identity (node-id). Keep it across restarts and reformats;
+                                 # one state_dir per node (it is locked), never group/world-writable
+
+[store]
+backing       = "hugetlbfs"      # or "file" with dir = "..."
+dir           = "/dev/hugepages" # a hugetlbfs mount owned by the service user
+segment_bytes = 1073741824       # 1 GiB segments
+# run_bytes: the largest block this node can store (payload + 64 B header + 16 B tag per 64 KiB segment). Use a power
+# of two >= 4x your engine's largest KV block (vLLM: one block; SGLang: one page, which holds every layer), at most
+# 256 MiB, with segment_bytes >= 2 x run_bytes. The adapters refuse to start when a block cannot fit.
+run_bytes     = 33554432         # 32 MiB
+n_segments    = 16               # 16 GiB of cache on this node
+# Per-principal limits (all clients of one deployment are one principal):
+max_bytes     = 17179869184      # = n_segments x segment_bytes (the default); smaller evicts early
+max_scopes    = 1048576          # cached conversation prefixes this principal may hold here (default 1024 is small)
+
+# Which client certificate identities map to the principal.
+[lab]
+principal  = "lab"
+identities = ["spiffe://lab/client-1"]
+
+# Tickets are issued here over mutual TLS (HTTPS). Open this port to the GPU hosts only.
+[admin]
+listen = "10.0.0.10:9465"
+cert   = "/etc/miracache/pki/node-1.pem"
+key    = "/etc/miracache/pki/node-1.key"   # mode exactly 0600, owned by the service user
+ca     = "/etc/miracache/pki/ca.pem"
+
+[telemetry]
+listen = "10.0.0.10:9464"        # GET /metrics (Prometheus, plain HTTP, no auth): bind the scrape interface, not 0.0.0.0

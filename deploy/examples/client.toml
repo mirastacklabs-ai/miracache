@@ -1,0 +1,41 @@
+# libmiracache: the client on a GPU host. Copy to /etc/miracache/client.toml; the vLLM and SGLang adapters point at it.
+# One [[nodes]] entry per memory node (three shown; use at least three).
+
+[scope]
+provider    = "static"
+secret_file = "/etc/miracache/keys/secret" # mode exactly 0600; lines "current = 1" and "1 = <64 hex chars>" (32 bytes).
+                                        # Every GPU host of one deployment uses the same secret; it never leaves them.
+
+[[nodes]]
+rails    = ["10.0.0.10:7471"]           # the memory node's RDMA CM address ([node] listen)
+admin    = "10.0.0.10:9465"             # its admin API ([admin] listen): tickets over mutual TLS
+identity = "spiffe://lab/node-1"        # pins the memory node's certificate identity
+
+[[nodes]]
+rails    = ["10.0.0.11:7471"]
+admin    = "10.0.0.11:9465"
+identity = "spiffe://lab/node-2"
+
+[[nodes]]
+rails    = ["10.0.0.12:7471"]
+admin    = "10.0.0.12:9465"
+identity = "spiffe://lab/node-3"
+
+[tls]
+cert = "/etc/miracache/pki/client-1.pem"
+key  = "/etc/miracache/pki/client-1.key" # mode 0600, or the client refuses to start
+ca   = "/etc/miracache/pki/ca.pem"
+
+[fabric]
+protocol     = "auto"                   # "roce" or "iwarp" to match the memory nodes
+device       = ""                       # empty = first RDMA device
+ticket_batch = 4
+
+[landing]
+subpool_bytes = 268435456               # the only RDMA-visible client buffer (256 MiB)
+
+[crypto]
+workers = 4                             # AES-256-GCM threads on the GPU host
+
+[lab]
+static_membership = true                # fixed node list from this file (no controller needed)
