@@ -6,6 +6,11 @@ alpha; until a stable release, any version may change formats, configuration or 
 
 ## [Unreleased]
 
+## [alpha-0.2.3] - 2026-11-20
+
+### Fixed
+- Container images: signing failed after the push (digest lookup); images are now signed and the controller gets its moving `alpha` tag.
+
 ## [alpha-0.2.2] - 2026-11-20
 
 ### Changed
@@ -85,7 +90,8 @@ hardware NICs or in GPU serving runs. No performance figures are published.
 - systemd units, Docker images, Grafana dashboards and Prometheus alert rules.
 - Wire format v0, crypto format v1 and storage layout v0, with golden vectors in `proto/golden/`.
 
-[Unreleased]: https://github.com/mirastacklabs-ai/miracache/compare/alpha-0.2.2...HEAD
+[Unreleased]: https://github.com/mirastacklabs-ai/miracache/compare/alpha-0.2.3...HEAD
+[alpha-0.2.3]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.2.3
 [alpha-0.2.2]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.2.2
 [alpha-0.2.1]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.2.1
 [alpha-0.2.0]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.2.0

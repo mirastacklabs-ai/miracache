@@ -134,10 +134,13 @@ jobs:
             ref="docker.io/$NAMESPACE/$name"
             docker tag "$ref:$TAG" "$ref:$moving"
             docker push "$ref:$moving"
-            digest=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$ref:$TAG" | grep "^$ref@" | head -n1)
-            if [ -z "$digest" ]; then echo "::error::no registry digest for $ref:$TAG"; exit 1; fi
-            cosign sign --yes "$digest"
-            echo "- \`$ref:$TAG\` (also \`:$moving\`), digest \`${digest#*@}\`" >> build-images.md
+            # The registry is authoritative: local RepoDigests omit the docker.io/ prefix, so never grep them.
+            digest=$(docker buildx imagetools inspect "$ref:$TAG" --format '{{json .Manifest}}' | jq -r .digest)
+            if ! printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+              echo "::error::no valid registry digest for $ref:$TAG (got: '$digest')"; exit 1
+            fi
+            cosign sign --yes "$ref@$digest"
+            echo "- \`$ref:$TAG\` (also \`:$moving\`), digest \`$digest\`" >> build-images.md
           done
           {
             echo "### Container images"
