@@ -1,16 +1,23 @@
 name: Release
 
-# Runs when a release tag is pushed (alpha-X.Y.Z, beta-X.Y.Z, ga-X.Y.Z). Builds x86_64 Linux binaries on
-# Ubuntu 24.04, signs the checksums with Sigstore (keyless) and creates the GitHub Release.
+# Runs when a release tag is pushed (alpha-X.Y.Z, beta-X.Y.Z, ga-X.Y.Z), or by hand (workflow_dispatch, input `tag`)
+# for an existing tag; a manual run on a tag whose Release exists replaces that Release's assets and notes.
+# Builds x86_64 Linux binaries on Ubuntu 24.04, signs the checksums with Sigstore (keyless) and creates the GitHub Release.
 on:
   push:
     tags: ['alpha-*', 'beta-*', 'ga-*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build (alpha-X.Y.Z, beta-X.Y.Z or ga-X.Y.Z)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -20,8 +27,18 @@ jobs:
     permissions:
       contents: write   # create the release
       id-token: write   # Sigstore keyless signing
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
+      - name: Check the tag name
+        run: |
+          if ! [[ "$TAG" =~ ^(alpha|beta|ga)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$TAG' is not a release tag (alpha|beta|ga-MAJOR.MINOR.PATCH)"
+            exit 1
+          fi
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}  # fails if the tag does not exist
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: controller/go.mod
@@ -34,15 +51,11 @@ jobs:
       - name: Test (tests that need a live RDMA device are excluded)
         run: .github/scripts/ci.sh test release
       - name: Package and checksum
-        env:
-          TAG: ${{ github.ref_name }}
         run: .github/scripts/ci.sh package "$TAG"
       - name: Sign the checksums (Sigstore, keyless)
         working-directory: build/dist
         run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
       - name: Release notes
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
           .github/scripts/ci.sh notes "$TAG" > build/notes.md
           if [ ! -s build/notes.md ]; then echo "Release $TAG." > build/notes.md; fi
@@ -51,12 +64,16 @@ jobs:
             echo "Verify: \`sha256sum -c SHA256SUMS\`, then"
             echo "\`cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS\`"
           } >> build/notes.md
-      - name: Create the GitHub Release
+      - name: Create the GitHub Release (or replace the assets of an existing one)
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          flags=()
-          case "$TAG" in alpha-* | beta-*) flags+=(--prerelease) ;; esac
-          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file build/notes.md "${flags[@]}" \
-            "build/dist/miracache-$TAG-linux-x86_64.tar.gz" build/dist/SHA256SUMS build/dist/SHA256SUMS.sigstore.json
+          assets=("build/dist/miracache-$TAG-linux-x86_64.tar.gz" build/dist/SHA256SUMS build/dist/SHA256SUMS.sigstore.json)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" --clobber "${assets[@]}"
+            gh release edit "$TAG" --notes-file build/notes.md
+          else
+            flags=()
+            case "$TAG" in alpha-* | beta-*) flags+=(--prerelease) ;; esac
+            gh release create "$TAG" --verify-tag --title "$TAG" --notes-file build/notes.md "${flags[@]}" "${assets[@]}"
+          fi
