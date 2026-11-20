@@ -28,6 +28,7 @@ Requirements: clang-18, CMake 3.28+, Ninja, rdma-core (`libibverbs-dev`, `librdm
 cmake --preset release && cmake --build --preset release      # mira-memnode, mira-nicprobe, libmiracache.so
 deploy/docker/go.sh -C controller build -o "$PWD/build/release/bin/" ./cmd/mira-controller ./cmd/mirctl
 deploy/docker/build.sh                                         # or: container images (needs docker buildx)
+# or pull the published images: docker pull docker.io/mirastack/miracache-memnode:alpha (and miracache-controller)
 ```
 
 `deploy/docker/go.sh` runs the pinned Go toolchain (see its `GO_VERSION`) on a Linux host or inside a build

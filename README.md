@@ -170,7 +170,7 @@ Offline or behind a proxy: see [Building offline or behind a proxy](docs/operati
 ```sh
 cmake --preset release && cmake --build --preset release   # mira-memnode, mira-nicprobe, libmiracache.so
 deploy/docker/go.sh -C controller build -o "$PWD/build/release/bin/" ./cmd/mira-controller ./cmd/mirctl
-# or container images: deploy/docker/build.sh
+# or container images: docker pull docker.io/mirastack/miracache-memnode:alpha (and miracache-controller), or deploy/docker/build.sh
 ```
 
 Small programs that store and fetch one block (C++, C, Python) are in [`examples/`](examples/README.md).

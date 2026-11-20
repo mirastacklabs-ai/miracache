@@ -6,6 +6,14 @@ alpha; until a stable release, any version may change formats, configuration or 
 
 ## [Unreleased]
 
+## [alpha-0.2.2] - 2026-11-20
+
+### Changed
+- The release workflow can be re-run for an existing tag with `images_only` to publish only its container images.
+
+### Added
+- Container images on Docker Hub (`docker.io/mirastack/miracache-memnode` and `miracache-controller`) for every release, tagged with the release tag and a moving `alpha`, `beta` or `latest` tag, signed with Sigstore.
+
 ## [alpha-0.2.1] - 2026-11-20
 
 ### Fixed
@@ -77,7 +85,8 @@ hardware NICs or in GPU serving runs. No performance figures are published.
 - systemd units, Docker images, Grafana dashboards and Prometheus alert rules.
 - Wire format v0, crypto format v1 and storage layout v0, with golden vectors in `proto/golden/`.
 
-[Unreleased]: https://github.com/mirastacklabs-ai/miracache/compare/alpha-0.2.1...HEAD
+[Unreleased]: https://github.com/mirastacklabs-ai/miracache/compare/alpha-0.2.2...HEAD
+[alpha-0.2.2]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.2.2
 [alpha-0.2.1]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.2.1
 [alpha-0.2.0]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.2.0
 [alpha-0.1.3]: https://github.com/mirastacklabs-ai/miracache/releases/tag/alpha-0.1.3

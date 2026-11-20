@@ -12,6 +12,11 @@ on:
         description: 'Existing release tag to build (alpha-X.Y.Z, beta-X.Y.Z or ga-X.Y.Z)'
         required: true
         type: string
+      images_only:
+        description: 'Publish only the container images; skip the binary release job (existing signed assets stay untouched)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -22,6 +27,7 @@ concurrency:
 
 jobs:
   release:
+    if: ${{ github.event_name != 'workflow_dispatch' || !inputs.images_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -77,3 +83,65 @@ jobs:
             case "$TAG" in alpha-* | beta-*) flags+=(--prerelease) ;; esac
             gh release create "$TAG" --verify-tag --title "$TAG" --notes-file build/notes.md "${flags[@]}" "${assets[@]}"
           fi
+
+  # Container images on Docker Hub. A separate job: an image failure never blocks the binary release above.
+  # Needs the repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN; without them the steps are skipped.
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write   # Sigstore keyless signing of the images
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      NAMESPACE: mirastack
+      HAVE_SECRETS: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+    steps:
+      - name: Check the tag name and the Docker Hub secrets
+        run: |
+          if ! [[ "$TAG" =~ ^(alpha|beta|ga)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$TAG' is not a release tag (alpha|beta|ga-MAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+          if [ "$HAVE_SECRETS" != "true" ]; then
+            echo "::notice::Container images skipped: the secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are not both set."
+          fi
+      - if: env.HAVE_SECRETS == 'true'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}  # the images are built from that tag's own Dockerfiles
+      - if: env.HAVE_SECRETS == 'true'
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+      - if: env.HAVE_SECRETS == 'true'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push the images
+        if: env.HAVE_SECRETS == 'true'
+        run: |
+          MIRA_IMAGE_VERSION="$TAG" MIRA_IMAGE_NAMESPACE="$NAMESPACE" deploy/docker/build.sh --push all
+      - name: Moving tag (alpha, beta, latest), digests and signatures
+        if: env.HAVE_SECRETS == 'true'
+        run: |
+          case "$TAG" in
+            alpha-*) moving=alpha ;;
+            beta-*) moving=beta ;;
+            ga-*) moving=latest ;;
+          esac
+          : > build-images.md
+          for name in miracache-memnode miracache-controller; do
+            ref="docker.io/$NAMESPACE/$name"
+            docker tag "$ref:$TAG" "$ref:$moving"
+            docker push "$ref:$moving"
+            digest=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$ref:$TAG" | grep "^$ref@" | head -n1)
+            if [ -z "$digest" ]; then echo "::error::no registry digest for $ref:$TAG"; exit 1; fi
+            cosign sign --yes "$digest"
+            echo "- \`$ref:$TAG\` (also \`:$moving\`), digest \`${digest#*@}\`" >> build-images.md
+          done
+          {
+            echo "### Container images"
+            cat build-images.md
+            echo
+            echo "Verify: \`cosign verify --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer https://token.actions.githubusercontent.com <image>@<digest>\`"
+          } >> "$GITHUB_STEP_SUMMARY"
