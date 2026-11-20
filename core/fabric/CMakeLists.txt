@@ -1,11 +1,4 @@
-# toml++ for the NIC profile registry (same pin as client/CMakeLists.txt; the first declaration wins).
-include(FetchContent)
-FetchContent_Declare(tomlplusplus
-  URL https://github.com/marzer/tomlplusplus/archive/refs/tags/v3.4.0.tar.gz
-  URL_HASH SHA256=8517f65938a4faae9ccf8ebb36631a38c1cadfb5efa85d9a72e15b9e97d25155
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-  SYSTEM)
-FetchContent_MakeAvailable(tomlplusplus)
+# toml++ (NIC profile registry) is declared once, in the top-level CMakeLists.txt.
 
 # profiles/nic-profiles.toml is compiled into the binaries (A3.3); a profiles_file overrides it.
 file(READ ${PROJECT_SOURCE_DIR}/profiles/nic-profiles.toml MIRA_PROFILES_TOML)

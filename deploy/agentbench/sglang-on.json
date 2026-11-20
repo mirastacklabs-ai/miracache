@@ -1,0 +1,22 @@
+{
+  "model": "google/gemma-4-31B-it",
+  "name": "gemma4-31b-sglang-miracache-on",
+  "revision": "842da3794eaa0b77d5f08bae87a17459d91ff475",
+  "served_name": "google/gemma-4-31B-it",
+  "tp": "1",
+  "max_len": "16384",
+  "gpu_memory": "0.85",
+  "max_seqs": "unbounded",
+  "target_sessions": "819",
+  "batched_tokens": "engine-default",
+  "prefix_cache": "on",
+  "tool_parser": "gemma4",
+  "reasoning_parser": "gemma4",
+  "kv_cache_dtype": "fp8_e4m3",
+  "port": "8000",
+  "tls": "off",
+  "advanced_args": "",
+  "extra_args": "--quantization fp8 --page-size 64 --enable-hierarchical-cache --hicache-size 32 --hicache-write-policy write_through --hicache-storage-backend dynamic --hicache-storage-backend-extra-config '{\"backend_name\":\"miracache\",\"module_path\":\"miracache.sglang\",\"class_name\":\"MiraHiCacheStorage\",\"interface_v1\":1,\"hicache_storage_pass_prefix_keys\":true,\"miracache_expect_prefix_keys\":true,\"miracache\":{\"config\":\"/etc/miracache/client.toml\"},\"ns_fields\":{\"model_revision\":\"842da3794eaa0b77d5f08bae87a17459d91ff475\",\"quantization\":\"fp8\",\"kv_cache_dtype\":\"fp8_e4m3\"}}'",
+  "version": "0.5.23",
+  "pip_extras": "miracache==0.0.1"
+}

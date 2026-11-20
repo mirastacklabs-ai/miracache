@@ -20,3 +20,8 @@ include-package-data = true
 # the standard library: build the wheel with a small script that bundles the .so itself.
 [tool.setuptools.package-data]
 miracache = ["libmiracache.so", "_core.pyi"]
+
+# ruff (CI: `ruff check python/`): ruff's default rule set. Two findings are intentional and kept as is.
+[tool.ruff.lint.per-file-ignores]
+"python/miracache/preflight/checks.py" = ["F401"]
+"python/miracache/vllm_tier.py" = ["F822"]  # MiraTier is a lazy module attribute

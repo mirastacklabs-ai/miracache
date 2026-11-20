@@ -473,9 +473,9 @@ func TestPlanTempDirRemovedOnSignal(t *testing.T) {
 	}
 }
 
-// The operator guide's example (cluster.toml.example) must load through the real parser.
+// The operator guide's example (deploy/examples/cluster.toml) must load through the real parser.
 func TestExampleClusterTomlParses(t *testing.T) {
-	s, err := ReadSource(filepath.Join("..", "..", "..", "docs", "ops", "cluster.toml.example"))
+	s, err := ReadSource(filepath.Join("..", "..", "..", "deploy", "examples", "cluster.toml"))
 	if err != nil {
 		t.Fatal(err)
 	}

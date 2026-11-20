@@ -1,0 +1,30 @@
+# The paths whose change needs the full gate (user, 2026-11-18): product, build, test and gate code. A commit that
+# changes none of them (docs, release/publish scripts, the workbench, the CI release jobs) is gated by its nearest gated
+# ancestor (tools/ci/gate_status.sh) and starts no gate job. KEEP IN SYNC with `.product-paths` in .gitlab-ci.yml.
+core/
+client/
+server/
+controller/
+proto/
+python/
+sim/
+tests/
+model/
+cmake/
+profiles/
+deploy/
+CMakeLists.txt
+CMakePresets.json
+pyproject.toml
+tools/dev/
+tools/ci/full_gate.sh
+tools/ci/build_and_test.sh
+tools/ci/rdma_test.sh
+tools/ci/docker_e2e.sh
+tools/ci/engine_contract.sh
+tools/ci/pybind_check.sh
+tools/ci/systemd_acceptance.sh
+tools/ci/lint_nondeterminism.sh
+tools/ci/x86_check.sh
+tools/ci/bench_smoke.sh
+tools/ci/model_nightly.sh

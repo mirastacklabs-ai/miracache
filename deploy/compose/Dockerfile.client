@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1
+# Quick-start test client: libmiracache.so (C ABI) + the Python binding + openssl and iproute2 for the setup helper.
+# Build context = repo root (docker-compose.yml sets it). Same pinned base as deploy/docker/Dockerfile.memnode.
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS build
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates clang-18 clang-tools-18 libclang-rt-18-dev cmake ninja-build pkg-config git \
+      rdma-core libibverbs-dev librdmacm-dev libssl-dev python3 \
+    && rm -rf /var/lib/apt/lists/*
+ENV CC=clang-18 CXX=clang++-18
+ARG JOBS=2
+WORKDIR /src
+COPY . /src
+RUN cmake --preset release -DMIRACACHE_WERROR=ON -DMIRACACHE_SIM=OFF >/dev/null \
+ && cmake --build --preset release -j"${JOBS}" --target miracache_shared \
+ && install -d /out/miracache \
+ && install -s -m 0755 build/release/client/libmiracache.so /out/miracache/ \
+ && cp python/miracache/*.py /out/miracache/
+
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libibverbs1 librdmacm1t64 ibverbs-providers libssl3t64 libstdc++6 ca-certificates \
+      python3 openssl iproute2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin mira
+COPY --from=build /out/miracache /opt/py/miracache
+ENV PYTHONPATH=/opt/py MIRACACHE_LIB=/opt/py/miracache/libmiracache.so PYTHONDONTWRITEBYTECODE=1
+USER mira

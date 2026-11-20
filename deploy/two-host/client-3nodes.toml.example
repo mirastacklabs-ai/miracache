@@ -1,0 +1,65 @@
+# libmiracache client with three memory nodes (static placement, A2.2). Same format as client.toml.
+# Each scope lives on exactly one node (or on replicas nodes, see [placement] below): owner(scope_id) = weighted rendezvous hash (design spec 7.1).
+# `weight` (positive integer, default 1) is the node's share: weights 1,1,2 give 25% / 25% / 50%.
+# Each node needs its own memnode.toml (no ID to set: each memory node draws its own and the client learns it), its own node-N cert, and its own admin address.
+# lab.ticket_file serves one node only; with several nodes every [[nodes]] entry needs admin + identity.
+
+[scope]
+provider    = "static"
+secret_file = "/run/miracache/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600
+
+[[nodes]]
+weight   = 1
+rails    = ["10.0.0.10:7471"]
+admin    = "10.0.0.10:9465"
+identity = "spiffe://lab/node-1"
+# zone   = "rack-a"                           # optional failure domain, see [placement] below
+
+[[nodes]]
+weight   = 1
+rails    = ["10.0.0.11:7471"]
+admin    = "10.0.0.11:9465"
+identity = "spiffe://lab/node-2"
+
+[[nodes]]
+weight   = 2                                  # twice the share (a bigger memory node)
+rails    = ["10.0.0.12:7471"]
+admin    = "10.0.0.12:9465"
+identity = "spiffe://lab/node-3"
+
+[tls]
+cert = "/etc/miracache/pki/client-1.pem"
+key  = "/etc/miracache/pki/client-1.key"      # mode 0600, or the client refuses to start
+ca   = "/etc/miracache/pki/ca.pem"
+
+[fabric]
+protocol     = "auto"
+device       = ""
+ticket_batch = 4
+
+# Optional best-effort replicas (design spec 7.7): each scope also lives on the next memory nodes of its
+# placement order, written by the client. 1 (default) = one owner per scope. replicas > 1 needs at least
+# replicas + 1 nodes.
+# replica_mode "async" (default): the engine's store writes one copy and returns; a client replicator writes the
+#   other copies from a copy of the block held in replica_buffer_bytes (0 = replicas off). A slow or hung replica
+#   never delays a store. "sync": the store waits for every copy (or its deadline).
+# [placement]
+# replicas             = 2          # 1..3
+# replica_mode         = "async"    # "async" | "sync"
+# replica_buffer_bytes = 268435456  # async only: bound of the waiting copies (256 MiB); 0 = replicas off
+#   Each waiting copy costs its block size rounded UP to a power of two (a 2^k+1 byte block costs 2^(k+1)); a block
+#   that costs more than half of a non-power-of-two pool is never replicated. Size it for the largest block times the copies in flight.
+#
+# Optional zones (racks, hosts, failure domains): add `zone = "rack-a"` to every [[nodes]] entry (all or none;
+# 1..64 of A-Za-z0-9._-). Replicas then go to different zones, and replicas may not exceed the number of zones.
+# The owner of a scope never depends on zones. For the three entries above, zone = "rack-a" on 1 and 2 and
+# "rack-b" on 3 lets replicas = 2 work: every scope then has a copy in rack-b.
+
+[landing]
+subpool_bytes = 268435456
+
+[crypto]
+workers = 4
+
+[lab]
+static_membership = true

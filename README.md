@@ -7,6 +7,8 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/mirastacklabs-ai/miracache/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI" src="https://github.com/mirastacklabs-ai/miracache/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/mirastacklabs-ai/miracache/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/mirastacklabs-ai/miracache?include_prereleases&sort=date"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
   <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-orange.svg">
   <img alt="Engines: vLLM, SGLang" src="https://img.shields.io/badge/engines-vLLM%20%7C%20SGLang-informational.svg">
@@ -84,7 +86,7 @@ flowchart TB
 
 | | |
 |---|---|
-| **Plugs into the engines you run** | vLLM through its tiering API (`MiraTier`), SGLang through its HiCache `dynamic` storage backend (`MiraHiCacheStorage`). Configuration flags only, no engine patches |
+| **Built to plug into vLLM and SGLang** | vLLM through its tiering API (`MiraTier`), SGLang through its HiCache `dynamic` storage backend (`MiraHiCacheStorage`). No engine patches; it needs specific engine flags, which `mira-preflight` checks |
 | **Standard RoCEv2 and iWARP** | Both RDMA flavours through the standard Linux connection manager (`rdma_cm`), one code path, auto-detected, multiple rails per host |
 | **Encrypted end to end** | KV is encrypted and authenticated (AES-256-GCM) on the GPU host before it leaves. Memory nodes are treated as untrusted: they hold no keys, and every fetch is verified |
 | **Engine-equivalent isolation** | miracache never shares KV between two requests that the engine would not share in its own prefix cache (vLLM `cache_salt`, SGLang `extra_key`) |
@@ -130,15 +132,48 @@ deterministic fault-injection simulator, fuzzers, sanitizers and golden wire-for
 | GPU host | vLLM 0.32–0.34 (accepted range; contract-tested at 0.33.0) or SGLang 0.5.23 (contract-tested), Python 3.10+, the same RDMA fabric as the memory nodes |
 | Build | clang-18, CMake 3.28+, Ninja, rdma-core (`libibverbs-dev`, `librdmacm-dev`), OpenSSL (`libssl-dev`). Go is fetched and checksum-verified by `deploy/docker/go.sh` |
 
+## Build and test it yourself
+
+Everything we test is in this repository. On Ubuntu 24.04:
+
+```sh
+sudo apt-get install -y clang-18 clang-tools-18 libclang-rt-18-dev cmake ninja-build pkg-config \
+  libibverbs-dev librdmacm-dev libssl-dev python3 golang
+git clone https://github.com/mirastacklabs-ai/miracache && cd miracache
+
+cmake --preset release -DMIRACACHE_SIM=OFF && cmake --build --preset release
+ctest --preset release -j"$(nproc)"                                  # C++ unit, integration, golden tests
+(cd controller && go vet ./... && go test -race ./...)               # controller and mirctl (Go 1.22+)
+PYTHONPATH=python python3 -m unittest discover -s tests/python       # Python adapters and tools
+```
+
+- **Sanitizers:** the `asan` and `tsan` presets build and test the same way (`cmake --preset tsan` ...). On Ubuntu
+  24.04, ThreadSanitizer needs `sudo sysctl vm.mmap_rnd_bits=28` first.
+- **Deterministic simulator:** the `sim` preset runs the whole cluster in one process with injected faults (crashes,
+  drops, delays) across thousands of seeds; any failing seed replays exactly. See [docs/simulator.md](docs/simulator.md).
+- **Protocol model:** `model/` is the Rust/Stateright model the protocol was checked against (Rust 1.82+:
+  `cargo test --release` inside it).
+- **Fuzzers:** the `fuzz` preset builds the libFuzzer targets in `tests/fuzz/`.
+- **Real RDMA:** tests labelled `rdma` skip when the host has no RDMA device. On any Linux machine, run
+  `deploy/compose/setup-rxe.sh` once (soft-RoCE), then [`deploy/compose/run.sh`](deploy/compose/README.md): it starts
+  three memory nodes and a client and prints `PASS`.
+
+On every pull request, [CI](.github/workflows/ci.yml) runs the build and the C++ tests (release, asan, tsan), the Go
+and Python tests, clang-format, a DCO check and a secret scan. The simulator sweeps, fuzzers, model and RDMA tests run
+in our own release pipeline before every release, and you can run them as above.
+Offline or behind a proxy: see [Building offline or behind a proxy](docs/operations.md#building-offline-or-behind-a-proxy).
+
 ## Quick start
 
-**1. Build**
+**1. Build** (or download the signed binaries of a [release](https://github.com/mirastacklabs-ai/miracache/releases))
 
 ```sh
 cmake --preset release && cmake --build --preset release   # mira-memnode, mira-nicprobe, libmiracache.so
 deploy/docker/go.sh -C controller build -o "$PWD/build/release/bin/" ./cmd/mira-controller ./cmd/mirctl
 # or container images: deploy/docker/build.sh
 ```
+
+Small programs that store and fetch one block (C++, C, Python) are in [`examples/`](examples/README.md).
 
 **2. Check each host**
 
@@ -227,13 +262,20 @@ dashboards and alert rules from [`deploy/observability/`](deploy/observability/R
 | `controller/` | `mira-controller` and `mirctl` (Go): signed bundles, membership, failure detection, audit log |
 | `python/` | the `miracache` package: vLLM and SGLang adapters, `preflight`, `node_prep` |
 | `proto/golden/` | golden vectors for every wire and storage format |
-| `deploy/` | systemd units, Docker images, example configs, dashboards and alerts, engine setup |
+| `deploy/` | systemd units, Docker images, the compose quick start, example configs, dashboards and alerts, engine setup |
 | `profiles/` | NIC profiles |
+| `examples/` | store-and-fetch examples in C++, C and Python |
+| `tests/` | unit, integration, end-to-end (RDMA) and engine contract tests, fuzz targets |
+| `sim/` | the deterministic fault-injection simulator |
+| `model/` | the Rust/Stateright protocol model |
+| `tools/` | development container, CI scripts, hardware and NIC probes, benchmark helpers |
+| `docs/` | [architecture](docs/architecture.md), [protocol](docs/protocol.md), [security](docs/security.md), [operations](docs/operations.md), [simulator](docs/simulator.md) |
 
 ## Contributing
 
 Issues and pull requests are welcome. Every commit needs a DCO sign-off (`git commit -s`); see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md) and the [changelog](CHANGELOG.md).
+Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 

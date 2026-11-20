@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -186,7 +187,7 @@ func TestLastSecurityAdminRefused(t *testing.T) {
 		t.Fatal("a refused change was applied")
 	}
 	// The publisher enforces it too, whatever the route does.
-	_, err := r.pub.Publish(t.Context(), publish.Change{Reason: "clear", Edit: func(s *store.State) { s.RBAC = nil }})
+	_, err := r.pub.Publish(context.Background(), publish.Change{Reason: "clear", Edit: func(s *store.State) { s.RBAC = nil }})
 	if !errors.Is(err, rbac.ErrLastSecurityAdmin) {
 		t.Errorf("publisher accepted a sec without security-admin: %v", err)
 	}

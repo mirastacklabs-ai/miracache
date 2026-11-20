@@ -1,0 +1,49 @@
+# mira-memnode on host A (the memory node). Copy to /etc/miracache/memnode.toml.
+#   mira-memnode --config /etc/miracache/memnode.toml
+# Replace 10.0.0.10 with host A's RoCE / iWARP interface address.
+
+[node]
+device   = "mlx5_0"            # see ibv_devices; empty = first device
+protocol = "auto"              # "roce" or "iwarp" to force
+listen   = ["10.0.0.10:7471"]  # RDMA CM port: open it to host B
+state_dir = "/var/lib/miracache"  # this node's identity: node-id + initialised (0600; dir 0700, owned by the memnode user,
+                               # never group/world-writable). One state_dir per memory node (it is locked). Keep it across
+                               # restarts and reformats; rm node-id only to give the machine a NEW identity (README: replacing)
+
+[store]
+backing       = "hugetlbfs"    # or "file" with dir = "..."; "anon" is for tests only
+dir           = "/dev/hugepages"
+segment_bytes = 1073741824
+# run_bytes = the largest block this node can place (a block is never split across runs): payload + 64 B header +
+#   16 B tag per 64 KiB segment must be <= run_bytes. The node sends it to clients (HELLO_ACK); the vLLM / SGLang adapters
+#   refuse to start when one engine block cannot fit, and the client refuses oversized puts locally
+#   (miracache_client_put_refused_total{reason="too_large"}). Rule: a power of two >= 4 x the largest stored block
+#   (<= 256 MiB; segment_bytes >= 2 x run_bytes). The code default is 256 KiB, which refuses 1 MiB blocks.
+#   32 MiB fits the M1 gate (1 MiB blocks, 31 per run) and typical vLLM blocks (8B: 2 MiB, 15 per run; 70B: 5 MiB, 6 per run).
+#   SGLANG RUNS MUST SIZE PER THE RUNBOOK TABLE (the hardware runbook's memnode store sizing table): a page holds every layer,
+#   e.g. 8B at page 64 = 8 MiB -> run_bytes = 67108864. The node logs "store geometry max_stored_block_bytes=..." at start.
+run_bytes     = 33554432
+n_segments    = 16
+# Per-principal limits (the lab principal below is ONE principal; eviction never crosses principals). SIZE THEM FOR THE RUN:
+#   max_bytes  = n_segments x segment_bytes (16 x 1 GiB = 16 GiB here). If you omit it, it defaults to that same product.
+#                Anything smaller makes the store evict at the cap long before the hugepages are full.
+#   max_scopes = scopes (conversation prefixes) the principal may hold on this node: at least
+#                sessions x prefixes-per-session, with headroom. The code default (1024) is far too small for a benchmark.
+max_bytes     = 17179869184
+max_scopes    = 1048576
+
+# Lab identity: every client cert listed here maps to this principal.
+[lab]
+principal    = "lab"
+identities   = ["spiffe://lab/client-1"]
+
+# Tickets are issued here over mTLS (HTTPS). Open the port to host B only.
+[admin]
+listen = "10.0.0.10:9465"
+cert   = "/etc/miracache/pki/node-1.pem"
+key    = "/etc/miracache/pki/node-1.key"   # mode 0600
+ca     = "/etc/miracache/pki/ca.pem"
+# max_conns = 8                # concurrent admin connections (2 per source address)
+
+[telemetry]
+listen = "10.0.0.10:9464"      # GET /metrics: plain HTTP, no auth. Bind the scrape interface, not 0.0.0.0

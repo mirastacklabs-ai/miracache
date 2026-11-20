@@ -1,0 +1,36 @@
+# agentbench kvtier stage over miracache's in-process loopback (no RDMA, $0 self-test).
+# Run where both `agentbench` and `miracache` (python/) are importable, with MIRACACHE_LIB
+# pointing at libmiracache.so, using the same entry point as configs/kvtier/example-mock.yaml:
+#   PYTHONPATH=<miracache>/python MIRACACHE_LIB=<path>/libmiracache.so <agentbench kvtier cmd> <this file>
+backend:
+  module: miracache.bench.agentbench_backend
+  class: MiracacheBackend
+  options:
+    mode: loopback          # loopback | wire (wire also needs `config: /path/client.toml`,
+                            # and `secret_file:` when client.toml does not set [scope] secret_file)
+    # One staging region is attached at open and sliced into fixed slots (not per op).
+    # Slot = max_op_blocks * block_size; region = max_inflight slots unless staging_bytes is set.
+    # Size them from the workload below: max_op_blocks >= batch_size (and the stage's prefill
+    # batch, 64), max_inflight >= concurrency. An op larger than a slot raises ValueError; with
+    # all slots busy an op waits up to timeout_s. Here 8 x 64 x 1 MiB = 512 MiB.
+    max_op_blocks: 64
+    max_inflight: 8
+    # staging_bytes: 536870912   # optional explicit total (>= one slot)
+    timeout_s: 30
+
+workload:
+  ops_per_s: 200
+  duration_s: 10
+  warmup_s: 2
+  block_size: 1048576
+  batch_size: 4
+  read_ratio: 0.9
+  keyspace: 1000
+  distribution: zipf
+  zipf_s: 1.1
+  concurrency: 8
+
+variants:
+  # miracache has no null-cipher option, so no `requires: supports_null_cipher` variant.
+  - name: default
+    options: {}

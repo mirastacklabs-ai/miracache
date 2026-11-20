@@ -15,5 +15,9 @@ under Apache-2.0. The sign-off line is `Signed-off-by: Your Name <you@example.co
 
 ## Before you open a pull request
 ```sh
-cmake --preset release && cmake --build --preset release
+cmake --preset release -DMIRACACHE_SIM=OFF && cmake --build --preset release && ctest --preset release -LE rdma -j"$(nproc)"
+(cd controller && go vet ./... && go test -race ./...)
+PYTHONPATH=python python3 -m unittest discover -s tests/python
 ```
+Changes to the protocol, the store or placement should also pass a simulator sweep (`cmake --preset sim`, see
+`docs/simulator.md`).

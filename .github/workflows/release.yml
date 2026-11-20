@@ -1,0 +1,62 @@
+name: Release
+
+# Runs when a release tag is pushed (alpha-X.Y.Z, beta-X.Y.Z, ga-X.Y.Z). Builds x86_64 Linux binaries on
+# Ubuntu 24.04, signs the checksums with Sigstore (keyless) and creates the GitHub Release.
+on:
+  push:
+    tags: ['alpha-*', 'beta-*', 'ga-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write   # create the release
+      id-token: write   # Sigstore keyless signing
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: controller/go.mod
+          cache-dependency-path: controller/go.sum
+      - uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+      - name: Install build dependencies
+        run: .github/scripts/ci.sh deps
+      - name: Build (release preset)
+        run: .github/scripts/ci.sh build release
+      - name: Test (tests that need a live RDMA device are excluded)
+        run: .github/scripts/ci.sh test release
+      - name: Package and checksum
+        env:
+          TAG: ${{ github.ref_name }}
+        run: .github/scripts/ci.sh package "$TAG"
+      - name: Sign the checksums (Sigstore, keyless)
+        working-directory: build/dist
+        run: cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+      - name: Release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          .github/scripts/ci.sh notes "$TAG" > build/notes.md
+          if [ ! -s build/notes.md ]; then echo "Release $TAG." > build/notes.md; fi
+          {
+            echo
+            echo "Verify: \`sha256sum -c SHA256SUMS\`, then"
+            echo "\`cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS\`"
+          } >> build/notes.md
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          flags=()
+          case "$TAG" in alpha-* | beta-*) flags+=(--prerelease) ;; esac
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file build/notes.md "${flags[@]}" \
+            "build/dist/miracache-$TAG-linux-x86_64.tar.gz" build/dist/SHA256SUMS build/dist/SHA256SUMS.sigstore.json

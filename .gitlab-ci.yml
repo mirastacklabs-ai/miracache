@@ -1,0 +1,296 @@
+# miracache CI (workstation setup guide, "GitLab CI gate" and "Workbench" sections).
+#   gate       gate of record, once per code change: a task/* push whose product code (.product-paths) differs from main,
+#              or "Run pipeline" (web/api); never on main itself or a release tag:
+#              tools/ci/full_gate.sh on the project runner (docker executor, privileged, docker:dind, no RDMA devices),
+#              so the RDMA parts are skipped with "skip rdma: ..." lines and the last line reads
+#              "OK: full gate <sha> ... rdma(skipped)". `main` moves only to a sha that tools/ci/gate_status.sh accepts: its `gate` JOB succeeded,
+#              or its product code equals that of a gated ancestor
+#              (tools/ci/gate_status.sh): a workbench pipeline is never a gate.
+#   gate-rdma  the same full gate with nothing skipped (rxe0 multirail, docker e2e on rxe0, siw0, product step) on a
+#              bare-metal shell runner tagged `miracache-rdma`. Created only when the CI variable MIRA_RDMA_RUNNER is "1"
+#              (Settings > CI/CD > Variables), so no pipeline ever waits for a runner that does not exist.
+#   release-check / publish  release tags on main, promoted dev -> qa -> mark -> alpha|beta|ga (same commit, same version):
+#              nothing re-tests (the code was gated into main); alpha/beta/ga publish the public tree to GitHub (end of this file).
+#   workbench  on-demand heavy work that is not a gate (repro hunts, stress repeats, sanitizer sweeps, engine runs).
+#              tools/ci/workbench.sh commits the command as .workbench/cmd (+ .workbench/opts) on top of a backup/*
+#              branch, pushes that to a throwaway backup/wb/... branch (backup/* pushes start no pipeline), starts an
+#              api pipeline there, fetches the logs and deletes the branch. No pipeline variables (the project does
+#              not let users set them), and the command reaches bash byte for byte.
+# gate and workbench share resource_group `miracache-runner`: the project runner is shared with other projects and the
+# gate's timing tests flake under extra load, so GitLab runs one of them at a time and queues the other. gate-rdma runs on
+# its own host (resource_group miracache-rdma). A newer push to a branch cancels the older push's gate (interruptible +
+# auto_cancel); a workbench job is never cancelled that way.
+# Gate logs (build/gate*.log) are kept 30 days; ctest's cost data (build/gate-costdata) is cached per branch (fallback:
+# main), so each lane's ctest starts the longest tests first.
+stages: [release, gate, publish, record]  # release: release-check (a pipeline of .pre jobs only is never created)
+
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH =~ /^task\//)
+    - if: $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"
+    - if: $CI_COMMIT_TAG =~ /^(dev|qa|mark|alpha|beta|ga)-[0-9]+\.[0-9]+\.[0-9]+$/   # a release tag (end of this file)
+
+# The docker executor setup shared by gate and workbench: a dind daemon the dev image is built in.
+.dind:
+  image: docker:27-cli
+  services:
+    - name: docker:27-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    # The runner is shared (endlesstokens, vaman): never load modules or create RDMA devices from these jobs.
+    MIRA_GATE_NO_RDMA: "1"
+  before_script:
+    - apk add --no-cache bash coreutils findutils grep sed gawk procps util-linux git curl jq >/dev/null
+    - for i in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
+    - docker info --format 'dind {{.ServerVersion}} cpus={{.NCPU}} mem={{.MemTotal}} storage={{.Driver}}'
+    # Builds the dev image, and proves the dind daemon sees $CI_PROJECT_DIR (tools/dev/run.sh bind-mounts it at /work).
+    - bash tools/dev/run.sh -- test -f /work/tools/ci/full_gate.sh
+
+# The paths whose change needs the full gate: product, build, test and gate code (user, 2026-11-18: test once, promote
+# the same build). KEEP IN SYNC with tools/ci/product-paths.txt (tools/ci/gate_status.sh reads that one).
+.product-paths: &product-paths
+  - "core/**/*"
+  - "client/**/*"
+  - "server/**/*"
+  - "controller/**/*"
+  - "proto/**/*"
+  - "python/**/*"
+  - "sim/**/*"
+  - "tests/**/*"
+  - "model/**/*"
+  - "cmake/**/*"
+  - "profiles/**/*"
+  - "deploy/**/*"
+  - "CMakeLists.txt"
+  - "CMakePresets.json"
+  - "pyproject.toml"
+  - "tools/dev/**/*"
+  - "tools/ci/full_gate.sh"
+  - "tools/ci/build_and_test.sh"
+  - "tools/ci/rdma_test.sh"
+  - "tools/ci/docker_e2e.sh"
+  - "tools/ci/engine_contract.sh"
+  - "tools/ci/pybind_check.sh"
+  - "tools/ci/systemd_acceptance.sh"
+  - "tools/ci/lint_nondeterminism.sh"
+  - "tools/ci/x86_check.sh"
+  - "tools/ci/bench_smoke.sh"
+  - "tools/ci/model_nightly.sh"
+
+.gate-common:
+  stage: gate
+  timeout: 4h
+  # The gate runs once per code change, on its way into main: a branch whose product code differs from main's, or a
+  # pipeline started by hand. Never on main itself (main only receives commits whose product code is gated:
+  # tools/ci/gate_status.sh), never on a release tag (dev -> qa -> mark -> alpha|beta|ga promote that same tested commit;
+  # a bug found at any stage is fixed as new code, which comes back through a branch and a new dev), never on backup/*.
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH =~ /^backup\//
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: never
+    - changes:
+        paths: *product-paths
+        compare_to: refs/heads/main
+      when: on_success
+  cache:
+    key: gate-costdata-$CI_COMMIT_REF_SLUG
+    fallback_keys: [gate-costdata-main]
+    paths: [build/gate-costdata/]
+    when: always
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - build/gate*.log
+      - build/gate-costdata/
+      - build/docker-images-build.log
+      - build/docker-e2e*.log
+
+gate:
+  extends: [.gate-common, .dind]
+  resource_group: miracache-runner
+  interruptible: true  # a newer push to the same branch supersedes this gate
+  script:
+    - mkdir -p build
+    # A workbench command commit (.workbench/) belongs only on a throwaway backup/wb/ branch, never in gated history.
+    - 'if [ -e .workbench ]; then echo "FAIL: .workbench/ is committed; it belongs only on backup/wb/ branches (tools/ci/workbench.sh)"; exit 1; fi'
+    - bash -c 'set -o pipefail; tools/ci/full_gate.sh 2>&1 | tee build/gate.log'
+  after_script:
+    # Free the shared runner's disk: drop the build dirs, keep the logs and cost data for the upload.
+    - find build -mindepth 1 -maxdepth 1 -type d ! -name gate-costdata -exec rm -rf {} + 2>/dev/null || true
+
+gate-rdma:
+  extends: .gate-common
+  tags: [miracache-rdma]
+  resource_group: miracache-rdma  # its own host (concurrent = 1 there); never queued behind the project runner's jobs
+  interruptible: true
+  rules:  # as .gate-common, and only where the RDMA runner exists
+    - if: $MIRA_RDMA_RUNNER != "1"
+      when: never
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH =~ /^backup\//
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "api"
+      when: on_success
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: never
+    - changes:
+        paths: *product-paths
+        compare_to: refs/heads/main
+      when: on_success
+  script:
+    - mkdir -p build
+    - 'if [ -e .workbench ]; then echo "FAIL: .workbench/ is committed; it belongs only on backup/wb/ branches (tools/ci/workbench.sh)"; exit 1; fi'
+    - bash -c 'set -o pipefail; tools/ci/full_gate.sh 2>&1 | tee build/gate.log'
+
+# The run is described by two committed files (tools/ci/workbench.sh writes them):
+#   .workbench/cmd   the command, run as a file (`bash .workbench/cmd`; its status is its LAST command's). It starts
+#                    from a fresh checkout: it configures and builds what it needs and keeps only logs under
+#                    build/workbench/ (the artifacts). Never a secret in it (it is in git, the job log and the artifacts).
+#   .workbench/opts  lines KEY=VALUE, each checked here (never sourced): flags=--tsan (tools/dev/run.sh flag; RDMA
+#                    never runs on this runner), host=1 (run in the job shell, which has the docker CLI, instead of the
+#                    dev container; no limits then), cpus=1..6 / mem=1g..12g or 1m..12288m (the dev container's limits;
+#                    default 4 / 8g of the shared 8 CPU / 16 GB runner).
+# The command's output streams to the job page AND build/workbench/console.log (a canceled job keeps its trace).
+workbench:
+  extends: .dind
+  stage: gate
+  timeout: 4h
+  resource_group: miracache-runner
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "api" || $CI_PIPELINE_SOURCE == "web") && $CI_COMMIT_BRANCH =~ /^backup\/wb\//
+      exists: [.workbench/cmd]
+  script:
+    - |
+      mkdir -p build/workbench
+      log=build/workbench/console.log
+      bad() { echo "WORKBENCH: FAIL rc=2 ($1)" | tee "$log"; exit 2; }
+      flags="" host=0 cpus=4 mem=8g limits=0
+      if [ -f .workbench/opts ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+          case "$line" in
+            "") ;;
+            flags=--tsan) flags=--tsan ;;
+            flags=) ;;
+            host=1) host=1 ;;
+            host=0) ;;
+            cpus=[1-6]) cpus=${line#cpus=}; limits=1 ;;
+            mem=*)
+              v=${line#mem=}; n=${v%[gm]}
+              case "$n" in ""|*[!0-9]*|0*) bad "mem '$v' refused (1g..12g or 1m..12288m)" ;; esac
+              [ "$v" != "$n" ] || bad "mem '$v' refused (needs g or m)"
+              case "$v" in *g) [ "$n" -le 12 ] || bad "mem '$v' above 12g" ;; *m) [ "$n" -le 12288 ] || bad "mem '$v' above 12288m" ;; esac
+              mem=$v; limits=1 ;;
+            *) bad "option '$line' refused (only flags=--tsan, host=1, cpus=1..6, mem=1g..12g; RDMA runs stay local)" ;;
+          esac
+        done < .workbench/opts
+      fi
+      if [ "$host" = 1 ] && [ -n "$flags" ]; then bad "flags apply to the dev container, not with host=1"; fi
+      if [ "$host" = 1 ] && [ "$limits" = 1 ]; then bad "cpus/mem limit the dev container; a host=1 run has no limits"; fi
+      [ -s .workbench/cmd ] || bad "empty .workbench/cmd"
+      export MIRA_DEV_CPUS=$cpus MIRA_DEV_MEM=$mem
+      echo "workbench $CI_COMMIT_SHORT_SHA on $CI_COMMIT_BRANCH host=$host flags=${flags:-none} cpus=$cpus mem=$mem" | tee "$log"
+      { printf 'cmd: '; cat .workbench/cmd; echo; } | tee -a "$log"
+      # Stream to the job page and the log file; the command's status travels through a file (sh has no pipefail).
+      rcf=build/workbench/.rc
+      echo 1 > "$rcf"
+      if [ "$host" = 1 ]; then
+        { bash .workbench/cmd < /dev/null 2>&1; echo $? > "$rcf"; } | tee -a "$log"
+      else
+        # shellcheck disable=SC2086 (one flag word or none)
+        { bash tools/dev/run.sh $flags -- bash /work/.workbench/cmd < /dev/null 2>&1; echo $? > "$rcf"; } | tee -a "$log"
+      fi
+      rc=$(cat "$rcf" 2>/dev/null || echo 1)
+      rm -f "$rcf"
+      if [ "$rc" -eq 0 ]; then echo "WORKBENCH: OK" | tee -a "$log"; else echo "WORKBENCH: FAIL rc=$rc" | tee -a "$log"; fi
+      exit "$rc"
+  after_script:
+    - find build -mindepth 1 -maxdepth 1 -type d ! -name workbench -exec rm -rf {} + 2>/dev/null || true
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - build/workbench/
+
+# Releases (workstation setup guide, releases section): tags on commits of main, promoted along one chain, each stage on the SAME
+# commit and version as the one before:  dev-X.Y.Z -> qa-X.Y.Z -> mark-X.Y.Z -> alpha-X.Y.Z | beta-X.Y.Z | ga-X.Y.Z
+#   release-check  every release tag, seconds (tools/ci/release_check.sh): on main, and promoted from a green previous stage
+#   gate           never on release tags: main only holds gated product code (rules in .gate-common)
+#   publish        alpha-* / beta-* / ga-* only: the public tree goes to GitHub under the same tag name
+#     tools/ci/public_export.sh   the allowlisted paths (tools/ci/public/paths.txt) + overlay, leak scan, gitleaks, and a
+#                                 standalone build of that tree in the dev container
+#     tools/ci/public_publish.sh  one release commit on top of the last one: GitLab branch `public`, then GitHub main + tag
+# dev, qa and mark are internal: gated or checked, tagged in GitLab, never published.
+# Secrets: GITHUB_DEPLOY_KEY, a File variable (protected) holding the private half of a write deploy key of the GitHub
+# repo; it reaches only protected refs, so release tags are protected (*.*.*). The GitLab push uses the job token
+# (Settings > CI/CD > Job token permissions: allow Git push). GitHub's host key is pinned below (api.github.com/meta).
+release-check:
+  stage: release
+  image: docker:27-cli
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^(dev|qa|mark|alpha|beta|ga)-[0-9]+\.[0-9]+\.[0-9]+$/
+  script:
+    - apk add --no-cache bash git curl >/dev/null
+    - bash tools/ci/release_check.sh "$CI_COMMIT_TAG" "$CI_COMMIT_SHA"
+
+publish:
+  extends: .dind
+  stage: publish
+  needs:
+    - job: release-check
+      artifacts: false
+  timeout: 2h
+  resource_group: miracache-runner
+  variables:
+    GIT_DEPTH: "0"
+    PUBLIC_GITHUB_REPO: git@github.com:mirastacklabs-ai/miracache.git
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^(alpha|beta|ga)-[0-9]+\.[0-9]+\.[0-9]+$/
+  script:
+    - apk add --no-cache openssh-client >/dev/null
+    - |
+      set -e
+      [ -n "${GITHUB_DEPLOY_KEY:-}" ] && [ -s "$GITHUB_DEPLOY_KEY" ] || { echo "FAIL: publish: the File variable GITHUB_DEPLOY_KEY is missing (protected tags only)"; exit 1; }
+      bash tools/ci/public_export.sh --sha "$CI_COMMIT_SHA" --build
+      install -d -m 0700 /tmp/gh
+      { cat "$GITHUB_DEPLOY_KEY"; echo; } > /tmp/gh/key && chmod 0600 /tmp/gh/key  # ssh needs the final newline
+      echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > /tmp/gh/known_hosts
+      export GIT_SSH_COMMAND="ssh -i /tmp/gh/key -o IdentitiesOnly=yes -o UserKnownHostsFile=/tmp/gh/known_hosts -o StrictHostKeyChecking=yes"
+      bash tools/ci/public_publish.sh --tree build/public/tree --tag "$CI_COMMIT_TAG" --github "$PUBLIC_GITHUB_REPO" \
+        --gitlab "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+  after_script:
+    - rm -rf /tmp/gh
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - build/public/*.log
+
+# The green marker of an internal stage: pushed only when every earlier job of this tag pipeline passed (its
+# release-check), so the next stage's release-check can see it (tools/ci/release_check.sh). Job-token push (Settings >
+# CI/CD > Job token permissions: allow Git push); ok/* falls under the protected tag pattern *.*.*, so only a Maintainer's
+# pipeline can create one. Never pushed to GitHub (publish pushes only the release tag).
+release-record:
+  stage: record
+  image: docker:27-cli
+  variables:
+    GIT_DEPTH: "1"
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^(dev|qa|mark)-[0-9]+\.[0-9]+\.[0-9]+$/
+  script:
+    - apk add --no-cache git >/dev/null
+    - git -c user.name="MIRASTACK LABS" -c user.email="cache@mirastacklabs.ai" tag -f "ok/$CI_COMMIT_TAG" "$CI_COMMIT_SHA"
+    - git push -q "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "refs/tags/ok/$CI_COMMIT_TAG"
+    - 'echo "OK: release $CI_COMMIT_TAG is green on $CI_COMMIT_SHORT_SHA: ok/$CI_COMMIT_TAG pushed"'

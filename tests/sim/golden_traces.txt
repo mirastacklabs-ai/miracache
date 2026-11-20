@@ -1,0 +1,11 @@
+# Pinned sim trace hashes: "<seed> <trace hash>". Any change to fabric/sim semantics, the
+# fault model, RNG use or the scenario changes these. Re-record deliberately with
+#   sim_runner --seed N   (prints "seed N trace <hash>") and review the diff.
+# Odd seeds run the opt-in unordered network, even seeds the RC-default ordered one.
+1 889a6cf929deab30
+2 c410aa1601e54959
+3 8ae9394642638360
+4 358910f6f3dde7d1
+10 25164d4fe9418db6
+77 6a11ede9e4e57ed8
+200 635eb83ada189b21

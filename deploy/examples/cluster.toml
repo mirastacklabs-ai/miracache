@@ -1,0 +1,41 @@
+# cluster.toml: the operator's INTENT for bundle mode. `mirctl bundle publish --source cluster.toml ...` turns it into
+# a signed bundle. Node IDs, hostnames and rails are NOT written here: they are learned from the nodes
+# (GET /v1/identity). Principal IDs and key IDs are computed. Unknown keys are errors.
+# Guide: the bundle-mode operator guide. Parsed by controller/cmd/mirctl/source.go (checked by TestExampleClusterTomlParses).
+
+reason = "initial two-node lab cluster"      # recorded in the bundle and the audit log
+
+# One [[nodes]] entry per memory node, keyed by its ADMIN address (the [admin] listen of its memnode.toml).
+[[nodes]]
+admin  = "10.0.0.10:9465"
+weight = 1                                    # share of the keyspace, default 1
+# zone  = "rack-a"                            # optional failure domain: all nodes or none
+# state = "active"                            # active (default) | draining | readonly
+
+[[nodes]]
+admin  = "10.0.0.11:9465"
+weight = 1
+
+# Principals own scopes; quota_bytes and max_scopes are PER NODE caps for that principal and both are required.
+# Size them for the run: quota_bytes = n_segments x segment_bytes of the memory node (the whole store), max_scopes =
+# at least sessions x prefixes-per-session. Too small = constant LRU eviction (miracache_evict_bytes_total{reason="cap"}).
+[[principals]]
+name       = "lab"
+identities = ["spiffe://lab/client-1", "spiffe://lab/client-2"]   # URI SANs of the GPU hosts' client certs
+quota_bytes = 17179869184                     # 16 x 1 GiB
+max_scopes  = 1048576
+
+# Who may operate the cluster over the admin APIs. security-admin is needed to change principals/rbac later.
+[[rbac]]
+identity = "spiffe://lab/ops"                 # the cert you give mirctl and the controller (--cert)
+roles    = ["operator", "security-admin"]
+
+# Cluster-wide settings for the memory nodes. In bundle mode these keys must NOT appear in memnode.toml
+# ([store] max_bytes / max_scopes, [lease], [retention], [evict], [quota], ... are refused there).
+[config.cluster.memnode.store]
+max_bytes  = 17179869184                      # default per-principal cap for principals WITHOUT a [[principals]] quota
+max_scopes = 1048576
+
+# Replicas live here in bundle mode (client.toml must not set placement.replicas).
+[config.cluster.placement]
+replicas = 1

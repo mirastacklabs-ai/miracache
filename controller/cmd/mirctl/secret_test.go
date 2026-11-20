@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const fixtures = "../../../tests/fixtures/"
+const fixtures = "../../../proto/golden/"
 
 func secretApp(start byte) (*app, *bytes.Buffer, *bytes.Buffer) {
 	out, errw := &bytes.Buffer{}, &bytes.Buffer{}

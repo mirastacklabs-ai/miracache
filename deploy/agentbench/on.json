@@ -1,0 +1,22 @@
+{
+  "model": "google/gemma-4-31B-it",
+  "name": "gemma4-31b-miracache-on",
+  "revision": "842da3794eaa0b77d5f08bae87a17459d91ff475",
+  "served_name": "google/gemma-4-31B-it",
+  "tp": "1",
+  "max_len": "16384",
+  "gpu_memory": "0.90",
+  "max_seqs": "unbounded",
+  "target_sessions": "819",
+  "batched_tokens": "engine-default",
+  "prefix_cache": "on",
+  "tool_parser": "gemma4",
+  "reasoning_parser": "gemma4",
+  "kv_cache_dtype": "fp8",
+  "port": "8000",
+  "tls": "off",
+  "advanced_args": "",
+  "extra_args": "--quantization fp8 --block-size 16 --prefix-caching-hash-algo sha256_cbor --kv-transfer-config '{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_load_failure_policy\":\"recompute\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":34359738368,\"canonical_layout\":true,\"secondary_tiers\":[{\"type\":\"MiraTier\",\"module_path\":\"miracache.vllm_tier\",\"config\":\"/etc/miracache/client.toml\",\"kv_load_failure_policy\":\"recompute\",\"model_revision\":\"842da3794eaa0b77d5f08bae87a17459d91ff475\",\"ns_fields\":{\"quantization\":\"fp8\"}}]}}'",
+  "version": "0.33.0",
+  "pip_extras": "miracache==0.0.1"
+}

@@ -1,0 +1,35 @@
+# miracache client config for the vLLM MiraTier (A2.9 agentbench "on" run).
+# Copy to /etc/miracache/client.toml. Same format as deploy/two-host/client.toml (see its README
+# for certs and ports); tests/deploy loads this file through the real parser, so it cannot go stale.
+#
+# Fairness: the on/off pair uses the same model, corpus and SLOs. Rotate the secret per run
+# for a cold cache (mirctl secret gen). No gateway: scopes come from the static provider and
+# vLLM's own keys (cache_salt is chained into the chain root by vLLM).
+
+[scope]
+provider    = "static"
+secret_file = "/run/miracache/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600, tmpfs
+
+# More nodes: repeat [[nodes]] (each with its own admin + identity); optional `weight` (default 1)
+# sets the placement share. See deploy/two-host/client-3nodes.toml.example.
+[[nodes]]
+rails    = ["10.0.0.10:7471"]                 # RDMA CM address of the memory node
+admin    = "10.0.0.10:9465"                   # IssueTicket over mTLS
+identity = "spiffe://lab/node-1"              # always set: pins the memory node's identity
+
+[tls]
+cert = "/etc/miracache/pki/client-1.pem"
+key  = "/etc/miracache/pki/client-1.key"      # mode 0600, or the client refuses to start
+ca   = "/etc/miracache/pki/ca.pem"
+
+[fabric]
+protocol = "auto"            # RoCE and iWARP are treated equally
+
+[landing]
+subpool_bytes = 268435456
+
+[crypto]
+workers = 4
+
+[lab]
+static_membership = true

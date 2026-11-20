@@ -5,14 +5,14 @@ Both are pure Python, need no engine import, and run from `python/` (`PYTHONPATH
 ## mira-preflight
 
 ```
-python -m miracache.preflight --engine vllm   --engine-args "<cli string>" --secret-file /run/miracache/secret [--json]
+python -m miracache.preflight --engine vllm   --engine-args "<cli string>" --secret-file /etc/miracache/keys/secret [--json]
 python -m miracache.preflight --engine sglang --answers answers.json --secret-file ...
 python -m miracache.preflight fingerprint --engine ... --engine-args ...      # this host's parity fingerprint
 python -m miracache.preflight compare host-a.json host-b.json ...             # exit 1 on any mismatch, names the field
 ```
 
 Exit: 0 ok, 1 hard fail, 2 warnings only with `--strict-warnings` (or a usage error).
-Other flags: `--provider engine-native|et-gateway`, `--engine-version`, `--env K=V` (default: this process), `--root` (fake fs for node facts), `--no-node-facts`, `--min-memlock-mib`, `--nic-report` (output of `mira-nicprobe --json`, attached verbatim; TODO A1.3: turn its findings into pass/warn/fail).
+Other flags: `--provider engine-native|et-gateway`, `--engine-version`, `--env K=V` (default: this process), `--root` (fake fs for node facts), `--no-node-facts`, `--min-memlock-mib`, `--nic-report` (output of `mira-nicprobe --json`, attached verbatim; its findings are not yet graded pass/warn/fail).
 
 | Result | Check |
 |---|---|

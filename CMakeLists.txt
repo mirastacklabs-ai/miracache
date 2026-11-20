@@ -19,6 +19,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND PkgConfig_FOUND)
   endif()
 endif()
 option(MIRACACHE_WITH_VERBS "Build the verbs/rdma_cm fabric backend" ${_verbs_default})
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(_examples_default ON)
+else()
+  set(_examples_default OFF)
+endif()
+option(MIRACACHE_EXAMPLES "Build the programs in examples/" ${_examples_default})
+option(MIRACACHE_USE_SYSTEM_TOMLPLUSPLUS "Use an installed toml++ (find_package) instead of fetching it" OFF)
 option(MIRACACHE_SIM "Build the deterministic simulation harness (sim/)" ON)
 option(MIRACACHE_FUZZ "Build libFuzzer targets (requires clang)" OFF)
 option(MIRACACHE_WERROR "Treat compiler warnings as errors (CI forces ON)" ON)
@@ -27,6 +34,7 @@ option(MIRACACHE_WITH_ROCM "GPU-direct support (stub: option only)" OFF)
 set(MIRACACHE_SANITIZE "" CACHE STRING "Sanitizers, e.g. address;undefined or thread")
 set(MIRACACHE_SIM_SEEDS 200 CACHE STRING "Seeds run by the sim_smoke test")
 set(MIRACACHE_STORE_SEEDS 200 CACHE STRING "Seeds run by the sim_store test (sim preset: 2000)")
+set(MIRACACHE_AEAD_SEEDS 2000 CACHE STRING "Seeds run by the sim_aead sweep")
 # Compiles the BUGGIFY teeth hooks (util/buggify.h) into the store so the sim can prove it
 # detects them. Off in production builds, where the hooks fold to constant false.
 option(MIRACACHE_TEETH "Compile store teeth hooks for the simulator (sim preset only)" OFF)
@@ -74,13 +82,19 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # toml++ pinned by exact tag and URL hash (header-only; SYSTEM so -Werror ignores its headers).
 # Declared once here; core/control, core/fabric, client/ and server/ link tomlplusplus::tomlplusplus.
-include(FetchContent)
-FetchContent_Declare(tomlplusplus
-  URL https://github.com/marzer/tomlplusplus/archive/refs/tags/v3.4.0.tar.gz
-  URL_HASH SHA256=8517f65938a4faae9ccf8ebb36631a38c1cadfb5efa85d9a72e15b9e97d25155
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-  SYSTEM)
-FetchContent_MakeAvailable(tomlplusplus)
+# Offline or behind a proxy: -DMIRACACHE_USE_SYSTEM_TOMLPLUSPLUS=ON uses an installed toml++ 3.4, or
+# -DFETCHCONTENT_SOURCE_DIR_TOMLPLUSPLUS=<unpacked source> skips the download (docs/operations.md).
+if(MIRACACHE_USE_SYSTEM_TOMLPLUSPLUS)
+  find_package(tomlplusplus 3.4 REQUIRED)
+else()
+  include(FetchContent)
+  FetchContent_Declare(tomlplusplus
+    URL https://github.com/marzer/tomlplusplus/archive/refs/tags/v3.4.0.tar.gz
+    URL_HASH SHA256=8517f65938a4faae9ccf8ebb36631a38c1cadfb5efa85d9a72e15b9e97d25155
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SYSTEM)
+  FetchContent_MakeAvailable(tomlplusplus)
+endif()
 
 add_subdirectory(core/util)
 add_subdirectory(core/control)
@@ -94,7 +108,11 @@ add_subdirectory(core/client)
 add_subdirectory(client)
 add_subdirectory(server)
 
-# The public source tree ships without the simulator and the test suites: build them only where they exist.
+if(MIRACACHE_EXAMPLES AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt")
+  add_subdirectory(examples)
+endif()
+
+# The simulator (sim/), the test suites and the protocol model (model/, a separate Rust crate) all ship in the public tree.
 if(MIRACACHE_SIM AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sim/CMakeLists.txt")
   add_subdirectory(sim)
 endif()

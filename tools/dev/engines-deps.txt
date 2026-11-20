@@ -1,0 +1,29 @@
+# Import-only deps for vllm / sglang (see Dockerfile.engines), found by importing until
+# nothing was missing. Not the engines' real requirement sets; nothing here runs an engine.
+packaging
+msgspec
+regex
+requests
+psutil
+pyzmq
+transformers
+cbor2
+aiohttp
+openai-harmony
+openai
+pillow
+pybase64
+cachetools
+cloudpickle
+uvloop
+py-cpuinfo
+prometheus_client
+xgrammar
+fastapi
+partial_json_parser
+llguidance
+pydantic
+orjson
+triton
+ipython
+traitlets

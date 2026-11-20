@@ -1,0 +1,20 @@
+# Engines image for the contract tests (tools/ci/engine_contract.sh): the dev image plus the
+# REAL vLLM and SGLang, installed IMPORT-ONLY into /opt/engines. Not for running an engine.
+#   docker build -t miracache-engines:0.33.0-0.5.23 -f tools/dev/Dockerfile.engines tools/dev
+# vLLM and SGLang come as prebuilt aarch64 wheels with --no-deps (their pins would pull
+# CUDA torch and ~100 packages); only the deps the imports need are added afterwards
+# (engines-deps.txt, found by importing until nothing is missing). Binary wheels only:
+# a source build of vLLM must never start. torch is the CPU-only wheel.
+FROM miracache-dev:24.04
+ARG VLLM_VERSION=0.33.0
+ARG SGLANG_VERSION=0.5.23
+USER root
+RUN python3 -m venv /opt/engines \
+ && /opt/engines/bin/pip install --no-cache-dir --only-binary=:all: --no-deps \
+      vllm==${VLLM_VERSION} sglang==${SGLANG_VERSION}
+RUN /opt/engines/bin/pip install --no-cache-dir --only-binary=:all: \
+      --index-url https://download.pytorch.org/whl/cpu torch==2.14.0 numpy
+COPY engines-deps.txt /tmp/engines-deps.txt
+RUN /opt/engines/bin/pip install --no-cache-dir --only-binary=:all: -r /tmp/engines-deps.txt \
+ && rm /tmp/engines-deps.txt
+USER ubuntu
