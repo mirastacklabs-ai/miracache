@@ -1,4 +1,4 @@
-// Package store is the controller's file store (membership plan decision 12, P30).
+// Package store is the controller's file store.
 //
 // One controller instance per cluster: Open takes flock(LOCK_EX|LOCK_NB) on <dir>/store.lock and
 // holds it until Close (the process lifetime); a second instance gets ErrLocked. There is no
@@ -25,7 +25,7 @@ import (
 	"miracache/controller/bundle"
 )
 
-// HistoryLen is how many published bodies the store keeps (for rollback, MB8b).
+// HistoryLen is how many published bodies the store keeps (for rollback).
 const HistoryLen = 16
 
 var (
@@ -42,7 +42,7 @@ type DesiredNode struct {
 	Weight uint64 `json:"weight"`
 	Zone   string `json:"zone,omitempty"`
 	State  string `json:"state"` // active | draining | readonly
-	// DrainSince (RFC 3339) is when the drain started; the drain timers (MB9) run from it, so a
+	// DrainSince (RFC 3339) is when the drain started; the drain timers run from it, so a
 	// controller restart resumes mid-drain from the store.
 	DrainSince string `json:"drain_since,omitempty"`
 }
@@ -58,15 +58,15 @@ type State struct {
 	History       [][]byte           `json:"history,omitempty"`     // the last HistoryLen published bodies, oldest first
 	LastEnvelope  []byte             `json:"last_envelope,omitempty"`
 	// Retiring lists nodes the last bundle removed; the reconcile loop keeps pushing them the
-	// removing bundle for a few passes (Y10).
+	// removing bundle for a few passes.
 	Retiring []Retiring `json:"retiring,omitempty"`
-	// Failed lists active nodes the failure detector removed (MB9): their address is still desired,
+	// Failed lists active nodes the failure detector removed: their address is still desired,
 	// so a node that returns with health OK for rejoin_ms is re-added (auto-rejoin).
 	Failed []FailedNode `json:"failed,omitempty"`
 	// Replaced lists (RFC 3339) when the failure detector granted a node-ID replacement; they count
-	// against static stability for the removal window (MB9).
+	// against static stability for the removal window.
 	Replaced []string `json:"replaced,omitempty"`
-	// Pending is the intent record written before a publish is pushed (Y13): if the controller
+	// Pending is the intent record written before a publish is pushed: if the controller
 	// dies between push and commit, reconcile completes the commit when a node holds the bundle.
 	Pending *Pending `json:"pending,omitempty"`
 }

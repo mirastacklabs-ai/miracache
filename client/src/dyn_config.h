@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR2: the client's live configuration (hot-reload plan decisions 1-4). Internal only: there is no C ABI or
-// Python reload call (P34). The source is the bundle's `config.cluster.client` table; the lab-mode client restarts.
+// The client's live configuration. Internal only: there is no C ABI or
+// Python reload call. The source is the bundle's `config.cluster.client` table; the lab-mode client restarts.
 //
-// The key table lives here and only here (P16: two C++ tables, none in Go). Every key has one class:
+// The key table lives here and only here (two C++ tables, none in Go). Every key has one class:
 //
 //   key                          class  source                         default (before any bundle value)
 //   ---------------------------  -----  -----------------------------  ---------------------------------
@@ -28,8 +28,8 @@
 //   breaker.probes               A      same                           3 (Half-open: ops at a time, and good ones to close)
 //   crypto.workers               C      [cluster.client.crypto]        4 (applied by the membership thread)
 //   landing.subpool_bytes        B      [cluster.client.landing]       64 MiB   \  recorded as pending: "applied at next
-//   fabric.mtu / protocol / fetch_qps B same fabric table              4096 / auto / profile  /  rebuild" (HR3b)
-//   R (placement.replicas)       A      config.cluster.placement       NOT here: its one home is the placement snapshot (P32)
+//   fabric.mtu / protocol / fetch_qps B same fabric table              4096 / auto / profile  /  rebuild"
+//   R (placement.replicas)       A      config.cluster.placement       NOT here: its one home is the placement snapshot
 //
 // STATIC keys (scope.*, tls.*, control.*, lab.*, nodes, fabric.device(s), fabric.profiles_file) in the table are an
 // error: the whole table is rejected and the old snapshot stays. Unknown keys are ignored (rolling upgrades), counted
@@ -84,7 +84,7 @@ struct ClientDyn {
   std::uint32_t breaker_probes = 3;
   // ---- class C ----
   std::uint32_t crypto_workers = 4;
-  // ---- class B: the wanted value; the running one is the base. Applied by the HR3b rebuild. ----
+  // ---- class B: the wanted value; the running one is the base. Applied by the planned rebuild. ----
   std::uint64_t subpool_bytes = 64ull << 20;
   std::uint32_t mtu = 4096;
   FabricProtocol protocol = FabricProtocol::Auto;

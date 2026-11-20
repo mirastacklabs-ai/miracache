@@ -78,7 +78,7 @@ class NoProvider final : public ScopeProvider {
 // The memory node: Server on a VerbsCmFabric, one thread, lab tickets written to a file.
 class Node {
  public:
-  // `draining`: begin_drain before serving (r7 R02: every new connect is refused as Busy).
+  // `draining`: begin_drain before serving (every new connect is refused as Busy).
   Node(const std::string& device, const std::string& ticket_file, bool draining = false) : ticket_file_(ticket_file) {
     fabric::VerbsOptions vo;
     vo.device = device;
@@ -257,7 +257,7 @@ TEST_P(WireRdma, ClientOpenStoreFetchInvalidate) {
   ::unlink(tmpl);
 }
 
-// r7 R01/R02: on verbs a draining node's admit refusal comes back as Busy (CM reject byte kRejectBusy),
+// On verbs a draining node's admit refusal comes back as Busy (CM reject byte kRejectBusy),
 // not AccessDenied, so one connect attempt draws ONE ticket, not ticket_attempts (4). Contrast: a forged
 // ticket on a serving node is AccessDenied and the client does try ticket_attempts tickets.
 TEST_P(WireRdma, DrainingRefusalIsBusyAndDrawsOneTicket) {
@@ -304,14 +304,14 @@ TEST_P(WireRdma, DrainingRefusalIsBusyAndDrawsOneTicket) {
         EXPECT_EQ(h.error().code, ErrorCode::AccessDenied) << h.error().context;
         EXPECT_EQ(drawn, 4);
       }
-      std::fprintf(stderr, "r7-R02 %s: code=%s tickets_drawn=%d\n", draining ? "draining" : "forged",
+      std::fprintf(stderr, "%s: code=%s tickets_drawn=%d\n", draining ? "draining" : "forged",
                    to_string(h.error().code), drawn);
     }
   }
   ::unlink(tmpl);
 }
 
-// r8 N01: the host is up but no memory node listens on the port (it was stopped): the kernel answers the
+// The host is up but no memory node listens on the port (it was stopped): the kernel answers the
 // connect with a REJ carrying zeroed private_data (RoCE) or ECONNREFUSED (iWARP), i.e. reject byte
 // kRejectNone. That is LinkDown and draws ONE ticket, not ticket_attempts (4) as AccessDenied would.
 TEST_P(WireRdma, NoListenerIsLinkDownAndDrawsOneTicket) {
@@ -353,7 +353,7 @@ TEST_P(WireRdma, NoListenerIsLinkDownAndDrawsOneTicket) {
     ASSERT_FALSE(h);
     EXPECT_EQ(h.error().code, ErrorCode::LinkDown) << h.error().context;
     EXPECT_EQ(drawn, 1) << "no listener must draw one ticket, not ticket_attempts";
-    std::fprintf(stderr, "r8-N01 no listener: code=%s tickets_drawn=%d\n", to_string(h.error().code), drawn);
+    std::fprintf(stderr, "no listener: code=%s tickets_drawn=%d\n", to_string(h.error().code), drawn);
   }
   ::unlink(tmpl);
 }
@@ -382,7 +382,7 @@ struct LogCapture {
   std::FILE* f;
 };
 
-// Review s9 K03/K04 over real verbs: HELLO_ACK carries the node's run_bytes (TLV 0x0003); the start-up check names the
+// Over real verbs: HELLO_ACK carries the node's run_bytes (TLV 0x0003); the start-up check names the
 // node; an oversized block is refused by the client before any PUT_BEGIN (the node counts nothing), with one WARN and
 // miracache_client_put_refused_total{reason="too_large"}; a block that fits still commits.
 TEST_P(WireRdma, HelloAckMaxBlockAndOversizedPutRefusedLocally) {
@@ -445,7 +445,7 @@ TEST_P(WireRdma, HelloAckMaxBlockAndOversizedPutRefusedLocally) {
   EXPECT_NE(text.find("max_stored_block_bytes=262144"), std::string::npos) << text;
   EXPECT_EQ(c.wire_port()->put_refusals(), 1u);
   const std::string m = c.metrics_text();
-  // F5: static mode: no series of the node says hostname="unknown" or "", node_info carries the node's own hostname.
+  // Static mode: no series of the node says hostname="unknown" or "", node_info carries the node's own hostname.
   EXPECT_EQ(m.find("hostname=\"unknown\""), std::string::npos) << m;
   EXPECT_EQ(m.find("hostname=\"\""), std::string::npos) << m;
   EXPECT_NE(m.find("miracache_client_node_info{"), std::string::npos) << m;
@@ -494,13 +494,13 @@ TEST_P(WireRdma, CAbiOpenAgainstLabConfig) {
     const int rc = mira_client_open(toml.str().c_str(), nullptr, &c);
     EXPECT_EQ(rc, MIRA_OK) << mira_last_error();
     EXPECT_NE(c, nullptr);
-    if (c != nullptr) {  // ABI 1.2 (review s9 K03): the start-up block size check against the live node
+    if (c != nullptr) {  // ABI 1.2: the start-up block size check against the live node
       std::size_t n = 0;
       EXPECT_EQ(mira_check_block_size(c, 64u << 10, &n), MIRA_OK) << mira_last_error();
       EXPECT_EQ(n, 1u);
       EXPECT_EQ(mira_check_block_size(c, 256u << 10, &n), MIRA_E_CONFIG);
       EXPECT_NE(std::string(mira_last_error()).find("store.run_bytes"), std::string::npos) << mira_last_error();
-      // F5: static/lab mode has no admin hostname; the node named itself in HELLO_ACK, so the error names the real host.
+      // static/lab mode has no admin hostname; the node named itself in HELLO_ACK, so the error names the real host.
       EXPECT_NE(std::string(mira_last_error()).find("(hostname " + log::hostname() + ","), std::string::npos) << mira_last_error();
       EXPECT_EQ(std::string(mira_last_error()).find("hostname unknown"), std::string::npos) << mira_last_error();
     }

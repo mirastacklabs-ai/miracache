@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// owner_set (MB2p): view-based placement order, short sets, thread-local hash context.
+// owner_set: view-based placement order, short sets, thread-local hash context.
 #include <gtest/gtest.h>
 
 #include <array>

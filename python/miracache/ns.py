@@ -1,4 +1,4 @@
-"""The one ``ns`` definition (design/03 R19, spec rev 5.1 §2.6).
+"""The one ``ns`` definition (spec rev 5.1 §2.6).
 
 ``ns`` is the 32-byte namespace digest that goes into every scope ID, key hash and DEK
 (engine-native provider). Two adapter hosts share cache only when their ``ns`` is equal, so

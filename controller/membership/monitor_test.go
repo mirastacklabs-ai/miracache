@@ -353,7 +353,7 @@ func TestDrainToRemovalR1(t *testing.T) {
 		t.Fatalf("still in nodes with bytes_used == 0; log:\n%s", r.log.String())
 	}
 	if r.epoch() != e1 {
-		t.Errorf("leave bumped the epoch (P31): %d -> %d", e1, r.epoch())
+		t.Errorf("leave bumped the epoch: %d -> %d", e1, r.epoch())
 	}
 	if len(r.state().Failed) != 0 {
 		t.Error("a drained node must not be recorded as failed (no auto-rejoin)")
@@ -361,7 +361,7 @@ func TestDrainToRemovalR1(t *testing.T) {
 	if r.desiredCount() != 2 {
 		t.Errorf("%d members", r.desiredCount())
 	}
-	// Clients' view: R=1 chains whose previous owner left fall through (MB7); the bundle still names
+	// Clients' view: R=1 chains whose previous owner left fall through; the bundle still names
 	// the previous view and no longer lists the node.
 	if len(r.body().Membership.Previous) == 0 {
 		t.Error("previous view lost at leave")

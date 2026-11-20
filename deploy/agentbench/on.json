@@ -18,5 +18,5 @@
   "advanced_args": "",
   "extra_args": "--quantization fp8 --block-size 16 --prefix-caching-hash-algo sha256_cbor --kv-transfer-config '{\"kv_connector\":\"OffloadingConnector\",\"kv_role\":\"kv_both\",\"kv_load_failure_policy\":\"recompute\",\"kv_connector_extra_config\":{\"spec_name\":\"TieringOffloadingSpec\",\"cpu_bytes_to_use\":34359738368,\"canonical_layout\":true,\"secondary_tiers\":[{\"type\":\"MiraTier\",\"module_path\":\"miracache.vllm_tier\",\"config\":\"/etc/miracache/client.toml\",\"kv_load_failure_policy\":\"recompute\",\"model_revision\":\"842da3794eaa0b77d5f08bae87a17459d91ff475\",\"ns_fields\":{\"quantization\":\"fp8\"}}]}}'",
   "version": "0.33.0",
-  "pip_extras": "miracache==0.0.1"
+  "pip_extras": "miracache==0.3.0"
 }

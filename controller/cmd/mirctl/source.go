@@ -13,7 +13,7 @@ import (
 	"miracache/controller/store"
 )
 
-// Source is the operator's cluster.toml: intent only (decision 14). Node IDs, hostnames and rails
+// Source is the operator's cluster.toml: intent only. Node IDs, hostnames and rails
 // are learned from the nodes; principal IDs and key IDs are computed. Overrides under
 // [config.node."<admin addr>"] are keyed by admin address.
 //
@@ -125,7 +125,7 @@ func ParseSource(data []byte) (*Source, error) {
 	if len(s.Nodes) == 0 {
 		return nil, fmt.Errorf("no [[nodes]]")
 	}
-	// Overrides are addressed by admin address (P33): a typed node ID there is a mistake.
+	// Overrides are addressed by admin address: a typed node ID there is a mistake.
 	if nodes, ok := f.Config["node"].(map[string]any); ok {
 		for k := range nodes {
 			if !strings.Contains(k, ":") {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A1.5 S2: single-fetch under a mutating remote. Oracle: "OK => output == original
+// Single-fetch under a mutating remote. Oracle: "OK => output == original
 // plaintext" (Decision 3b). tests/ is not linted, so std::thread is allowed here.
 #include <gtest/gtest.h>
 

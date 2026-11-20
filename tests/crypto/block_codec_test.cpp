@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A1.5 S2: block segmenter. Round trips, golden vector (freezes crypto v1), AAD and
+// Block segmenter. Round trips, golden vector (freezes crypto v1), AAD and
 // structure negatives, CRC combine, nonce-reuse guard.
 #include <gtest/gtest.h>
 #include <openssl/evp.h>
@@ -127,7 +127,7 @@ bool all_zero(const Bytes& b) {
 TEST(BlockLayout, Geometry) {
   auto l = layout(0, 16);
   ASSERT_TRUE(l.has_value());
-  EXPECT_EQ(l->segments, 1u);  // D17: empty plaintext still has one segment
+  EXPECT_EQ(l->segments, 1u);  // Empty plaintext still has one segment
   EXPECT_EQ(l->stored_len, 64u + 16u);
   EXPECT_EQ(l->ct_len(0), 16u);
   l = layout(65536, 16);
@@ -177,7 +177,7 @@ TEST(Crc32cCombine, MatchesWholeForManySplits) {
 }
 
 // By-hand structural check, written WITHOUT block_codec: literal header, AAD and nonce
-// bytes (per extent_header.h D16/D18), HKDF via the KAT-tested primitive, raw EVP GCM.
+// bytes (per extent_header.h), HKDF via the KAT-tested primitive, raw EVP GCM.
 // This pins the codec to the documented layout before the golden file is trusted.
 Bytes hand_block_100() {
   const Bytes pt = pattern(100);

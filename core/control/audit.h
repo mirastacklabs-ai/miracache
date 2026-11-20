@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Hash-chained audit log `mira-audit-v1` (RBAC/audit plan decisions 5-7, RB1): the JSON Lines
+// Hash-chained audit log `mira-audit-v1`: the JSON Lines
 // writer (rotation, total byte cap, batched fsync, tail recovery), the per-second coalescer for
 // denied / 429 entries, and the verifier. The Go side (mirctl, controller) must produce files the
 // verifier accepts and verify files this writer produces.
@@ -73,9 +73,9 @@ struct AuditConfig {
 class AuditLog {
  public:
   // Takes an exclusive flock on `cfg.dir` for the life of the object: a second writer gets
-  // ErrorCode::Busy. Tail recovery (P19): everything after the last line that verifies (a partial
+  // ErrorCode::Busy. Tail recovery: everything after the last line that verifies (a partial
   // line, or entries that do not verify) is dropped and an `audit.recover` entry is written.
-  // If open() still fails (I/O error, lock held, unreadable or oversize file), the caller (RB2)
+  // If open() still fails (I/O error, lock held, unreadable or oversize file), the caller
   // decides; the recommended policy is: refuse to start the admin API but keep the data plane
   // running, and alarm. Never write to the files by other means.
   static Expected<AuditLog, Error> open(AuditConfig cfg);
@@ -110,7 +110,7 @@ class AuditLog {
 // Paths of `audit-<first seq>.jsonl` in `dir`, ordered by first seq.
 std::vector<std::string> list_audit_files(const std::string& dir);
 
-// Per-(actor, action, result) one-second coalescing of denied / 429 entries (decision 6).
+// Per-(actor, action, result) one-second coalescing of denied / 429 entries.
 class AuditCoalescer {
  public:
   explicit AuditCoalescer(std::size_t max_keys = 1024) : max_keys_(max_keys) {}

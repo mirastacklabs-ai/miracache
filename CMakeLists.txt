@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(miracache VERSION 0.0.1 LANGUAGES CXX
+project(miracache VERSION 0.3.0 LANGUAGES CXX
         DESCRIPTION "Remote KV-cache tier over RDMA")
 
 set(CMAKE_CXX_STANDARD 20)

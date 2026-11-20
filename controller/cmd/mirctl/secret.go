@@ -20,7 +20,7 @@ import (
 //
 // Blank, space, tab and CR around lines, keys and values are ignored. The file must be a regular
 // file with mode exactly 0600. mirctl writes it canonically (comments, current, kvers ascending,
-// lower-case hex), through a tmp file in the same directory and a rename (P39), and never prints
+// lower-case hex), through a tmp file in the same directory and a rename, and never prints
 // a key.
 
 const secretHeader = `# miracache engine-native secret file. Keep it mode 0600; never commit it.
@@ -182,7 +182,7 @@ func (a *app) secretAddKver(args []string) error {
 		return errors.New("--file is required")
 	}
 	// Two add-kver runs on one file would each read the same highest kver and one would lose its
-	// key (U2-32): serialise them with an flock on a sidecar file (the secret itself is replaced by
+	// key: serialise them with an flock on a sidecar file (the secret itself is replaced by
 	// rename, so it cannot carry the lock).
 	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {

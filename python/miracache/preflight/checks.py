@@ -76,7 +76,7 @@ def _mira_tiers(kv_transfer_config: Optional[str]) -> List[Dict[str, Any]]:
 
 # Engine flags that change the KV bytes but never reach the miracache adapter. Each must be
 # mirrored into ns (operator config) or two hosts that differ in it would share KV: a wrong hit,
-# which R19 forbids, so these are fails. (flag, ns_fields key, why)
+# which the ns rules forbid, so these are fails. (flag, ns_fields key, why)
 _WRONG_HIT = "hosts that differ in it (or an upgrade that changes it) would reuse KV computed differently"
 
 
@@ -218,7 +218,7 @@ def node_checks(facts: Mapping[str, Any], min_memlock_mib: int) -> List[Result]:
 
 
 def load_nic_report(path: str) -> Dict[str, Any]:
-    """Loads `mira-nicprobe --json`. The report is attached verbatim; its "profiles" array (A3.3)
+    """Loads `mira-nicprobe --json`. The report is attached verbatim; its "profiles" array
     is turned into results by nic_profile_checks()."""
     import json
     with open(path) as f:
@@ -226,7 +226,7 @@ def load_nic_report(path: str) -> Dict[str, Any]:
 
 
 def nic_profile_checks(nic: Mapping[str, Any]) -> List[Tuple[str, str, str]]:
-    """A3.3: turn the "profiles" array of `mira-nicprobe --json` into results. The matched profile
+    """Turn the "profiles" array of `mira-nicprobe --json` into results. The matched profile
     is always reported (info-level "ok"); a firmware below the profile minimum fails; an unprofiled
     NIC (generic fallback) and unverified profile values warn; a device with no profile fails."""
     out: List[Tuple[str, str, str]] = []

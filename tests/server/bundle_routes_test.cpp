@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB3a: the memory node's bundle routes over loopback HTTPS + mTLS (POST/GET /v1/bundle, GET /v1/identity),
+// The memory node's bundle routes over loopback HTTPS + mTLS (POST/GET /v1/bundle, GET /v1/identity),
 // persistence of bundle.current and the floor in state_dir, start-up re-verify, dry run, and "reply only after
 // the swap". Bundles are signed by the test-only signer (independent of the library under test).
 #include <arpa/inet.h>
@@ -50,7 +50,7 @@ struct Certs {
     pki = root + "/pki";
     const std::string cmd = std::string("bash ") + MIRACACHE_LAB_CERTS_SH + " " + pki + " --nodes 1 --clients 1,2 >/dev/null";
     EXPECT_EQ(std::system(cmd.c_str()), 0);
-    // "nosan": a client cert from the lab CA without any SAN (bundle routes must refuse it: X14, X20).
+    // "nosan": a client cert from the lab CA without any SAN (bundle routes must refuse it).
     const std::string ns =
         "cd " + pki +
         " && openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out nosan.key 2>/dev/null"
@@ -297,7 +297,7 @@ TEST(BundleRoutes, PushGetIdentity) {
   ASSERT_EQ(id0.code(), 200) << id0.raw;
   EXPECT_EQ(json_num(id0.body(), "applied_generation"), 0);
   EXPECT_EQ(json_str(id0.body(), "hostname"), "hostA");
-  EXPECT_EQ(json_str(id0.body(), "member_state"), "active");  // Y08 fields present (snapshot defaults before the first publish)
+  EXPECT_EQ(json_str(id0.body(), "member_state"), "active");  // fields present (snapshot defaults before the first publish)
   EXPECT_EQ(json_num(id0.body(), "scopes"), 0);
   EXPECT_EQ(json_num(id0.body(), "bytes_used"), 0);
   EXPECT_EQ(json_num(id0.body(), "node_id"), static_cast<long long>(n.server->node_id()));
@@ -415,7 +415,7 @@ TEST(BundleRoutes, StartupWithUnverifiableBundleKeepsServing) {
   auto ok = n.push(env_gen(44, 8));
   ASSERT_EQ(ok.code(), 200) << ok.raw;
   EXPECT_EQ(n.server->applied_bundle().generation, 44u);
-  // X11: the first successful apply clears the alert (identity flag and gauge).
+  // The first successful apply clears the alert (identity flag and gauge).
   EXPECT_NE(n.call("GET", "/v1/identity").body().find("\"startup_unverified\":false"), std::string::npos);
   EXPECT_EQ(metric(*n.server, "miracache_bundle_startup_unverified"), 0.0);
   // A re-push of the floor generation also supersedes (equal hash, but this process never applied it).
@@ -431,7 +431,7 @@ TEST(BundleRoutes, StartupWithUnverifiableBundleKeepsServing) {
   EXPECT_EQ(m.server->applied_bundle().generation, 10u);
 }
 
-// J03/H09: the node exempts a drop_before the floor already holds (not above its stored maximum), so a clock that
+// The node exempts a drop_before the floor already holds (not above its stored maximum), so a clock that
 // stepped back (the stored value now looks like the future) does not make every publish fail at the dry run. A value
 // above the stored maximum is still refused. The floor is seeded with a far-future value (year 2100).
 TEST(BundleRoutes, StoredFutureDropBeforeIsExemptOnlyUpToTheFloorMaximum) {
@@ -545,7 +545,7 @@ TEST(BundleRoutes, StoreThreadTimeoutIs504AndThePushIsPersisted) {
   EXPECT_EQ(n.server->applied_bundle().generation, 42u);
 }
 
-TEST(BundleRoutes, CrashBetweenFloorCommitAndRenameIsHealedAtStartup) {  // X02
+TEST(BundleRoutes, CrashBetweenFloorCommitAndRenameIsHealedAtStartup) {
   const std::string dir = make_dir();
   { Node n(dir); ASSERT_EQ(n.push(env_gen(42)).code(), 200); }
   const std::string env43 = env_gen(43, 8);
@@ -577,7 +577,7 @@ TEST(BundleRoutes, CrashBetweenFloorCommitAndRenameIsHealedAtStartup) {  // X02
   std::system(("rm -rf " + dir).c_str());
 }
 
-TEST(BundleRoutes, RotatedOutKeyAtStartupAppliesWhenEqualToTheFloor) {  // X03 (exception) + X11
+TEST(BundleRoutes, RotatedOutKeyAtStartupAppliesWhenEqualToTheFloor) {
   const std::string dir = make_dir();
   const std::string sec = tu::sec_toml(5), body = tu::body_toml(42, 7, 6);
   { Node n(dir); ASSERT_EQ(n.push(tu::make_envelope(sec, body)).code(), 200); }
@@ -598,7 +598,7 @@ TEST(BundleRoutes, RotatedOutKeyAtStartupAppliesWhenEqualToTheFloor) {  // X03 (
   std::system(("rm -rf " + dir).c_str());
 }
 
-TEST(BundleRoutes, RotatedOutKeyThatDiffersFromTheFloorServesNothing) {  // X03 (other branches)
+TEST(BundleRoutes, RotatedOutKeyThatDiffersFromTheFloorServesNothing) {
   const std::string dir = make_dir();
   std::string old42;
   {
@@ -615,7 +615,7 @@ TEST(BundleRoutes, RotatedOutKeyThatDiffersFromTheFloorServesNothing) {  // X03 
   std::system(("rm -rf " + dir).c_str());
 }
 
-TEST(BundleRoutes, StoredBundleThatFailsTheFloorCheckServesNothing) {  // X04
+TEST(BundleRoutes, StoredBundleThatFailsTheFloorCheckServesNothing) {
   const std::string dir = make_dir();
   { Node n(dir); ASSERT_EQ(n.push(env_gen(43, 8)).code(), 200); }
   // A correctly signed bundle above the floor generation but with an older epoch.
@@ -628,7 +628,7 @@ TEST(BundleRoutes, StoredBundleThatFailsTheFloorCheckServesNothing) {  // X04
   std::system(("rm -rf " + dir).c_str());
 }
 
-TEST(BundleRoutes, SymlinksAreNeverFollowed) {  // X12
+TEST(BundleRoutes, SymlinksAreNeverFollowed) {
   const std::string dir = make_dir();
   { Node n(dir); ASSERT_EQ(n.push(env_gen(42)).code(), 200); }
   ASSERT_EQ(::rename((dir + "/bundle.current").c_str(), (dir + "/elsewhere").c_str()), 0);
@@ -650,7 +650,7 @@ TEST(BundleRoutes, SymlinksAreNeverFollowed) {  // X12
   std::system(("rm -rf " + dir).c_str());
 }
 
-TEST(BundleRoutes, TrustFileChangeIsPickedUpByTheStatCheck) {  // X13
+TEST(BundleRoutes, TrustFileChangeIsPickedUpByTheStatCheck) {
   Node n;
   n.write_trust(tu::trust_toml(/*single_key_both_roles=*/true));  // the security key is gone
   n.bundle->maybe_reload_trust();                                  // before 10 s nothing is re-read
@@ -660,7 +660,7 @@ TEST(BundleRoutes, TrustFileChangeIsPickedUpByTheStatCheck) {  // X13
   EXPECT_EQ(n.push(env_gen(43)).code(), 403);
 }
 
-TEST(BundleRoutes, CertWithoutSanIsRefusedOnBundleRoutes) {  // X14, X20
+TEST(BundleRoutes, CertWithoutSanIsRefusedOnBundleRoutes) {
   Node n;
   EXPECT_EQ(n.call("GET", "/v1/identity", "", "nosan").code(), 403);
   EXPECT_EQ(n.call("GET", "/v1/bundle", "", "nosan").code(), 403);
@@ -673,10 +673,10 @@ TEST(BundleRoutes, CertWithoutSanIsRefusedOnBundleRoutes) {  // X14, X20
   EXPECT_EQ(n.server->applied_bundle().generation, 0u);
 }
 
-TEST(BundleRoutes, PinRaisedAboveRotatedOutBundleServesNothing) {  // Y03
+TEST(BundleRoutes, PinRaisedAboveRotatedOutBundleServesNothing) {
   const std::string dir = make_dir();
   { Node n(dir); ASSERT_EQ(n.push(env_gen(42)).code(), 200); }  // sec_generation 5
-  {  // the pin equals the bundle's sec_generation: still applied (the X03 exception)
+  {  // the pin equals the bundle's sec_generation: still applied (the floor exception)
     Node n(dir, rotated_trust() + "min_sec_generation = 5\n");
     EXPECT_TRUE(n.bundle->startup_view());
   }
@@ -689,7 +689,7 @@ TEST(BundleRoutes, PinRaisedAboveRotatedOutBundleServesNothing) {  // Y03
   std::system(("rm -rf " + dir).c_str());
 }
 
-TEST(BundleRoutes, BundleModeRefusesRailsItCannotAdvertise) {  // Y12
+TEST(BundleRoutes, BundleModeRefusesRailsItCannotAdvertise) {
   using fabric::RailAddr;
   auto ok = bundle_rails({RailAddr{"127.0.0.1", 7471}}, "roce");
   EXPECT_TRUE(ok.error.empty()) << ok.error;
@@ -712,7 +712,7 @@ TEST(BundleRoutes, BundleModeRefusesRailsItCannotAdvertise) {  // Y12
   EXPECT_FALSE(bundle_rails({}, "roce").error.empty());  // no listen rail at all
 }
 
-TEST(BundleRoutes, IdentityListsRails) {  // X06
+TEST(BundleRoutes, IdentityListsRails) {
   Node n;
   const auto j = n.call("GET", "/v1/identity").body();
   EXPECT_NE(j.find("\"rails\":[{\"addr\":\"10.0.0.10:7471\",\"subnet\":\"10.0.0.0/24\",\"protocol\":\"roce\",\"up\":true}]"),
@@ -726,7 +726,7 @@ TEST(BundleRoutes, IdentityListsRails) {  // X06
   EXPECT_NE(lo.find('/'), std::string::npos);
 }
 
-// RL1: rails[] carries the server's real health, not a flag set once at start-up.
+// rails[] carries the server's real health, not a flag set once at start-up.
 TEST(BundleRoutes, IdentityReportsRealRailHealth) {
   Node n;
   const auto pre = n.call("GET", "/v1/identity").body();  // not started: the start-up flag only
@@ -787,7 +787,7 @@ TEST(BundleRoutes, LabModeHasNoBundleRoutes) {
 }
 
 TEST(BundleRoutes, ReSignedEnvelopeReplacesWithoutApply) {
-  // Key rotation (decision 4): a new valid signature over the same bytes replaces the stored envelope.
+  // Key rotation: a new valid signature over the same bytes replaces the stored envelope.
   const auto new_seed = tu::seed_from(0x41);
   const auto pub = tu::public_key(new_seed);
   Node n("", tu::trust_toml() + "\n[[key]]\npublic = \"" + tu::hex(pub.data(), 32) + "\"\nroles = [\"publish\"]\n");
@@ -818,7 +818,7 @@ TEST(BundleRoutes, TrustFileReloadKeepsOldKeysOnFailure) {
   EXPECT_EQ(n.push(env_gen(43)).code(), 403);  // the security key is gone now: the old pair no longer verifies
 }
 
-// ---- HR1: config.cluster.memnode over the push route, and credential files (P13, P16, P39) ---------------------------
+// ---- Config.cluster.memnode over the push route, and credential files ---------------------------
 TEST(BundleRoutes, PushAppliesTheMemnodeConfigAndRejectsAStaticKey) {
   Node n;
   const std::string good = tu::make_envelope(tu::sec_toml(5), tu::body_toml(42, 7, 6, "\n[config.cluster.memnode.lease]\nttl_s = 4\nmax_s = 40\n"
@@ -848,7 +848,7 @@ TEST(BundleRoutes, PushAppliesTheMemnodeConfigAndRejectsAStaticKey) {
   EXPECT_EQ(metric(*n.server, "miracache_config_unknown_keys_total"), 2.0);  // log_level (the fixture's) and future_knob
 }
 
-TEST(BundleRoutes, TrustFileFailureKeepsOldKeysCountsAndRetriesNextTick) {  // P39
+TEST(BundleRoutes, TrustFileFailureKeepsOldKeysCountsAndRetriesNextTick) {
   Node n;
   // The admin listener's accept loop runs the same 10 s trust check (AdminHttps::accept_loop, every poll slice), so after
   // the clock moves EITHER thread does the reload (exactly one: next_stat_ is claimed under the lock) and the count can
@@ -875,7 +875,7 @@ TEST(BundleRoutes, TrustFileFailureKeepsOldKeysCountsAndRetriesNextTick) {  // P
   EXPECT_EQ(reloads("applied", 1.0), 1.0);
 }
 
-TEST(BundleRoutes, AdminCertAndKeyReplacedNonAtomicallyKeepTheOldMaterialUntilTheyMatch) {  // P39
+TEST(BundleRoutes, AdminCertAndKeyReplacedNonAtomicallyKeepTheOldMaterialUntilTheyMatch) {
   const auto& c = certs();
   const std::string dir = make_dir();
   const std::string pki2 = dir + "/pki2";

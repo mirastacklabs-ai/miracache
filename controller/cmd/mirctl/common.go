@@ -97,7 +97,7 @@ func spiffeOf(c *x509.Certificate) string {
 
 // readSeed reads an Ed25519 seed file (64 hex characters), as mira-controller does.
 func readSeed(path string) (ed25519.PrivateKey, error) {
-	// A signing key must not be readable by group or others (U2-31), as add-kver demands of secrets.
+	// A signing key must not be readable by group or others, as add-kver demands of secrets.
 	st, err := os.Stat(path)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func readSeed(path string) (ed25519.PrivateKey, error) {
 }
 
 // writeFileAtomic writes data to path through a tmp file in the same directory (mode 0600, fsync)
-// and a rename; with noClobber it links instead, so an existing path is never replaced (P39).
+// and a rename; with noClobber it links instead, so an existing path is never replaced.
 func writeFileAtomic(path string, data []byte, noClobber bool) error {
 	dir := filepath.Dir(path)
 	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*") // created 0600

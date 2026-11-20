@@ -1,20 +1,20 @@
-# Pinned store-scenario trace hashes (A1.4 S6): "<seed> <trace hash>". Any change to the store's
+# Pinned store-scenario trace hashes: "<seed> <trace hash>". Any change to the store's
 # observable behaviour, the scenario, the reference model or RNG use changes these. Re-record
 # deliberately with   sim_runner --store-seed N   and review the diff.
 # Seeds divisible by 3 are "roomy" (no capacity eviction, spurious-MISS check on).
-# Re-recorded on integration with the reviewed store (e07e08f fixes + S7): seeds 1 2 4 5 8 10 11
+# Re-recorded after a store fix round: seeds 1 2 4 5 8 10 11
 # 100 500 1000 1999 changed (capacity/eviction/reservation behaviour); 3 6 7 9 12 unchanged.
-# Re-recorded on store-fixes-r2 (whole-run eviction R05, leaf LRU R14, single quota R13): seeds 2 11
+# Re-recorded after a store fix round (whole-run eviction, leaf LRU, single quota): seeds 2 11
 # 100 500 1000 1999 changed (capacity-eviction paths); 1 3 4 5 6 7 8 9 10 12 unchanged.
-# Re-recorded on server-store-fixes-r3 (T01: a hopeless reservation is refused before evicting): only
+# Re-recorded after a store fix round (a hopeless reservation is refused before evicting): only
 # seed 1000 changed (it used to evict and then refuse); the other 15 pinned seeds are unchanged.
-# Re-recorded on sim-coverage (run 114): all 16 seeds changed on purpose. The scenario now runs with
+# Re-recorded after a sim coverage change: all 16 seeds changed on purpose. The scenario now runs with
 # small per-endpoint put caps (2-4) and per-session lease caps (3-6), a new UnknownPut probe step and
 # endpoint-down bookkeeping, so the RNG stream, refusals and lookups differ. The store is unchanged.
-# Re-recorded on r6-fixes (run 116): only seeds 6 and 12 changed. Seeds divisible by 6 now keep the
-# default put/lease caps (B1: > 4 concurrent puts per endpoint), so their refusals differ. The cap
+# Re-recorded after a store fix round: only seeds 6 and 12 changed. Seeds divisible by 6 now keep the
+# default put/lease caps (> 4 concurrent puts per endpoint), so their refusals differ. The cap
 # draws still happen on every seed, so the RNG stream is the same, and the other 14 pinned seeds are
-# bit-identical, also across the store's no-wrap cap compare (B2): the store is unchanged.
+# bit-identical, also across the store's no-wrap cap compare: the store is unchanged.
 1 f8fb63f80c82829e
 2 0f21d9fd98c7ac77
 3 3bc76d747af76c54

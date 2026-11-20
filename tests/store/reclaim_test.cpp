@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Store reclaim tests (A1.4 S5): INVALIDATE, drops, reaping, zombies, eviction, rate limit.
+// Store reclaim tests: INVALIDATE, drops, reaping, zombies, eviction, rate limit.
 #include <memory>
 #include <vector>
 
@@ -173,7 +173,7 @@ TEST(Reclaim, DropPrincipalAffectsOnlyThatPrincipal) {
   build(f, 2, 1);
   f.clock.advance_by(seconds(10));
   ASSERT_TRUE(f.put(1, 3, 1, 0));  // newer scope
-  EXPECT_EQ(f.store->drop_principal(1, f.clock.now() - seconds(5)), 2u);  // old scopes only (by opened_at, P15)
+  EXPECT_EQ(f.store->drop_principal(1, f.clock.now() - seconds(5)), 2u);  // old scopes only (by opened_at)
   EXPECT_EQ(f.hits(1, 1, {1}), 0u);  // incremental: they miss at once ...
   f.store->tick();                   // ... and their blocks go under the budget
   EXPECT_EQ(f.store->n_scopes(1), 1u);

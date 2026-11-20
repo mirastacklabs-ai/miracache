@@ -67,7 +67,7 @@ def settings_from_args(kv_transfer_config: Optional[str], tokens: Sequence[str])
         if not all(isinstance(t.get("config"), str) for t in mira):
             problems.append("MiraTier 'config' must be a path string (it is passed to the "
                             "constructor as a keyword)")
-        # s12 (C3): the tier cannot see the top-level policy, so the entry repeats it; the tier refuses without it.
+        # The tier cannot see the top-level policy, so the entry repeats it; the tier refuses without it.
         if any(t.get("kv_load_failure_policy") != "recompute" for t in mira):
             problems.append('MiraTier entry needs "kv_load_failure_policy": "recompute" (the tier cannot see the '
                             "top-level setting and refuses to start without this promise)")

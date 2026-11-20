@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Metrics library (A3.5 M1; spec 11.1). Hand-rolled Prometheus text exposition 0.0.4.
+// Metrics library (spec 11.1). Hand-rolled Prometheus text exposition 0.0.4.
 //
 // Hot path: Counter::inc, Gauge::set/add and Histogram::observe_ns are single relaxed atomic
 // operations: no locks, no allocation, no label lookup. Labels are fixed when a child is
@@ -93,7 +93,7 @@ class Registry {
   // not carry a label of the same name.
   void set_const_labels(Labels labels);
 
-  // H08: takes one child out of the exposition (a series whose labels went stale, e.g. node_id "unknown" once the ID is
+  // Takes one child out of the exposition (a series whose labels went stale, e.g. node_id "unknown" once the ID is
   // learned). The object stays valid (references are never invalidated) and keeps counting; registering the same label
   // set again brings it back. Unknown pointers are ignored.
   void hide(const Counter* c);
@@ -111,7 +111,7 @@ class Registry {
     std::unique_ptr<Gauge> g;
     std::unique_ptr<Histogram> h;
     std::function<std::int64_t()> cb;
-    bool hidden = false;  // H08: not exported (hide)
+    bool hidden = false;  // not exported (hide)
   };
   struct Family {
     std::string name, help;

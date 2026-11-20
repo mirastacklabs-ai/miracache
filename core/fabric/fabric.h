@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Backend-neutral fabric interface (spec 3.9). Subset implemented for M0:
+// Backend-neutral fabric interface (spec 3.9). Subset implemented:
 // probe, reg/dereg, connect/listen, poll, and the endpoint verbs.
 // Connect/accept carry a ticket in private_data; deadlines are a relative timeout.
 #pragma once
@@ -29,7 +29,7 @@ class Endpoint {
   // Connect private_data (the ticket) as presented by the active side; empty on the
   // active side and when none was sent.
   virtual std::span<const std::byte> peer_private_data() const = 0;
-  // The remote side's "ip:port" for log lines (review s9 K10); empty when the backend cannot say (the default).
+  // The remote side's "ip:port" for log lines; empty when the backend cannot say (the default).
   virtual std::string peer_addr() const { return {}; }
 };
 
@@ -82,16 +82,16 @@ class Fabric {
   // completion notification: poll() once more afterwards (closes the arm/poll race),
   // then wait for the fd to become readable, then poll() again.
   virtual int wait_fd() = 0;
-  // RL1: port state, fatal events and listener liveness of the device behind this fabric (see FabricHealth).
+  // port state, fatal events and listener liveness of the device behind this fabric (see FabricHealth).
   // Default: a healthy device with no listener information.
   virtual FabricHealth health() { return {}; }
 };
 
-// Q6: the last LOCAL device resource failure on this thread (a CQ, completion channel, PD, MR or QP the local device
+// The last LOCAL device resource failure on this thread (a CQ, completion channel, PD, MR or QP the local device
 // would not create: e.g. a soft-iWARP device at its CQ limit). The Error a fabric returns carries only a static
 // context, so a caller that wants to report the verbs call, errno and device clears this before the call and reads it
 // after a failure. `call` null = no local resource failure since the last clear. `rail` is set by the caller that knows
-// which node rail the failing fabric serves (-1 = unknown). `provider_call` (review s10 Q07): false when the refusal is
+// which node rail the failing fabric serves (-1 = unknown). `provider_call`: false when the refusal is
 // the fabric's own budget (cq_depth), not a verbs/provider call: there is no errno to report.
 struct LocalFailure {
   const char* call = nullptr;

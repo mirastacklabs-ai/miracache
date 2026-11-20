@@ -86,7 +86,7 @@ inline Expected<SegmentLayout> compute_segment_layout(std::uint64_t segment_byte
   return Error{ErrorCode::InvalidArgument, "layout: segment too small for one run"};
 }
 
-// A3.1: the persisted scope region (spec 6.1, proto/scope_record.h) lives in segment 0, in the first of: (1) the
+// The persisted scope region (spec 6.1, proto/scope_record.h) lives in segment 0, in the first of: (1) the
 // alignment gap between the header table and the data runs (no capacity lost), (2) the slack after the last run, (3)
 // the last `reserved_runs` runs of segment 0, which the slab then never formats. records == 0: no region (volatile).
 struct ScopeRegionLayout {
@@ -119,7 +119,7 @@ inline Expected<ScopeRegionLayout> compute_scope_region(const SegmentLayout& l, 
 struct StoreLayout {
   SegmentLayout seg;
   std::uint32_t n_segments = 0;
-  ScopeRegionLayout scope;  // A3.1
+  ScopeRegionLayout scope;
 
   constexpr std::uint64_t sg_slots() const { return std::uint64_t{n_segments} * seg.slots(); }
   // Global state_gen slot (slot rule from proto).

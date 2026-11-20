@@ -629,7 +629,7 @@ struct AuditLog::Impl {
     return write_entry(fd, cur_size, t);
   }
 
-  // Tail recovery (P19): in the newest file, keep everything up to the last line that verifies
+  // Tail recovery: in the newest file, keep everything up to the last line that verifies
   // and drop the rest (a partial line, or entries that do not verify); a file left empty is
   // removed and the predecessor becomes the tail. Writes audit.recover if anything was dropped.
   Status recover() {

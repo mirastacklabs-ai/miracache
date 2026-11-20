@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Store tests (A1.4 S3): scopes, index, leases. Seeded loops, no external property library.
+// Store tests: scopes, index, leases. Seeded loops, no external property library.
 #include <map>
 #include <memory>
 #include <vector>
@@ -24,7 +24,7 @@ StoreConfig cfg() {
   c.gen_chunk = 1000;
   c.lease_ttl = seconds(30);
   c.lease_max = seconds(100);
-  c.reap_grace = Nanos{0};  // these tests model reaping at exactly idle_ttl (S5 adds the grace)
+  c.reap_grace = Nanos{0};  // these tests model reaping at exactly idle_ttl (the reclaim tests add the grace)
   c.principal_default.max_scopes = 3;
   c.principal_default.max_bytes = 5 * 4096;
   c.principal_default.idle_ttl = seconds(40);
@@ -52,7 +52,7 @@ struct Fx {
     slab = std::make_unique<SlabAllocator>(*arena);
     store = std::make_unique<Store>(*arena, *slab, clock, rng);
   }
-  // Allocates one block and commits it (test-only stand-in for the S4 put path).
+  // Allocates one block and commits it (test-only stand-in for the put path).
   Status put(PrincipalId p, int s, int k, std::uint64_t len = 4096, Extent* out = nullptr) {
     const std::uint64_t lens[] = {len};
     auto r = slab->alloc_batch(lens);
@@ -339,7 +339,7 @@ struct Model {
     if (it == p.scopes.end()) { code = ErrorCode::AccessDenied; return false; }
     if (it->second.keys.count(k)) { code = ErrorCode::Aborted; return false; }
     // Zombies (leased blocks no longer mapped) still count; nothing is evicted when even
-    // evicting every unleased block of the other scopes cannot make room (Q09, Q17).
+    // evicting every unleased block of the other scopes cannot make room.
     const std::uint64_t zb = zombie_bytes(pid);
     if (p.bytes + zb + len > c.principal_default.max_bytes) {
       std::uint64_t reclaim = 0;
@@ -514,9 +514,9 @@ TEST_P(StoreModel, RandomOpsAgreeWithReference) {
 
 INSTANTIATE_TEST_SUITE_P(Seeds, StoreModel, ::testing::Range<std::uint64_t>(1, 21));
 
-// ---- fix round 1 (Q02, Q09, Q17, Q18) ------------------------------------------------------
+// ---- fix round 1 ------------------------------------------------------
 
-TEST(StoreFix, AmbiguousSixteenBytePrefixDoomsChildOnlyWhenNotExactlyOne) {  // Q02
+TEST(StoreFix, AmbiguousSixteenBytePrefixDoomsChildOnlyWhenNotExactlyOne) {
   Fx f;
   ASSERT_TRUE(f.root(1, 1));
   auto commit = [&](const KeyHash& key, const KeyHash& parent) {
@@ -543,7 +543,7 @@ TEST(StoreFix, AmbiguousSixteenBytePrefixDoomsChildOnlyWhenNotExactlyOne) {  // 
   f.inv();
 }
 
-TEST(StoreFix, LeaseCapPerSessionAndZombieBytesCountAgainstQuota) {  // Q09
+TEST(StoreFix, LeaseCapPerSessionAndZombieBytesCountAgainstQuota) {
   StoreConfig c = cfg();
   c.max_leases_per_session = 2;
   Fx f(c);
@@ -575,7 +575,7 @@ TEST(StoreFix, LeaseCapPerSessionAndZombieBytesCountAgainstQuota) {  // Q09
   f.inv();
 }
 
-TEST(StoreFix, FailingCommitDoesNotEvictOtherScopes) {  // Q17
+TEST(StoreFix, FailingCommitDoesNotEvictOtherScopes) {
   Fx f;  // max_bytes = 5 blocks
   ASSERT_TRUE(f.root(1, 1));
   ASSERT_TRUE(f.put(1, 1, 1));
@@ -590,7 +590,7 @@ TEST(StoreFix, FailingCommitDoesNotEvictOtherScopes) {  // Q17
   f.inv();
 }
 
-TEST(StoreFix, PrincipalStateIsNotCreatedByNoopsAndReapedWhenEmpty) {  // Q18
+TEST(StoreFix, PrincipalStateIsNotCreatedByNoopsAndReapedWhenEmpty) {
   Fx f;
   EXPECT_TRUE(f.store->invalidate(42, sid(1), kh(1), 1));
   EXPECT_EQ(f.store->n_principals(), 0u);

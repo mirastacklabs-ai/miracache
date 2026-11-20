@@ -14,7 +14,7 @@
 namespace miracache::store {
 namespace {
 
-// T12: an I/O failure gets an error code from errno and a log line with the path and strerror (the Error context is
+// An I/O failure gets an error code from errno and a log line with the path and strerror (the Error context is
 // a static string by contract).
 ErrorCode code_of(int e) {
   switch (e) {
@@ -46,7 +46,7 @@ Error refuse(ErrorCode c, const char* what, const std::string& path) {
   return Error{c, what};
 }
 
-// T12: every call that can be interrupted is retried on EINTR.
+// Every call that can be interrupted is retried on EINTR.
 template <typename F>
 auto retry(F f) {
   for (;;) {
@@ -77,7 +77,7 @@ Status sync_dir(const std::string& dir) {
   return {};
 }
 
-// T03: tmp in the same dir, unlinked first and created O_EXCL|O_NOFOLLOW 0600 (a planted symlink or file is never
+// Tmp in the same dir, unlinked first and created O_EXCL|O_NOFOLLOW 0600 (a planted symlink or file is never
 // written through), fsync, rename over `name`, dir fsync.
 Status write_atomic(const std::string& dir, const char* name, const std::string& text) {
   const std::string path = dir + "/" + name, tmp = path + ".tmp";
@@ -113,7 +113,7 @@ int open_state_file(const std::string& path) {
 Status prepare_state_dir(const std::string& dir) {
   if (dir.empty()) return Error{ErrorCode::InvalidArgument, "node state: empty state_dir"};
   if (Status s = mkdir_p(dir); !s) return s;
-  // r9c U05: the final component is not followed (a symlinked state_dir is refused); parents are the operator's.
+  // The final component is not followed (a symlinked state_dir is refused); parents are the operator's.
   const int dfd = retry([&] { return ::open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC); });
   if (dfd < 0) {
     struct stat ls {};

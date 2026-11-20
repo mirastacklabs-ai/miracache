@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SHA-256 and lower-case hex, the only hash and the only hex form the bundle envelope uses
-// (membership plan decision 2, rules 4 and 7).
+// SHA-256 and lower-case hex, the only hash and the only hex form the bundle envelope uses.
 #pragma once
 
 #include <array>

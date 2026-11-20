@@ -56,7 +56,7 @@ Bytes sb_prefix() {  // hand-placed bytes 0..4091 of sb_msg()
               bytes({0, 1, 0, 0, 0, 0, 0, 0}),                     // 72 sg_slots
               bytes({0, 0x30, 0, 0, 0, 0, 0, 0}),                  // 80 scope_off
               bytes({0, 4, 0, 0, 0, 0, 0, 0}),                     // 88 scope_len
-              bytes({16}),                                         // 96 min_block_log2 (s12 C2)
+              bytes({16}),                                         // 96 min_block_log2
               zeros(3995)});                                       // 97 z
 }
 
@@ -119,7 +119,7 @@ TEST(Superblock, DecodeErrors) {
   EXPECT_EQ(code(60, 2, true), ErrorCode::Corrupt);
   EXPECT_EQ(code(61, 27, true), ErrorCode::Corrupt);
   EXPECT_EQ(code(62, 1, true), ErrorCode::Corrupt);
-  // s12 C2: byte 96 is min_block_log2: 0 (a store from before s12) or 12..28.
+  // Byte 96 is min_block_log2: 0 (a store from before the recorded minimum block size) or 12..28.
   EXPECT_EQ(code(96, 1, true), ErrorCode::Corrupt);
   EXPECT_EQ(code(96, 11, true), ErrorCode::Corrupt);
   EXPECT_EQ(code(96, 29, true), ErrorCode::Corrupt);

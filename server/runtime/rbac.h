@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// Memory-node RBAC and audit wiring for the admin API (RBAC/audit plan decisions 2-6; slice RB2).
+// Memory-node RBAC and audit wiring for the admin API.
 //
-//  * The route table (decision 4) is ONE code table: enforcement and tests both read it.
+//  * The route table is ONE code table: enforcement and tests both read it.
 //      POST /v1/tickets                principal identity (the principal table decides, not a role)
 //      GET  /v1/bundle                 authenticated mTLS only (bundle mode)
-//      POST /v1/bundle[?dry_run=1]     authenticated mTLS only; the bundle signatures are the gate (P03)
+//      POST /v1/bundle[?dry_run=1]     authenticated mTLS only; the bundle signatures are the gate
 //      GET  /v1/identity               authenticated mTLS only (bundle mode)
 //      POST /v1/drain                  operator
 //      POST /v1/drop_principal         security-admin
@@ -15,7 +15,7 @@
 //    `[[admin.rbac]]` (lab mode, SIGHUP). A bundle-mode node with no bundle applied has no bindings.
 //  * AdminAudit wraps control::AuditLog + AuditCoalescer behind one mutex: immediate entries for actions
 //    (bundle apply, drain, drop_principal), per-(identity, action, result)-per-second coalesced entries for
-//    denials and ticket refusals (P19). Every entry carries node ID + hostname + IP (spec goal 10).
+//    denials and ticket refusals. Every entry carries node ID + hostname + IP (spec goal 10).
 #pragma once
 
 #include <cstdint>
@@ -44,7 +44,7 @@ struct RouteRule {
   bool bundle_mode_only;  // 404 in lab mode (no [control] trust_keys)
 };
 
-// The decision 4 table, memory-node side.
+// The route-to-role table, memory-node side.
 const std::vector<RouteRule>& route_table();
 // Exact method + path; null if there is none.
 const RouteRule* find_route(std::string_view method, std::string_view path);
@@ -92,7 +92,7 @@ class Server;
 // Start-up (main and tests): applies the drop_before maxima persisted in `<state_dir>/bundle-floor` (bundle deliveries
 // and POST /v1/drop_principal) with Server::load_drop_before_floor. No state_dir or no floor file = nothing to load (ok).
 // A floor file that cannot be opened, read or parsed is an error: the caller refuses to start, a corrupt floor must
-// never silently drop persisted revocations (U2-07). Store thread / before the loop runs.
+// never silently drop persisted revocations. Store thread / before the loop runs.
 Status load_persisted_drop_before(Server& srv, const std::string& state_dir);
 
 class AdminAudit {
@@ -114,7 +114,7 @@ class AdminAudit {
 
   std::uint64_t seq() const;   // last written entry
   std::string head() const;
-  // (seq, head) of the last entry known to be fsynced (U2-19): GET /v1/identity shows this, so a controller never records
+  // (seq, head) of the last entry known to be fsynced: GET /v1/identity shows this, so a controller never records
   // an anchor the node could lose in a crash. Forces an fsync of what is pending; if that fails, the previous anchor.
   std::pair<std::uint64_t, std::string> anchor();
   std::uint64_t errors() const;

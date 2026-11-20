@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The memory node's state directory (plan 2C, review r9 S04, r9b T01-T03, T12).
+// The memory node's state directory.
 //
 //   <state_dir>/node-id       the node ID (decimal, mode 0600). A wiped store (hugetlbfs after a reboot, a volatile
 //                             anon store) keeps its identity because the ID lives here, not only in the store.
@@ -26,8 +26,8 @@ inline constexpr const char* kNodeIdFile = "node-id";
 inline constexpr const char* kInitialisedFile = "initialised";
 inline constexpr const char* kStateLockFile = "node-id.lock";
 
-// Creates `dir` (and missing parents) with mode 0700 if needed, then checks it: a directory (not a symlink to one,
-// r9c U05; the parents are not checked and must not be writable by others) owned by the effective
+// Creates `dir` (and missing parents) with mode 0700 if needed, then checks it: a directory (not a symlink to one;
+// the parents are not checked and must not be writable by others) owned by the effective
 // user, not group- or world-writable. Anything else is an error (the memory node refuses to start).
 Status prepare_state_dir(const std::string& dir);
 
@@ -49,9 +49,9 @@ class StateDirLock {
 };
 
 // The ID in <dir>/node-id. nullopt: no such file, or its content is not a decimal ID in 1..2^32-1 (treated as
-// missing, with a warning). A symlink, a non-regular file (a FIFO never blocks the start, r9c U06) or another I/O
+// missing, with a warning). A symlink, a non-regular file (a FIFO never blocks the start) or another I/O
 // error is an error. The marker and the lock file must be regular files as well.
-// `invalid` (optional) is set when the file exists but holds no valid ID (r9c U04, for the "node replaced" log line).
+// `invalid` (optional) is set when the file exists but holds no valid ID (for the "node replaced" log line).
 Expected<std::optional<std::uint32_t>> read_node_id_file(const std::string& dir, bool* invalid = nullptr);
 
 // Writes <dir>/node-id atomically. `dir` must exist (prepare_state_dir).

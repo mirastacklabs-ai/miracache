@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB2: floor rules (membership plan decision 4) and the persisted, flock-guarded floor file.
+// Floor rules and the persisted, flock-guarded floor file.
 #include <gtest/gtest.h>
 
 #include <sys/stat.h>
@@ -132,9 +132,9 @@ TEST(FloorRules, SecGenerationFloor) {
   BundleView changed = bundle(50, 7, 5);
   changed.sec_hash[0] ^= 0xFF;
   EXPECT_EQ(reject_of(check_against_floor(f, changed, 0)), "sec_equal_generation");
-  // Higher sec_generation: apply. Equal generation, same body, higher sec: rejected (W07).
+  // Higher sec_generation: apply. Equal generation, same body, higher sec: rejected.
   EXPECT_EQ(reject_of(check_against_floor(f, bundle(50, 7, 6), 0)), "apply");
-  EXPECT_EQ(reject_of(check_against_floor(f, bundle(42, 7, 6), 0)), "equal_generation");  // W07: a new sec needs a new generation
+  EXPECT_EQ(reject_of(check_against_floor(f, bundle(42, 7, 6), 0)), "equal_generation");  // a new sec needs a new generation
 }
 
 TEST(FloorRules, PinnedMinSecGenerationAppliesOnABlankFloor) {
@@ -213,7 +213,7 @@ TEST(FloorFile, ConcurrentCommittersEndAtTheMaximum) {
       ASSERT_TRUE(fs.has_value());
       for (std::size_t i = 0; i < views.size(); ++i) {
         const std::size_t k = (i + static_cast<std::size_t>(t) * 6) % views.size();
-        auto r = fs->commit(views[k]);  // a lower generation than the floor loses (W06)
+        auto r = fs->commit(views[k]);  // a lower generation than the floor loses
         ASSERT_TRUE(r.has_value() || (r.error().rejected && r.error().reject.reason == Reject::GenerationLower));
       }
     });
@@ -261,7 +261,7 @@ TEST(FloorFile, SerializationRoundTrips) {
   EXPECT_EQ(g->body_hash, f.body_hash);
 }
 
-// ---- W06 / W07 / W08 --------------------------------------------------------------------------
+// ---- Floor rule cases ----------------------------------------------------------------------
 
 TEST(FloorCommit, ReturnsTheVerdict) {
   TempDir d;

@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Report is the body of POST /v1/reports (decision 9): what one client sees. The reporter is the
-// caller's mTLS identity, never a field in the body (P18).
+// Report is the body of POST /v1/reports: what one client sees. The reporter is the
+// caller's mTLS identity, never a field in the body.
 type Report struct {
 	Generation    uint64       `json:"generation"`
 	Nodes         []ReportNode `json:"nodes"`
@@ -58,7 +58,7 @@ func (m *Monitor) Submit(identity string, body []byte, at time.Time) error {
 	}
 	m.mu.Lock()
 	if _, ok := m.reports[identity]; !ok && len(m.reports) >= m.cfg.MaxReporters {
-		// One cap policy for the controller (V16): drop reports too old to count, else refuse the new identity.
+		// One cap policy for the controller: drop reports too old to count, else refuse the new identity.
 		for id, r := range m.reports {
 			if at.Sub(r.at) > m.cfg.ReportFresh {
 				delete(m.reports, id)

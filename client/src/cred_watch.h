@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR4 (hot-reload plan decision 1, P39): the client notices new contents of its credential files without a restart.
+// The client notices new contents of its credential files without a restart.
 //   * [tls] cert/key/ca: ClientTlsCtx::reload_if_changed() (admin_http.h). Every HttpsClient with those paths (ticket
 //     sources, the bundle watcher, client reports) takes the new SSL_CTX for its NEW connections.
 //   * scope.secret_file: a changed file (inode, mtime, size) is parsed whole; if it loads, ReloadableEngineNativeProvider

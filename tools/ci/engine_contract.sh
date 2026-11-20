@@ -5,7 +5,7 @@
 # nightly. The fake-based unit suites (tests/python) stay in the gate and are NOT run here.
 #   tools/ci/engine_contract.sh                 # exit 0 = all pass and nothing skipped
 #   tools/ci/engine_contract.sh --bundle-mode   # the same pass with the engines handed a BUNDLE-MODE client.toml
-#                                               # (MB11, P40). Run both for the M2 exit: `tools/ci/engine_contract.sh &&
+#                                               # Run both for the full check: `tools/ci/engine_contract.sh &&
 #                                               # tools/ci/engine_contract.sh --bundle-mode`.
 # The contract tests are import-only and use a fake client, so --bundle-mode changes only the client.toml the
 # adapters are given (MIRACACHE_CLIENT_TOML, a [control] file written to a temp dir; no [[nodes]], no static
@@ -44,6 +44,10 @@ export MIRACACHE_DEV_IMAGE=$TAG
   for t in tests/engines/vllm/test_contract.py tests/engines/sglang/test_contract.py \
            tests/engines/vllm/test_real_construct.py tests/engines/sglang/test_real_construct.py \
            tests/engines/test_agentbench_configs.py; do
+    if [ ! -f "$t" ]; then
+      if [ "$t" = tests/engines/test_agentbench_configs.py ]; then echo "skip $t (not in this tree)"; continue; fi
+      echo "FAIL: missing $t"; rc=1; continue
+    fi
     echo "== $t"
     /opt/engines/bin/python -m unittest -v "$t" >>"$log" 2>&1 || rc=1
   done

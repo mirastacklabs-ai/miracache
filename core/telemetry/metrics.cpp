@@ -28,7 +28,7 @@ Registry::Child& Registry::child(const std::string& name, const std::string& hel
   MIRACACHE_CHECK(f->type == t);
   for (auto& c : f->children)
     if (c.labels == labels) {
-      c.hidden = false;  // H08: registered again: exported again
+      c.hidden = false;  // registered again: exported again
       return c;
     }
   f->children.emplace_back();

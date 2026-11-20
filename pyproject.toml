@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "miracache"
-version = "0.0.1"
+version = "0.3.0"
 description = "Remote KV-cache tier over RDMA (ctypes binding over libmiracache.so)"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }

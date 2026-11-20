@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB5: the client bundle watcher against fake HTTPS (TLS 1.3 + mTLS) memory-node admin endpoints.
-// Certs come from deploy/examples/lab-certs.sh into a temp dir. Bundles are signed with the MB2 test signer.
+// The client bundle watcher against fake HTTPS (TLS 1.3 + mTLS) memory-node admin endpoints.
+// Certs come from deploy/examples/lab-certs.sh into a temp dir. Bundles are signed with the test signer.
 #include <gtest/gtest.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>

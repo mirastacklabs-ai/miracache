@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB6a: client node slots driven by bundles (membership plan decision 9). Real memory-node servers over SimFabric,
-// bundles built in memory (no signatures: the watcher's job, MB5). Checks add, retire (waits for jobs_inside, slot
+// Client node slots driven by bundles. Real memory-node servers over SimFabric,
+// bundles built in memory (no signatures: the watcher's job). Checks add, retire (waits for jobs_inside, slot
 // reuse), re-weight and R under 4-thread traffic with the strict oracle, the stage-before-swap push order, the
 // HELLO_ACK ID check, and the oracle helper itself.
 #include <gtest/gtest.h>
@@ -142,15 +142,15 @@ server::ServerConfig server_cfg() {
   return sc;
 }
 
-// MB6b: stands in for MB4's epoch enforcement (the real server enforces it from MB4 on) at the client's side of the sim
+// Stands in for the memory node's epoch enforcement (the real server enforces it) at the client's side of the sim
 // fabric. Per memory node it has an applied (epoch, bundle_gen_lo), stamps every frame it delivers to the client with
-// them (decision 8: "every reply frame carries the node's epoch and bundle_gen_lo"), and answers a PUT_BEGIN whose frame
+// them ("every reply frame carries the node's epoch and bundle_gen_lo"), and answers a PUT_BEGIN whose frame
 // epoch differs from the node's with StaleEpoch (retry 0 when the frame is lower, 50 ms when higher), or Draining when
 // `draining` is set, without forwarding it to the server. Everything else passes through to the real server.
 struct NodeStamp {
   std::atomic<std::uint32_t> epoch{0}, gen_lo{0};  // 0 = this node is not stamped / not enforced (lab mode)
   std::atomic<bool> draining{false};
-  std::atomic<bool> drop_put_done{false};  // run #200: the node commits, its PUT_DONE never reaches the client
+  std::atomic<bool> drop_put_done{false};  // The node commits, its PUT_DONE never reaches the client
   std::atomic<unsigned> stale_replies{0}, draining_replies{0}, put_begins_passed{0}, put_done_dropped{0};
   void set(std::uint32_t e, std::uint32_t g) {
     epoch = e;
@@ -297,7 +297,7 @@ Status ShimEndpoint::post_send(fabric::Frame frame, fabric::WrTag tag) {
 
 // Memory nodes 1..kServers are all running; a bundle decides which ones the client knows.
 struct World {
-  static inline bool single_listener_any_address = false;  // RailChangeQuietsTheOldIdentitySeries only (G08)
+  static inline bool single_listener_any_address = false;  // RailChangeQuietsTheOldIdentitySeries only
   explicit World(std::map<unsigned, unsigned> wrong_id = {}, bool shim_on = false) : rng(5), net(clock, rng, {}, opts()) {
     for (unsigned i = 1; i <= kServers; ++i) {
       sfab[i - 1] = &net.add_node(i);
@@ -307,7 +307,7 @@ struct World {
     }
     for (unsigned i = 1; i <= kServers; ++i) {
       auto sc = server_cfg();
-      sc.rails = {fabric::RailAddr{"sim", static_cast<std::uint16_t>(7000 + i)}};  // where the client dials: the sim matches exactly (G08)
+      sc.rails = {fabric::RailAddr{"sim", static_cast<std::uint16_t>(7000 + i)}};  // where the client dials: the sim matches exactly
       auto w = wrong_id.find(i);
       sc.store.node_id = w != wrong_id.end() ? w->second : i;
       auto s = server::Server::create(sc, *sfab[i - 1], clock, rng, sex);
@@ -321,7 +321,7 @@ struct World {
     o.slice_size = 2048;
     return o;
   }
-  // A wait on a frozen server ends at its sim-time deadline (WirePort, review w5 U2-26: no call-count cap), so a job
+  // A wait on a frozen server ends at its sim-time deadline (WirePort, no call-count cap), so a job
   // held on one (rpc_timeout = 100 h of sim time) stays inside until the test unfreezes the server, on any build.
   void drive() {
     if (!net.step()) clock.advance_by(milliseconds(1));
@@ -492,7 +492,7 @@ struct Rig {
     cur_gen = first->generation();
     if (shim)  // every node of the first bundle runs it (they gave it to us)
       for (const auto& nv : first->view.body.nodes) w.stamps[nv.node_id - 1].set(cur_epoch, static_cast<std::uint32_t>(cur_gen));
-    if (bundle_servers) {  // the servers of the first bundle already run it (bundle mode, MB3b apply)
+    if (bundle_servers) {  // the servers of the first bundle already run it (bundle mode, apply)
       cur_env = first->envelope;
       for (const auto& nv : first->view.body.nodes) w.srv[nv.node_id - 1]->apply_bundle(first->view);
     }
@@ -502,18 +502,18 @@ struct Rig {
     env.salts = &w.salts;
     env.drive = [this] { w.drive(); };
     env.replica_buffer_bytes = 8u << 20;
-    // Run #200: the traffic gives every store a 60 s (sim) deadline, but HR2 clamps store deadlines to put_max_ms
+    // The traffic gives every store a 60 s (sim) deadline, but the live configuration clamps store deadlines to put_max_ms
     // (2.5 s by default). Sim time races ahead while a job waits for its sim turn (four traffic threads plus the
     // keepalive and slot threads all drive the clock), so 2.5 s of sim time can pass in ~2.5 ms of real time and a
     // healthy store timed out (strict-oracle "timeout"/"aborted", about 1 run in 40). The tests' own deadlines apply.
     env.put_max_ms = 600000;
-    env.open_settle = open_settle;  // Q15
+    env.open_settle = open_settle;
     Client::BundleOpen bo;
     bo.initial = std::move(first);
     bo.make_spec = [this](const control::NodeView& nv) -> Expected<Client::NodeSpec> {
       spec_calls.fetch_add(1);
       if (spec_fail.load()) return Error{ErrorCode::LinkDown, "test: make_spec fails"};
-      if (spec_local_fail.load()) {  // Q6: the node's fabric open fails at the local CQ (siw0 at its device limit)
+      if (spec_local_fail.load()) {  // The node's fabric open fails at the local CQ (siw0 at its device limit)
         fabric::last_local_failure() =
             spec_provider_call.load()
                 ? fabric::LocalFailure{"ibv_create_cq", spec_errno.load(), "siw0", -1}
@@ -531,14 +531,14 @@ struct Rig {
       if (id_of_admin_connected) {
         const bool c = id_of_admin_connected(id);
         connected_at_push.push_back(c);
-        first_push_connected.emplace(id, c);  // MB6b also pushes to lagging nodes: per node, its first push
+        first_push_connected.emplace(id, c);  // the client also pushes to lagging nodes: per node, its first push
       }
       if (fail_pushes > 0) {
         --fail_pushes;
         return Error{ErrorCode::LinkDown, "test: push fails"};
       }
       if (shim_) w.stamps[id - 1].set(cur_epoch, static_cast<std::uint32_t>(cur_gen));  // the node applied our envelope
-      if (bundle_servers_) {  // MB3b servers: the pushed envelope is verified and applied, as the node's POST /v1/bundle would
+      if (bundle_servers_) {  // bundle-mode servers: the pushed envelope is verified and applied, as the node's POST /v1/bundle would
         auto v = control::open_bundle(cur_env, trust());
         if (!v) return Error{ErrorCode::Corrupt, "test: pushed envelope does not verify"};
         std::lock_guard sl(w.srv_mu);
@@ -594,8 +594,8 @@ struct Rig {
   int fail_pushes = 0;
   std::atomic<bool> spec_fail{false};
   std::atomic<bool> spec_local_fail{false};
-  std::atomic<int> spec_errno{ENOMEM};  // L12: 0 = a provider that fails without setting errno (libsiw)
-  std::atomic<bool> spec_provider_call{true};  // Q07: false = the fabric's own cq_depth budget refused (no verbs call)
+  std::atomic<int> spec_errno{ENOMEM};  // 0 = a provider that fails without setting errno (libsiw)
+  std::atomic<bool> spec_provider_call{true};  // false = the fabric's own cq_depth budget refused (no verbs call)
   std::atomic<int> spec_calls{0};
   std::function<void(Client::NodeSpec&, const control::NodeView&)> tweak_;
   std::string cur_env;                                // bundle_servers: the envelope a push delivers
@@ -642,8 +642,8 @@ void cycle(Rig& r, Oracle& o, int scope, std::uint64_t v) {
   if (!fc) return o.on_missing_completion("fetch " + key);
   const KeyStatus fs = fc->status.at(0);
   o.on_fetch(key, fs, fs == KeyStatus::Hit ? decode(scope, out) : std::nullopt, false, ctx_of(s0, r0, g0));
-  // Y19: also re-read an OLDER committed key. After a membership change its owner may be another node: a Miss is fine,
-  // a Hit must still carry exactly that key's version (the stale-bytes rule). Run #200: a traffic thread gives its
+  // Also re-read an OLDER committed key. After a membership change its owner may be another node: a Miss is fine,
+  // a Hit must still carry exactly that key's version (the stale-bytes rule). A traffic thread gives its
   // scopes the versions v, v+1, v+2 in turn, so this scope's previous key is v - 3 (v - 2 was never stored here: the
   // re-read was always a Miss and checked nothing).
   if (v > 3) {
@@ -785,7 +785,7 @@ TEST(MembershipSlots, RetireWaitsForJobsInsideAndReviveKeepsTheSlot) {
   ASSERT_TRUE(until([&] { return r.cl->slot_of(2) < 0; })) << "freed once the job left";
 }
 
-// s12 (tpu-sync cross-check C1, review P2-6): the bundle-mode lane (lane_of's bundle branch: the first node of the
+// The bundle-mode lane (lane_of's bundle branch: the first node of the
 // bundle's owner set). Node 2 stops answering and holds every fetch sent to it; with the production runtime for 3 nodes
 // (6 workers, lane_cap 2) only 2 of them run and a lookup for node 1 still completes. `old` (2 workers, no lanes): the
 // lookup waits behind the held fetches.
@@ -836,7 +836,7 @@ void bundle_frozen_node(bool old) {
 TEST(MembershipLanes, FrozenNodeHoldsOnlyItsLaneInBundleMode) { bundle_frozen_node(false); }
 TEST(MembershipLanes, WithoutLanesAFrozenNodeStallsBundleModeLookups) { bundle_frozen_node(true); }
 
-// HR3a (hot-reload plan decision 6): a job pins the node's pair once and uses only that pair for its whole life. With
+// A job pins the node's pair once and uses only that pair for its whole life. With
 // the job inside, the node's pointer is moved aside (as a planned rebuild will move it to a new pair): new jobs see no
 // pair and fail fast, while the held job finishes on the pair it pinned, with the right bytes, and lets it go.
 TEST(MembershipSlots, AJobPinsOnePairForItsWholeLife) {
@@ -947,7 +947,7 @@ TEST(MembershipSlots, ReplicasFromTheBundleSurviveARetire) {
   EXPECT_EQ(o.failed(), 0u) << o.report();
 }
 
-// Y04: the same node_id at another admin address is rebuilt in a new slot; the old slot retires and is freed.
+// The same node_id at another admin address is rebuilt in a new slot; the old slot retires and is freed.
 TEST(MembershipSlots, ChangedAdminRebuildsTheNodeInANewSlot) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}));
   ASSERT_TRUE(r.cl);
@@ -966,7 +966,7 @@ TEST(MembershipSlots, ChangedAdminRebuildsTheNodeInANewSlot) {
   ASSERT_TRUE(until([&] { return r.cl->slots_in_use() == 3; })) << "the old slot is freed";
   EXPECT_FALSE(r.cl->slot_retiring(static_cast<std::size_t>(old2)));
   EXPECT_EQ(r.cl->slot_of(2), new2);
-  // Review w3b Z05: the old and the new slot share their series here (same rail, so the same labels); the old slot's
+  // The old and the new slot share their series here (same rail, so the same labels); the old slot's
   // teardown leaves the new slot's identity and pool series alone.
   const std::string m = r.cl->metrics_text();
   EXPECT_EQ(series(m, "miracache_client_node_info", {"node_id=\"2\""}), 1) << m;
@@ -976,7 +976,7 @@ TEST(MembershipSlots, ChangedAdminRebuildsTheNodeInANewSlot) {
   EXPECT_EQ(o.failed(), 0u) << o.report();
 }
 
-// Y06: a node whose make_spec fails is kept pending and retried on the manager tick (no new generation needed).
+// A node whose make_spec fails is kept pending and retried on the manager tick (no new generation needed).
 TEST(MembershipSlots, NodeLeftOutByAFailingMakeSpecIsRetried) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}));
   ASSERT_TRUE(r.cl);
@@ -989,7 +989,7 @@ TEST(MembershipSlots, NodeLeftOutByAFailingMakeSpecIsRetried) {
   ASSERT_TRUE(until([&] { return r.cl->wire_port(static_cast<std::size_t>(r.cl->slot_of(4))) != nullptr; }));
 }
 
-// Y11 (real threads): keepalive threads on; add, retire and re-add (a new incarnation of the same node) under traffic.
+// Real threads: keepalive threads on; add, retire and re-add (a new incarnation of the same node) under traffic.
 TEST(MembershipSlots, RealSlotThreadsAddRetireReAddUnderTraffic) {
   // connect_wait_ms counts sim time, which the four traffic threads drive fast, while the added node is built by its
   // real-time slot thread: a 2 s wait could end before the node is Up on an optimised build (published anyway -> its
@@ -1019,7 +1019,7 @@ TEST(MembershipSlots, RealSlotThreadsAddRetireReAddUnderTraffic) {
   EXPECT_EQ(o.failed(), 0u) << o.report();
 }
 
-// Run #200 regression (the wrong_bytes_unknown of RealSlotThreadsAddRetireReAddUnderTraffic): a store whose deadline
+// Regression (the wrong_bytes_unknown of RealSlotThreadsAddRetireReAddUnderTraffic): a store whose deadline
 // passes while its PUT_COMMIT is out ends Timeout/Aborted, yet the node may have committed it. A later fetch then hits
 // exactly the bytes put under that key: the product promise (those bytes or a miss) holds, and the oracle must count
 // the store's own failure only, never a "wrong bytes" Hit. Deterministic: the shim drops every PUT_DONE.
@@ -1057,7 +1057,7 @@ TEST(MembershipSlots, AStoreThatTimesOutMayStillHaveCommitted) {
   EXPECT_EQ(o.reason_count("wrong_bytes_unknown"), 0u) << o.report();
 }
 
-// Y11: the servers run in bundle mode (MB3b apply_bundle). The push delivers a verifiable envelope; the added node has
+// The servers run in bundle mode (apply_bundle). The push delivers a verifiable envelope; the added node has
 // applied it before the client's first connection to it.
 TEST(MembershipSlots, AddedBundleModeServerHasTheEnvelopeBeforeTheFirstConnect) {
   Rig r(signed_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}), 2, 2000, {}, 0, /*bundle_servers=*/true);
@@ -1072,7 +1072,7 @@ TEST(MembershipSlots, AddedBundleModeServerHasTheEnvelopeBeforeTheFirstConnect) 
     std::lock_guard lk(r.pm);
     ASSERT_EQ(r.applied_at_push.count(4), 1u);
     EXPECT_EQ(r.applied_at_push[4], 2u);
-    // MB6b: nodes 1-3 lag (generation 1) and may be pushed too; the added node's first push came before its connect.
+    // Nodes 1-3 lag (generation 1) and may be pushed too; the added node's first push came before its connect.
     ASSERT_EQ(r.first_push_connected.count(4), 1u);
     EXPECT_FALSE(r.first_push_connected[4]);
   }
@@ -1139,7 +1139,7 @@ int scope_owned_by(unsigned id) {
   return -1;
 }
 
-// Review w3b Z01: a production ticket source has no ticket until prepare() ran (draw() never touches the network). The
+// A production ticket source has no ticket until prepare() ran (draw() never touches the network). The
 // open must prepare each node of the first bundle before its first build, or every initial build fails.
 TEST(MembershipSlots, BundleOpenPreparesTicketsBeforeTheFirstBuild) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}}), 2, 2000, {}, 0, false, false, [](Client::NodeSpec& ns, const control::NodeView&) {
@@ -1161,7 +1161,7 @@ TEST(MembershipSlots, BundleOpenPreparesTicketsBeforeTheFirstBuild) {
   EXPECT_EQ(o.failed(), 0u) << o.report();
 }
 
-// Review w3b Z04: the bundle is authoritative for the hostname: node_info carries it even while the node's own
+// The bundle is authoritative for the hostname: node_info carries it even while the node's own
 // hostname source (the admin ticket answer) has nothing yet.
 TEST(MembershipSlots, IdentitySeriesCarriesTheBundleHostname) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}}), 2, 2000, {}, 0, false, false, [](Client::NodeSpec& ns, const control::NodeView&) {
@@ -1175,7 +1175,7 @@ TEST(MembershipSlots, IdentitySeriesCarriesTheBundleHostname) {
   }
 }
 
-// Review w3b Z02: after a rebuild (Y04) the old slot retires. Its address comes up inside the retire window (a held job
+// After a rebuild the old slot retires. Its address comes up inside the retire window (a held job
 // pins the old snapshot): it must not run its first build, and once it is torn down the node's landing pool series reads
 // the new slot's pool (asan: no read of a freed pool).
 TEST(MembershipSlots, RetiringOldSlotRunsNoFirstBuildAndThePoolSeriesSurvivesItsTeardown) {
@@ -1229,7 +1229,7 @@ TEST(MembershipSlots, RetiringOldSlotRunsNoFirstBuildAndThePoolSeriesSurvivesIts
   EXPECT_EQ(o.failed(), 0u) << o.report();
 }
 
-// Review w3b Z05: after a rail change the old slot's identity series (old addr) goes to 0 at its teardown; the new
+// After a rail change the old slot's identity series (old addr) goes to 0 at its teardown; the new
 // slot's series is 1.
 TEST(MembershipSlots, RailChangeQuietsTheOldIdentitySeries) {
   // The rail address changes to one the sim server cannot listen on: this test opts into the single-listener wildcard.
@@ -1252,7 +1252,7 @@ TEST(MembershipSlots, RailChangeQuietsTheOldIdentitySeries) {
   EXPECT_GT(series(m, "miracache_client_landing_pool_bytes", {"state=\"free\"", "node=\"2\""}).value_or(0), 0) << m;
 }
 
-// Review w3b Z06: a node whose make_spec keeps failing is retried with exponential backoff (not every 200 ms), its error
+// A node whose make_spec keeps failing is retried with exponential backoff (not every 200 ms), its error
 // is logged once (on change), and the generation that left it out still logs "membership applied".
 TEST(MembershipSlots, PendingNodeBacksOffAndLogsOnlyOnChange) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}));
@@ -1283,7 +1283,7 @@ TEST(MembershipSlots, PendingNodeBacksOffAndLogsOnlyOnChange) {
   ASSERT_TRUE(until([&] { return r.cl->wire_port(static_cast<std::size_t>(r.cl->slot_of(4))) != nullptr; }));
 }
 
-// ---- MB6b: epoch stamping and stale-epoch handling (the shim above plays MB4's server rules) ----
+// ---- Epoch stamping and stale-epoch handling (the shim above plays the server's rules) ----
 
 // One store of a fresh key into `scope`; the status of the only key.
 KeyStatus put_one(Rig& r, int scope, const std::string& key, std::uint64_t v = 1) {
@@ -1304,7 +1304,7 @@ std::uint64_t skipped(Rig& r, const char* reason) {
   return series_value(r.cl->metrics_text(), std::string("miracache_client_put_skipped_total{reason=\"") + reason + "\"}");
 }
 
-// ---- Q6: a LOCAL device resource failure (siw0 at its CQ limit on the 4th node) ----
+// ---- A LOCAL device resource failure (siw0 at its CQ limit on the 4th node) ----
 
 // The log lines of `logs` that contain `what`.
 std::vector<std::string> lines_with(const std::string& logs, const std::string& what) {
@@ -1397,7 +1397,7 @@ TEST(MembershipSlots, LocalDeviceResourceFailureIsLoggedOnceCountedAndRecovers) 
 }
 
 // The siw0 case as it happens in production: the node's fabric open (make_spec) fails at the local ibv_create_cq, so
-// the bundle node stays pending (no slot) with its set-up backoff. The Q6 line replaces the generic pending line.
+// the bundle node stays pending (no slot) with its set-up backoff. The local-device-failure line replaces the generic pending line.
 TEST(MembershipSlots, LocalDeviceLimitInNodeSetUpIsLoggedOnceAndRecovers) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}));
   ASSERT_TRUE(r.cl);
@@ -1483,7 +1483,7 @@ TEST(MembershipEpoch, StaleEpochSkipsAndPushesTheLaggingNodeOnce) {
   EXPECT_TRUE(r.wakes.empty()) << "the client is not behind";
 }
 
-// Decision 8 / Q11: a reply whose bundle_gen_lo is below the client's triggers the push too, with equal epochs (no StaleEpoch).
+// A reply whose bundle_gen_lo is below the client's triggers the push too, with equal epochs (no StaleEpoch).
 TEST(MembershipEpoch, LowerReplyGenerationTriggersTheSamePush) {
   Rig r(make_snap(5, 1, {{1, 1}, {2, 1}, {3, 1}}), 2, 2000, {}, 0, false, /*shim=*/true);
   ASSERT_TRUE(r.cl);
@@ -1594,7 +1594,7 @@ TEST(MembershipEpoch, EpochChangesUnderTrafficFailNothing) {
   for (unsigned id = 1; id <= 3; ++id) EXPECT_LE(pushes_to(r, id), 2u) << "one push per generation: node " << id;
 }
 
-// ---- MB7: previous view, hints, client reports ----
+// ---- Previous view, hints, client reports ----
 
 // The owner set (node IDs, best first) of `scope` in a view of `ids` with R replicas.
 std::vector<unsigned> owners_in(int scope, const std::vector<unsigned>& ids, unsigned R = 1) {
@@ -1773,7 +1773,7 @@ TEST(MembershipPrevious, HintsAreVoidWhenThePreviousEpochChanges) {
   for (int s : j.sp.moved) EXPECT_EQ(get_one(r, s, "a" + std::to_string(s)), KeyStatus::Miss) << "scope " << s;
 }
 
-// Q08 / P31 with R = 1: node 3 drains (still serves reads), then leaves `nodes` without an epoch bump. Hints that pointed at it
+// With R = 1: node 3 drains (still serves reads), then leaves `nodes` without an epoch bump. Hints that pointed at it
 // are dropped at the retire; reads of its chains miss on the current set and the filtered previous set is empty (no error).
 TEST(MembershipPrevious, DrainToRemovalWithR1MissesWithoutRefusedAndDropsTheHints) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}));
@@ -1832,7 +1832,7 @@ TEST(MembershipPrevious, R2HintedContinuationReachesBothPreviousReplicas) {
 }
 
 // "0 failed operations" by the strict oracle: a join and a drain to removal (R = 1) under 4-thread traffic, against servers that
-// enforce the epoch rules (MB4), with the previous view carrying reads across each change.
+// enforce the epoch rules, with the previous view carrying reads across each change.
 TEST(MembershipPrevious, JoinAndDrainToRemovalUnderTrafficFailNothing) {
   Rig r(signed_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}), 2, 2000, {}, 0, /*bundle_servers=*/true);
   ASSERT_TRUE(r.cl);
@@ -1905,7 +1905,7 @@ TEST(MembershipReports, BodyGoldenAndAnUnreachableRailIsReportedFalse) {
 }
 
 TEST(MembershipReports, SentEveryReportMsAndNeverWithoutAController) {
-  EXPECT_EQ(Client::BundleOpen{}.report_ms, 2000u) << "decision 9: one report every 2 s";
+  EXPECT_EQ(Client::BundleOpen{}.report_ms, 2000u) << "one report every 2 s";
   ReportSink sink;
   {
     Rig r(make_snap(1, 1, {{1, 1}, {2, 1}}), 2, 2000, {}, 0, false, false, {}, [&](Client::BundleOpen& bo) {
@@ -1929,10 +1929,10 @@ TEST(MembershipReports, SentEveryReportMsAndNeverWithoutAController) {
   EXPECT_EQ(none.cl->reports_sent(), 0u);
 }
 
-// ---- review w5 ----
+// ---- Previous-set reads, hints and reports ----
 
 // One fetch of the roots `names` (versions `vs`) in `scope`: each status, and for every Hit the oracle check that the buffer
-// holds exactly that key's bytes (U2-01: never a Hit over zeroed or another node's bytes).
+// holds exactly that key's bytes (never a Hit over zeroed or another node's bytes).
 std::vector<KeyStatus> fetch_roots(Rig& r, int scope, const std::vector<std::string>& names, const std::vector<std::uint64_t>& vs) {
   std::vector<Chain> ch;
   ch.reserve(names.size());
@@ -1949,7 +1949,7 @@ std::vector<KeyStatus> fetch_roots(Rig& r, int scope, const std::vector<std::str
   return fc->status;
 }
 
-// U2-01 (P0): the current owner misses keys[0] but hits keys[1]; the previous-set node then runs (it writes every
+// The current owner misses keys[0] but hits keys[1]; the previous-set node then runs (it writes every
 // buffer) and misses keys[0] too. The job must report that node's statuses (keys[1] Miss), not the current node's Hit
 // over the bytes the previous node left (zeros). Variant: the previous node hits keys[0] and misses keys[1].
 TEST(MembershipPrevious, FallbackReadReportsTheStatusesOfTheNodeThatWroteTheBuffers) {
@@ -1977,7 +1977,7 @@ TEST(MembershipPrevious, FallbackReadReportsTheStatusesOfTheNodeThatWroteTheBuff
   EXPECT_EQ(st[1], KeyStatus::Miss) << "the previous node does not hold keys[1]";
 }
 
-// U2-25: a hint tagged with a previous epoch other than the snapshot's is void on the next read (void_epoch), dropped,
+// A hint tagged with a previous epoch other than the snapshot's is void on the next read (void_epoch), dropped,
 // and the read goes to the current set.
 TEST(MembershipPrevious, StaleTaggedHintIsVoidOnTheNextRead) {
   JoinedRig j;
@@ -1993,7 +1993,7 @@ TEST(MembershipPrevious, StaleTaggedHintIsVoidOnTheNextRead) {
   EXPECT_EQ(prev_hits(r), 0u) << "a void hint sends nothing to the previous set";
 }
 
-// U2-14: aead_fail_delta per node label: a retired node's failures do not hide new ones on another node, and a revived
+// Aead_fail_delta per node label: a retired node's failures do not hide new ones on another node, and a revived
 // node reports only the failures of its new incarnation.
 TEST(MembershipReports, AeadDeltaIsPerNodeAndSurvivesARetireAndARevive) {
   ReportSink sink;
@@ -2026,7 +2026,7 @@ TEST(MembershipReports, AeadDeltaIsPerNodeAndSurvivesARetireAndARevive) {
   EXPECT_EQ(delta(), 1) << "a failed send keeps the delta";
 }
 
-// U2-27: a report send in flight holds no state lock (report_body answers at once), and shutdown cuts it short.
+// A report send in flight holds no state lock (report_body answers at once), and shutdown cuts it short.
 TEST(MembershipReports, ASlowSendBlocksNeitherTheStateNorShutdown) {
   std::atomic<bool> in_send{false}, cancelled{false};
   auto r = std::make_unique<Rig>(make_snap(1, 1, {{1, 1}, {2, 1}}), 2, 2000, std::map<unsigned, unsigned>{}, 0, false, false,
@@ -2051,7 +2051,7 @@ TEST(MembershipReports, ASlowSendBlocksNeitherTheStateNorShutdown) {
   EXPECT_LT(std::chrono::steady_clock::now() - t1, seconds(5)) << "the send was cut short";
 }
 
-// ---- review w4: the real Client against real MB4 bundle-mode servers ----
+// ---- The real Client against real bundle-mode servers ----
 
 // What the controller does before the clients learn a bundle: the memory nodes `ids` apply it (POST /v1/bundle).
 void servers_apply(Rig& r, const MembershipSnapPtr& s, std::initializer_list<unsigned> ids) {
@@ -2059,7 +2059,7 @@ void servers_apply(Rig& r, const MembershipSnapPtr& s, std::initializer_list<uns
   for (unsigned id : ids) r.w.queue_apply(id, s->view);  // applied at the next drive step (in the sim turn)
 }
 
-// Review w4 V08: a memory node removed from the membership sends GOAWAY(Epoch). A store the client still routes there
+// A memory node removed from the membership sends GOAWAY(Epoch). A store the client still routes there
 // (its view is older) is Skipped, both while the session is still Up and on the not-Up fast path, never Refused.
 TEST(MembershipEpochServers, RemovedNodeSkipsStoresInsteadOfRefusing) {
   Rig r(signed_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}), 2, 2000, {}, 0, /*bundle_servers=*/true);
@@ -2071,8 +2071,8 @@ TEST(MembershipEpochServers, RemovedNodeSkipsStoresInsteadOfRefusing) {
         .value_or(0);
   };
   servers_apply(r, signed_snap(2, 2, {{1, 1}, {3, 1}}), {2});  // node 2 learns first that it is out: GOAWAY(Epoch)
-  // Path 1 (U2-25): the session is still Up when the PUT_BEGIN goes out: the node answers it (StaleEpoch: it is on
-  // epoch 2), or its GOAWAY(Epoch) cuts the wait short (V08: put_begin) -> Skipped either way, counted once, no fast path.
+  // Path 1: the session is still Up when the PUT_BEGIN goes out: the node answers it (StaleEpoch: it is on
+  // epoch 2), or its GOAWAY(Epoch) cuts the wait short (put_begin) -> Skipped either way, counted once, no fast path.
   const long long stale0 = skipped("stale_epoch"), drain_first = skipped("draining");
   const std::uint64_t fast_first = r.cl->fast_failed_jobs();
   EXPECT_EQ(put_one(r, scope, "rm_first"), KeyStatus::Skipped);
@@ -2096,7 +2096,7 @@ TEST(MembershipEpochServers, RemovedNodeSkipsStoresInsteadOfRefusing) {
   EXPECT_EQ(skipped("draining"), drain0 + 20);
 }
 
-// Review w4 V07 (+ V08, V12): a real Client in bundle mode and real MB4 servers under 4-thread traffic, strict oracle.
+// A real Client in bundle mode and real servers under 4-thread traffic, strict oracle.
 // Epoch changes (a join), a drain, a removal that the node learns before the client (GOAWAY), and a slot gap: a node the
 // servers place on has no slot on the client, so roots the client sends elsewhere are SKIPped as not an owner.
 TEST(MembershipEpochServers, EpochsDrainRemovalAndSlotGapUnderTrafficStrict) {
@@ -2122,10 +2122,10 @@ TEST(MembershipEpochServers, EpochsDrainRemovalAndSlotGapUnderTrafficStrict) {
   // 2. Drain: node 2 refuses new roots (Draining skips), keeps serving reads.
   step(signed_snap(3, 3, {{1, 1}, {2, 1}, {3, 1}, {4, 1}}, 1, {}, {2}), {1, 2, 3, 4}, {});
   // 3. Removal of node 2 (drained), and of active node 3, which learns it before anyone else: GOAWAY(Epoch) while the
-  //    client still routes roots to it (V08).
+  //    client still routes roots to it.
   step(signed_snap(4, 4, {{1, 1}, {4, 1}}), {3}, {1, 2, 4});
   ASSERT_TRUE(until([&] { return r.cl->slot_of(2) < 0 && r.cl->slot_of(3) < 0; }));
-  // 4. Slot gap (V12): node 5 joins on the servers, but the client cannot set it up (make_spec fails): its view lacks
+  // 4. Slot gap: node 5 joins on the servers, but the client cannot set it up (make_spec fails): its view lacks
   //    node 5, the servers' owner sets include it.
   r.spec_fail = true;
   {
@@ -2143,7 +2143,7 @@ TEST(MembershipEpochServers, EpochsDrainRemovalAndSlotGapUnderTrafficStrict) {
   const std::string m = r.cl->metrics_text();
   EXPECT_GT(series(m, "miracache_client_put_skipped_total", {"reason=\"not_owner\""}).value_or(0), 0) << m;
   {
-    std::lock_guard sl(r.w.srv_mu);  // the servers count the not-owner skips (V09)
+    std::lock_guard sl(r.w.srv_mu);  // the servers count the not-owner skips
     long long n = 0;
     std::string sm;
     for (unsigned id : {1u, 4u}) {
@@ -2243,7 +2243,7 @@ TEST(Breaker, SlowNodeTripsItsReadsMissFastItsStoresSkipAndProbesCloseItAfterRec
   }
   EXPECT_EQ(b.state(3), 0);
   EXPECT_EQ(b.m("miracache_client_breaker_state", 3), 0);
-  // F08 (goal 10): the breaker series carry the node's ID, hostname and address, as the rail series.
+  // The breaker series carry the node's ID, hostname and address, as the rail series.
   EXPECT_EQ(series(b.r.cl->metrics_text(), "miracache_client_breaker_state", {"node=\"3\"", "node_id=\"3\"", "hostname=", "addr="}), 0)
       << b.r.cl->metrics_text();
   EXPECT_EQ(series(b.r.cl->metrics_text(), "miracache_client_breaker_trips_total",
@@ -2383,7 +2383,7 @@ TEST(Breaker, ReplicasRouteAroundAnOpenNode) {
   EXPECT_EQ(b.o.failed(), 0u) << b.o.report();
 }
 
-// QT2: a put the node throttles (an Ok ack whose entries say SKIP, with retry_after_ms > 0) is Skipped and counted as
+// A put the node throttles (an Ok ack whose entries say SKIP, with retry_after_ms > 0) is Skipped and counted as
 // put_skipped{reason="throttled"}; an idempotent re-put (Skipped, no retry_after) is not.
 TEST(MembershipEpoch, ThrottledPutsAreSkippedAndCountedAsThrottled) {
   Rig r(make_snap(1, 1, {{1, 1}}), /*workers=*/1);
@@ -2426,7 +2426,7 @@ TEST(Oracle, StrictAndFaultVerdicts) {
   }
   EXPECT_EQ(status_failure(KeyStatus::Refused, OracleMode::Fault, true), nullptr);
   EXPECT_EQ(status_failure(KeyStatus::Timeout, OracleMode::Fault, true), nullptr);
-  EXPECT_EQ(status_failure(KeyStatus::Aborted, OracleMode::Fault, true), nullptr);  // Q1 option A
+  EXPECT_EQ(status_failure(KeyStatus::Aborted, OracleMode::Fault, true), nullptr);  // excused under a fault
   EXPECT_NE(status_failure(KeyStatus::Aborted, OracleMode::Fault, false), nullptr);  // never for a healthy node
 }
 
@@ -2476,7 +2476,7 @@ TEST(Oracle, WrongBytesAndParentRules) {
   EXPECT_NE(o.report().find("failed=6"), std::string::npos);
 }
 
-// Run #200: a store that ended without Committed has an unknown outcome. Its bytes may be seen until a newer committed
+// A store that ended without Committed has an unknown outcome. Its bytes may be seen until a newer committed
 // version supersedes them; a version never submitted for the key is still wrong.
 TEST(Oracle, AStoreWithoutAnAnswerMayStillHaveLanded) {
   Oracle o(OracleMode::Strict);
@@ -2499,7 +2499,7 @@ TEST(Oracle, AStoreWithoutAnAnswerMayStillHaveLanded) {
 }
 
 
-// L12 (review s9b): a provider that returns NULL without setting errno (libsiw, ring mmap failure) is logged as
+// A provider that returns NULL without setting errno (libsiw, ring mmap failure) is logged as
 // errno=none with a note, never as a stale errno; the cause is still local_resource.
 TEST(MembershipSlots, LocalDeviceFailureWithoutErrnoIsLoggedAsNone) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}));
@@ -2522,7 +2522,7 @@ TEST(MembershipSlots, LocalDeviceFailureWithoutErrnoIsLoggedAsNone) {
   r.spec_local_fail = false;
 }
 
-// Q07 (review s10): the fabric's own cq_depth budget refusal involves no provider call: the line names the budget and
+// The fabric's own cq_depth budget refusal involves no provider call: the line names the budget and
 // prints no errno and no errno_note (they would describe a verbs call that never happened).
 TEST(MembershipSlots, FabricBudgetRefusalIsLoggedWithoutErrno) {
   Rig r(make_snap(1, 1, {{1, 1}, {2, 1}, {3, 1}}));
@@ -2547,7 +2547,7 @@ TEST(MembershipSlots, FabricBudgetRefusalIsLoggedWithoutErrno) {
   EXPECT_EQ(ln[0].find("errno"), std::string::npos) << ln[0];
 }
 
-// Q03 / Q09 (review s10): a session reconnect (link loss, not a rail rejoin) that the LOCAL device refuses is counted per
+// A session reconnect (link loss, not a rail rejoin) that the LOCAL device refuses is counted per
 // attempt and logged once; when the reconnect takes, one recovery line closes the entry, so the next outage with the
 // same (node, rail, cause) is logged again: fail -> recover -> fail = 2 error lines and 1 recovery line. Every line and
 // series carries the node ID, hostname and address.
@@ -2619,7 +2619,7 @@ TEST(MembershipSlots, SessionReconnectLocalFailureIsLoggedRecoveredAndLoggedAgai
   EXPECT_EQ(count_of(logs, kLocalLine), 0u);
 }
 
-// ---- Q15 in bundle mode (run #271): the open contract of the static open (Env::open_settle) -------------------------
+// ---- Bundle mode: the open contract of the static open (Env::open_settle) -------------------------
 // Node `id`'s ticket draws fail `fails` times (an open-time admin fetch that failed under load), then work.
 std::function<void(Client::NodeSpec&, const control::NodeView&)> draws_fail(unsigned id, std::shared_ptr<std::atomic<int>> fails) {
   return [id, fails](Client::NodeSpec& ns, const control::NodeView& nv) {
@@ -2650,7 +2650,7 @@ TEST(MembershipSlots, BundleOpenRetriesANodeWhoseFirstBuildFailedInsideTheOpen) 
   EXPECT_NE(logs.find("connected=\"3 of 3\""), std::string::npos) << logs;
 }
 
-// R20 (review s11): every node's first build fails (one transient admin failure each). Before: the bundle open failed
+// Every node's first build fails (one transient admin failure each). Before: the bundle open failed
 // at once (up == 0 returned before the settle); now they are retried in the settle like one of N-1.
 TEST(MembershipSlots, BundleOpenRetriesEveryNodeWhenAllFirstBuildsFail) {
   std::vector<std::shared_ptr<std::atomic<int>>> fails;

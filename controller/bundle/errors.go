@@ -1,5 +1,5 @@
-// Package bundle implements the signed cluster bundle "mira-bundle-v1" (membership plan
-// decision 2): the byte-exact two-part envelope, the deterministic body emitter, signing,
+// Package bundle implements the signed cluster bundle "mira-bundle-v1":
+// the byte-exact two-part envelope, the deterministic body emitter, signing,
 // verification with role binding, parsing, the trust file and computed identities.
 package bundle
 

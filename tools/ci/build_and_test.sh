@@ -21,7 +21,7 @@ export TSAN_OPTIONS=halt_on_error=1
 fuzz_seconds=${MIRACACHE_FUZZ_SECONDS:-30}
 # ctest parallelism (default 3, leaving CPU for other projects on the shared VM). Tests that cannot overlap are
 # RUN_SERIAL in CMake (every rdma-labelled test, all e2e tests with fixed ports/devices). The long sim sweeps are sharded (sim_X_1of6.., MIRACACHE_SIM_SHARDS, PROCESSORS 1) and run in parallel; at tsan -j1 they stay sequential.
-# J02: default min(3, nproc); the tsan preset defaults to 1 (timing-sensitive tests flake when they overlap on 2 CPUs). An
+# Default min(3, nproc); the tsan preset defaults to 1 (timing-sensitive tests flake when they overlap on 2 CPUs). An
 # explicit MIRA_CTEST_JOBS wins everywhere. RUN_SERIAL set (listed in tests/CMakeLists.txt): every
 # rdma-labelled test, reload_walk_tests (ClientRebuild.ClassBChange*), bundle_watcher, cred_watch, the *Keepalive* tests
 # in miracache_wire_tests.
@@ -121,7 +121,7 @@ for p in "${presets[@]}"; do
     fuzz_run fuzz_audit_verify 20 tests/fuzz/corpus/audit
   fi
 done
-# R07: MIRA_SKIP_TAIL=1 skips the go / Python / engine-contract / binding + wheel tail (tools/ci/full_gate.sh runs it once, in the devrel lane).
+# MIRA_SKIP_TAIL=1 skips the go / Python / engine-contract / binding + wheel tail (tools/ci/full_gate.sh runs it once, in the devrel lane).
 if [[ ${MIRA_SKIP_TAIL:-0} == 1 ]]; then
   echo "=== tail (go, python, engine contracts, binding, wheel) skipped: MIRA_SKIP_TAIL=1 ==="
 else

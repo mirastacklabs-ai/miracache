@@ -46,7 +46,7 @@ func (r *rig) auditText() string {
 	return sb.String()
 }
 
-// The route table equals RBAC/audit plan decision 4 (controller column).
+// The route table equals the documented RBAC route table (controller column).
 func TestRouteTable(t *testing.T) {
 	want := map[string]string{
 		"GET /v1/bundle": "", "GET /v1/metrics": "", "POST /v1/reports": "principal",

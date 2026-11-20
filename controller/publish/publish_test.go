@@ -23,7 +23,7 @@ func principals() func(*store.State) {
 	}
 }
 
-// P11 and Q06: next generation = max(store, max applied) + 1; next sec_generation likewise.
+// Next generation = max(store, max applied) + 1; next sec_generation likewise.
 func TestGenerationChoice(t *testing.T) {
 	r := newRig(t, []string{"hostA", "hostB"}, 2)
 	r.nodes[0].set(func(n *fakeNode) { n.gen, n.secGen, n.epoch = 7, 4, 3 })
@@ -89,7 +89,7 @@ func TestMembershipLearnedFromNodes(t *testing.T) {
 	}
 }
 
-// P16: every node is dry-run before publish; one refusal aborts with no real push and no commit.
+// Every node is dry-run before publish; one refusal aborts with no real push and no commit.
 func TestDryRunAbort(t *testing.T) {
 	r := newRig(t, []string{"hostA", "hostB", "hostC"}, 3)
 	r.nodes[2].set(func(n *fakeNode) { n.dryStatus, n.dryReason = 400, bundle.ReasonSchema })
@@ -121,7 +121,7 @@ func publishTwoThenJoin(t *testing.T) *rig {
 	return r
 }
 
-// Q05: the join pushes to the new node first; without its ack nothing else is pushed or committed.
+// The join pushes to the new node first; without its ack nothing else is pushed or committed.
 func TestJoinAbortsWithoutNewNodeAck(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -186,7 +186,7 @@ func TestJoinPushesNewNodeFirst(t *testing.T) {
 	}
 }
 
-// A slow node misses the ack wait: the publish succeeds, the node is lagging, reconcile re-pushes it (P06).
+// A slow node misses the ack wait: the publish succeeds, the node is lagging, reconcile re-pushes it.
 func TestSlowAckThenReconcileRepush(t *testing.T) {
 	r := newRig(t, []string{"hostA", "hostB"}, 2)
 	r.nodes[1].set(func(n *fakeNode) { n.delay = 3 * time.Second })
@@ -214,7 +214,7 @@ func TestSlowAckThenReconcileRepush(t *testing.T) {
 	}
 }
 
-// P11: a node at the same generation with another applied_hash (a second writer) or ahead of the
+// A node at the same generation with another applied_hash (a second writer) or ahead of the
 // store gets the controller's content republished under a new generation, with an alert.
 func TestReconcileSecondWriter(t *testing.T) {
 	for _, tc := range []struct {
@@ -251,8 +251,8 @@ func TestReconcileSecondWriter(t *testing.T) {
 	}
 }
 
-// Q06: a push rejected for its sec section stops publishing, reconcile included, and the log
-// names --recover-from with the node that has the highest sec_generation. Q07: the node below
+// A push rejected for its sec section stops publishing, reconcile included, and the log
+// names --recover-from with the node that has the highest sec_generation. The node below
 // the highest sec_generation is alerted.
 func TestSecRejectStops(t *testing.T) {
 	r := newRig(t, []string{"hostA", "hostB"}, 2)
@@ -269,7 +269,7 @@ func TestSecRejectStops(t *testing.T) {
 		t.Fatalf("got %v, want ErrStopped", err)
 	}
 	if len(rep.SecBehind) != 1 || rep.SecBehind[0] != r.nodes[0].admin() {
-		t.Fatalf("Q07 alert missing: %+v", rep)
+		t.Fatalf("alert missing: %+v", rep)
 	}
 	if !r.p.Stopped() {
 		t.Fatal("not stopped")
@@ -302,7 +302,7 @@ func TestSecRejectInDryRunStops(t *testing.T) {
 	}
 }
 
-// Q12: a drop_before later than now + skew is rejected by the publisher.
+// A drop_before later than now + skew is rejected by the publisher.
 func TestDropBeforeSkew(t *testing.T) {
 	r := newRig(t, []string{"hostA"}, 1)
 	bad := r.now.Add(10 * time.Minute).Format("2006-01-02T15:04:05Z")
@@ -322,7 +322,7 @@ func TestDropBeforeSkew(t *testing.T) {
 	}
 }
 
-// H09: after a controller clock step back, an UNCHANGED stored drop_before that is now in the future is accepted
+// After a controller clock step back, an UNCHANGED stored drop_before that is now in the future is accepted
 // (the cluster stays publishable); one the caller's edit introduces or changes is still a bad edit.
 func TestDropBeforeStoredAfterClockStepBack(t *testing.T) {
 	const layout = "2006-01-02T15:04:05Z"
@@ -370,7 +370,7 @@ func TestUnreachableMemberAborts(t *testing.T) {
 	}
 }
 
-// Q06 / decision 12: --recover-from imports a node's bundle.current into a fresh store, and the
+// Decision 12: --recover-from imports a node's bundle.current into a fresh store, and the
 // next publish continues from it with the sec section unchanged.
 func TestRecoverFrom(t *testing.T) {
 	r := newRig(t, []string{"hostA", "hostB"}, 2)
@@ -425,7 +425,7 @@ func TestRecoverFrom(t *testing.T) {
 	}
 }
 
-// Decision 12 / P30: two controllers on one store directory: the second fails the flock.
+// Decision 12: two controllers on one store directory: the second fails the flock.
 func TestTwoControllersOneStore(t *testing.T) {
 	dir := t.TempDir()
 	a, err := store.Open(dir)
@@ -532,7 +532,7 @@ func (r *rig) writeState(s store.State) {
 	}
 }
 
-// Y09: with a second writer's epoch above the last body's, an unchanged-view publish never reuses an
+// With a second writer's epoch above the last body's, an unchanged-view publish never reuses an
 // epoch number; it moves to baseEpoch + 1 and records the old number as the previous epoch.
 func TestEpochNeverReusedAfterSecondWriter(t *testing.T) {
 	r := newRig(t, []string{"hostA", "hostB"}, 2)
@@ -556,7 +556,7 @@ func TestEpochNeverReusedAfterSecondWriter(t *testing.T) {
 	}
 }
 
-// Y10: a node dropped from the desired state gets the removing bundle, and reconcile keeps trying
+// A node dropped from the desired state gets the removing bundle, and reconcile keeps trying
 // for store.RetirePasses passes.
 func TestRemovedNodeGetsRemovingBundle(t *testing.T) {
 	r := newRig(t, []string{"hostA", "hostB", "hostC"}, 3)
@@ -638,7 +638,7 @@ func TestRemovedNodeRetriedThenGivenUp(t *testing.T) {
 	}
 }
 
-// Y13: the controller died after the nodes acked but before the store commit. Reconcile finds the
+// The controller died after the nodes acked but before the store commit. Reconcile finds the
 // intent record, sees a node holding exactly that body, and completes the commit instead of reverting.
 func TestIntentRecordCompletedAfterCrash(t *testing.T) {
 	for _, join := range []bool{false, true} {
@@ -706,7 +706,7 @@ func TestIntentRecordDiscardedWhenNobodyHoldsIt(t *testing.T) {
 	}
 }
 
-// Z03: the controller died before any node acked (no node holds the record) and one node is dead.
+// The controller died before any node acked (no node holds the record) and one node is dead.
 // Reconcile carries on (re-pushing a lagging node) and keeps the record; a publish that removes the
 // dead node succeeds, above the record's generation.
 func TestUnresolvedIntentRecordDoesNotBlock(t *testing.T) {
@@ -750,7 +750,7 @@ func TestUnresolvedIntentRecordDoesNotBlock(t *testing.T) {
 	}
 }
 
-// Z03: only the (now dead) node C acked the record before the crash, and the record moved
+// Only the (now dead) node C acked the record before the crash, and the record moved
 // sec_generation. A tolerant publish supersedes it, above its generation and sec_generation; when C
 // returns it is behind and takes a re-push: no equal-generation clash, no sec reject, no stop.
 func TestUnresolvedIntentRecordNodeReturns(t *testing.T) {
@@ -807,7 +807,7 @@ func TestUnresolvedIntentRecordNodeReturns(t *testing.T) {
 	}
 }
 
-// Z07: a node holds the record's body but the store commit fails with an I/O error: the record is kept
+// A node holds the record's body but the store commit fails with an I/O error: the record is kept
 // (discarding it would revert an acked change) and the error returned; the next pass completes it. A
 // CAS conflict still discards it.
 func TestIntentRecordKeptOnStoreFailure(t *testing.T) {
@@ -864,7 +864,7 @@ func TestIntentRecordKeptOnStoreFailure(t *testing.T) {
 	}
 }
 
-// Y14: a sec reject from the JOINING node aborts the join only; publishing continues, and the
+// A sec reject from the JOINING node aborts the join only; publishing continues, and the
 // remedy never names the joining node.
 func TestJoinSecRejectAbortsJoinOnly(t *testing.T) {
 	r := publishTwoThenJoin(t)
@@ -902,7 +902,7 @@ func dropAdmin(admin string) func(*store.State) {
 	}
 }
 
-// F02: only the caller's own invalid edit carries ErrBadEdit; a *bundle.Error from the
+// Only the caller's own invalid edit carries ErrBadEdit; a *bundle.Error from the
 // controller's own trust file or a corrupt stored envelope is a server fault.
 func TestBadEditVsServerFault(t *testing.T) {
 	t.Run("future drop_before is a bad edit", func(t *testing.T) {
@@ -949,7 +949,7 @@ func TestBadEditVsServerFault(t *testing.T) {
 	})
 }
 
-// J03: after a step back the controller keeps publishing the stored drop_before unchanged, so the bundle every node
+// After a step back the controller keeps publishing the stored drop_before unchanged, so the bundle every node
 // receives still carries a drop_before that looks like the future to a node with the same clock. The node (C++
 // check_drop_before_not_future with the floor's stored maximum, covered by the C++ bundle tests and
 // the bundle-apply tests) must accept it; this pins the controller side of that contract.

@@ -103,7 +103,7 @@ func TestSecretAddKverGolden(t *testing.T) {
 	a, out, errw := secretApp(0x40)
 	p := filepath.Join(t.TempDir(), "secret.txt")
 	// The output keeps the input's comment lines, so the input takes the first two comment lines of the
-	// golden (the stale "Expect:" text of secret_golden.txt, U2-33, stays out of the golden).
+	// golden (the stale "Expect:" text of secret_golden.txt, stays out of the golden).
 	gl := strings.SplitN(readFile(t, fixtures+"secret_add_kver_golden.txt"), "\n", 3)
 	sl := strings.SplitN(readFile(t, fixtures+"secret_golden.txt"), "\n", 3)
 	if err := os.WriteFile(p, []byte(gl[0]+"\n"+gl[1]+"\n"+sl[2]), 0o600); err != nil {
@@ -147,7 +147,7 @@ func TestSecretAddKverGolden(t *testing.T) {
 	}
 }
 
-// U2-32: concurrent add-kver runs on one file lose no key.
+// Concurrent add-kver runs on one file lose no key.
 func TestSecretAddKverConcurrentRunsKeepEveryKey(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "secret.txt")
 	if err := os.WriteFile(p, []byte(readFile(t, fixtures+"secret_golden.txt")), 0o600); err != nil {

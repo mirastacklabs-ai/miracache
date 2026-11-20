@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Storage for POST /v1/reports. The raw latest body per identity is kept for inspection; MB9's
+// Storage for POST /v1/reports. The raw latest body per identity is kept for inspection; the
 // membership.Monitor (Config.Mem) parses it and applies the failure rules. A report is attributed to the caller's mTLS identity, never to a field in the body; only
 // the latest report per identity is kept and the number of identities is bounded.
 const (
@@ -33,7 +33,7 @@ func (rs *reportStore) put(id string, body []byte, at time.Time, max int, fresh 
 	rs.mu.Lock()
 	defer rs.mu.Unlock()
 	if _, ok := rs.m[id]; !ok && len(rs.m) >= max {
-		for k, r := range rs.m { // the same policy as the monitor (V16): stale reports go first
+		for k, r := range rs.m { // the same policy as the monitor: stale reports go first
 			if at.Sub(r.At) > fresh {
 				delete(rs.m, k)
 			}
@@ -52,7 +52,7 @@ func (rs *reportStore) count() int {
 	return len(rs.m)
 }
 
-// Report returns the latest stored report body of an identity (for MB9 and tests).
+// Report returns the latest stored report body of an identity (for the failure detector and tests).
 func (s *Server) Report(id string) ([]byte, bool) {
 	s.reports.mu.Lock()
 	defer s.reports.mu.Unlock()

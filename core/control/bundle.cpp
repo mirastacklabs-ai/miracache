@@ -513,7 +513,7 @@ Expected<SecView, BundleError> parse_sec(std::string_view text) {
         if (!parse_utc_time(db, secs)) return schema("drop_before must be YYYY-MM-DDTHH:MM:SSZ");
         p.drop_before = secs;
       }
-      // W01: one identity maps to exactly one principal, once.
+      // One identity maps to exactly one principal, once.
       for (const std::string& ident : p.identities) {
         if (ident.empty()) return schema("principal identity must not be empty");
         if (!identities.insert(ident).second) return schema("identity bound to two principals (or twice in one)");
@@ -620,7 +620,7 @@ std::optional<BundleError> check_drop_before_not_future(const BundleView& v, std
     if (p.drop_before && *p.drop_before > now_unix_s + kDropBeforeSkewSeconds) {
       if (stored_max) {
         auto it = stored_max->find(p.name);
-        if (it != stored_max->end() && *p.drop_before <= it->second) continue;  // J03: already stored, not a new value
+        if (it != stored_max->end() && *p.drop_before <= it->second) continue;  // already stored, not a new value
       }
       return BundleError{Reject::Schema, "a principal drop_before is later than now + 300 s"};
     }

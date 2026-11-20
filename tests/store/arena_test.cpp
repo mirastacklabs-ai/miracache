@@ -127,7 +127,7 @@ TEST(Arena, FileBackingGenerationsUniqueAcrossReopen) {
   }
 }
 
-// s12 (tpu-sync cross-check C2): the restart scan infers each run's block size from min_block_bytes, so a warm start
+// The restart scan infers each run's block size from min_block_bytes, so a warm start
 // under another value is refused (STATIC), and the formatted value is recorded in the superblock.
 TEST(Arena, MinBlockBytesIsRecordedAndAChangeIsRefused) {
   TempDir td;
@@ -150,7 +150,7 @@ TEST(Arena, MinBlockBytesIsRecordedAndAChangeIsRefused) {
   EXPECT_FALSE((*again)->fresh());
 }
 
-// A store from before s12 has 0 in that byte (reserved zero): it is re-formatted once, then recorded.
+// A store from before the minimum block size was recorded has 0 in that byte (reserved zero): it is re-formatted once, then recorded.
 TEST(Arena, StoreWithoutRecordedMinBlockIsReformattedOnce) {
   TempDir td;
   ASSERT_FALSE(td.path().empty());
@@ -161,7 +161,7 @@ TEST(Arena, StoreWithoutRecordedMinBlockIsReformattedOnce) {
     auto a = Arena::open(cfg);
     ASSERT_TRUE(a) << (a ? "" : a.error().context);
   }
-  {  // rewrite both superblock copies as a pre-s12 store would have them
+  {  // rewrite both superblock copies as an older store would have them
     const std::string seg0 = td.path() + "/segment-0000";
     std::FILE* f = std::fopen(seg0.c_str(), "r+b");
     ASSERT_NE(f, nullptr);
@@ -224,7 +224,7 @@ TEST(Arena, NodeIdIsRandomAndSurvivesWarmRestart) {
 }
 
 
-// ---- review r9 S04: the node ID lives in <state_dir>/node-id --------------------------------------------------
+// ---- The node ID lives in <state_dir>/node-id --------------------------------------------------
 std::string slurp(const std::string& p) {
   std::FILE* f = std::fopen(p.c_str(), "rb");
   if (!f) return {};
@@ -276,7 +276,7 @@ TEST(ArenaStateFile, BlankStoreDrawsAndWritesFile0600AndAWipedStoreKeepsTheId) {
     ASSERT_TRUE(a);
     EXPECT_EQ((*a)->superblock().node_id, first);
   }
-  // Deleting the file is the way to a new identity (the directory is initialised: a replacement, r9b T01).
+  // Deleting the file is the way to a new identity (the directory is initialised: a replacement).
   std::filesystem::remove(cfg.state_dir + "/node-id");
   auto a = Arena::open(anon);
   ASSERT_TRUE(a);
@@ -331,7 +331,7 @@ TEST(ArenaStateFile, GarbageFileCountsAsMissing) {
     EXPECT_EQ((*a)->superblock().node_id, id) << junk;
     ASSERT_TRUE((*a)->shutdown_clean());
   }
-  // r9b T01: in an initialised dir an unreadable node-id counts as deleted: the node is replaced (new ID, reformatted).
+  // In an initialised dir an unreadable node-id counts as deleted: the node is replaced (new ID, reformatted).
   {
     std::FILE* f = std::fopen((st.path() + "/node-id").c_str(), "wb");
     ASSERT_NE(f, nullptr);
@@ -410,7 +410,7 @@ TEST(NodeStateFile, WriteIsAtomicAndReplacesAStaleTemp) {
   EXPECT_FALSE(none->has_value());
 }
 
-// ---- review r9b T01: replacing a node with a persistent store that still holds data -----------------------------------
+// ---- Replacing a node with a persistent store that still holds data -----------------------------------
 TEST(ArenaStateFile, ReplacingANodeWithAFullStoreDrawsANewIdAndReformats) {
   TempDir td, st;
   auto cfg = small_cfg();
@@ -456,7 +456,7 @@ TEST(ArenaStateFile, ReplacingANodeWithAFullStoreDrawsANewIdAndReformats) {
   EXPECT_EQ((*a)->superblock().node_id, second);
 }
 
-// ---- review r9b T02: one memory node per state_dir --------------------------------------------------------------------
+// ---- One memory node per state_dir --------------------------------------------------------------------
 TEST(ArenaStateFile, ASecondOpenOfOneStateDirFailsInThisProcessAndInAnother) {
   TempDir st;
   auto cfg = small_cfg();
@@ -485,7 +485,7 @@ TEST(ArenaStateFile, ASecondOpenOfOneStateDirFailsInThisProcessAndInAnother) {
   EXPECT_EQ((*c)->superblock().node_id, id);
 }
 
-// ---- review r9b T03: no symlink is followed, and an unsafe state_dir is refused ---------------------------------------
+// ---- No symlink is followed, and an unsafe state_dir is refused ---------------------------------------
 TEST(NodeStateFile, SymlinksAreNeverFollowedAndAnUnsafeDirIsRefused) {
   TempDir td;
   const std::string dir = td.path() + "/s", victim = td.path() + "/victim";
@@ -542,7 +542,7 @@ TEST(NodeStateFile, SymlinksAreNeverFollowedAndAnUnsafeDirIsRefused) {
   }
 }
 
-// ---- review r9c U05/U06: a symlinked state_dir is refused; a FIFO or other odd file never hangs or passes ------------
+// ---- A symlinked state_dir is refused; a FIFO or other odd file never hangs or passes ------------
 TEST(NodeStateFile, SymlinkedStateDirIsRefused) {
   TempDir td;
   const std::string real = td.path() + "/real", link = td.path() + "/link";
@@ -580,7 +580,7 @@ TEST(NodeStateFile, FifoAndNonRegularStateFilesAreRejectedWithoutHanging) {
   EXPECT_FALSE(state_dir_initialised(dir));
 }
 
-// ---- review r9c U03: the reformat crash window ------------------------------------------------------------------------
+// ---- The reformat crash window ------------------------------------------------------------------------
 class RecordingBacking : public Backing {
  public:
   explicit RecordingBacking(std::unique_ptr<Backing> in) : in_(std::move(in)) {}

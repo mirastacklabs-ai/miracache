@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Production Executor for the single-threaded store (A1.4 S7). `work` runs on a small worker
+// Production Executor for the single-threaded store. `work` runs on a small worker
 // pool; `done` is queued and runs ONLY inside drain_done(), which the store thread calls from
 // its event loop. This is the stronger guarantee core/util/executor.h asks for: `done` always
 // runs on the store thread, after `work` (the queue mutex gives the happens-before edge).

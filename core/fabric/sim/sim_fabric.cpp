@@ -19,7 +19,7 @@ bool overlaps(std::uintptr_t a, std::size_t al, std::uintptr_t b, std::size_t bl
 
 }  // namespace
 
-// ---- SimWrAudit (RL3) ----
+// ---- SimWrAudit ----
 
 void SimWrAudit::flag(Rule r, std::string msg) {
   ++counts_[r];
@@ -211,7 +211,7 @@ Status SimFabric::listen(AcceptFn on_accept, const ListenParams& params) {
 }
 
 // Exact address first; a caller that gives a host must match one exactly (as verbs: a connect to an address nobody
-// listens on is refused, G08). Without a host: the first listener (any port 0), or the only listener.
+// listens on is refused). Without a host: the first listener (any port 0), or the only listener.
 SimFabric::Listener* SimFabric::find_listener(const RailAddr& a) {
   for (auto& l : listeners_)
     if (l.addr.host == a.host && l.addr.port == a.port) return &l;
@@ -258,7 +258,7 @@ void SimFabric::abort_endpoints_to(NodeId peer) {
 NodeId SimEndpoint::peer_node() const { return peer_ != nullptr ? peer_->owner().id() : ~NodeId{0}; }
 
 Expected<Endpoint*> SimFabric::connect(const Peer& peer, const ConnParams& params) {
-  if (const char* call = local_call_.load(std::memory_order_acquire)) {  // Q6 fault hook: the local device refuses
+  if (const char* call = local_call_.load(std::memory_order_acquire)) {  // Fault hook: the local device refuses
     local_failures_.fetch_add(1, std::memory_order_relaxed);
     last_local_failure() = LocalFailure{call, local_errno_.load(std::memory_order_relaxed), "sim", -1};
     return Error{ErrorCode::ResourceExhausted, call};
@@ -272,7 +272,7 @@ Expected<Endpoint*> SimFabric::connect(const Peer& peer, const ConnParams& param
   SimFabric* remote = net_.node(peer.node);
   Listener* lst = remote != nullptr ? remote->find_listener(peer.addr) : nullptr;
   if (lst == nullptr || !lst->on_accept || lst->down) {
-    // r8b Q05: as on verbs (the CM rejects a connect with no listener): a node that is not there is
+    // As on verbs (the CM rejects a connect with no listener): a node that is not there is
     // LinkDown, not NotFound.
     return Error{ErrorCode::LinkDown, "connect: no listener"};
   }
@@ -282,7 +282,7 @@ Expected<Endpoint*> SimFabric::connect(const Peer& peer, const ConnParams& param
   Admission adm{lst->accept_class, lst->accept_pd};
   if (lst->admit) {
     auto r = lst->admit(ticket);
-    // r7 R01: through the verbs reject table, so a sim refusal reports what a CM reject would.
+    // Through the verbs reject table, so a sim refusal reports what a CM reject would.
     if (!r) return protocol::reject_error(protocol::admit_reject_code(r.error().code));
     adm = *r;
     // As on verbs: an admission naming a PD the passive side does not have is a refusal.

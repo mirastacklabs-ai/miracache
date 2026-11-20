@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A1.6 L3: Client facade + ClientCore against the real store on SimFabric (LoopbackPort).
+// Client facade + ClientCore against the real store on SimFabric (LoopbackPort).
 // Control calls are direct; DATA moves over simulated RDMA READ/WRITE with slicing and early
 // iWARP write CQEs. Everything is deterministic (seeded) except the facade tests, which use
 // the runtime's worker threads.
@@ -518,7 +518,7 @@ TEST(ClientFacade, StoreThenFetchThroughRuntime) {
   }
 }
 
-// ---- fix round 1 (review-store-s1s5-client-l3-r1: Q03/Q04/Q11-Q15) --------------------
+// ---- fix round 1 --------------------
 
 // ServerPort decorator: mutate the server's acks and/or lose PUT_DONE, like a broken peer.
 class FaultPort final : public ServerPort {
@@ -527,7 +527,7 @@ class FaultPort final : public ServerPort {
   std::function<void(store::LookupAck&)> mut_lookup;
   std::function<void(store::PutBeginAck&)> mut_begin;
   std::atomic<bool> drop_commit{false};
-  std::atomic<bool> removed{false};  // review w5 U2-24: the node's GOAWAY said Epoch (removed from the membership)
+  std::atomic<bool> removed{false};  // the node's GOAWAY said Epoch (removed from the membership)
   std::atomic<int> commits{0}, cancels{0};
   std::vector<store::PutDoneFn> held;  // the dropped PUT_DONE callbacks
 
@@ -603,8 +603,8 @@ void expect_all(const std::vector<KeyStatus>& st, std::size_t n, KeyStatus want)
   for (auto s : st) EXPECT_EQ(s, want);
 }
 
-// Q03: a local batch failure must abort every key of the batch at once, not wait for the deadline.
-// Review w5 U2-24: on a node that left the membership, only what the session loss cut short becomes Skipped. A refusal
+// A local batch failure must abort every key of the batch at once, not wait for the deadline.
+// on a node that left the membership, only what the session loss cut short becomes Skipped. A refusal
 // the node ANSWERED (retry 0, e.g. "parent unknown") stays Refused, so the client can fall through to the previous set;
 // a key aborted locally (here: the landing pool is full) is a skip.
 TEST(ClientFix, RemovedNodeKeepsAnsweredRefusalsAndSkipsTheRest) {
@@ -670,7 +670,7 @@ TEST(ClientFix, Q03SealFailureAbortsPromptly) {
   EXPECT_TRUE(w.server->puts().check_invariants());
 }
 
-// Q04: server-supplied MR index / extent are bounds-checked; a bad ack aborts the batch.
+// Server-supplied MR index / extent are bounds-checked; a bad ack aborts the batch.
 TEST(ClientFix, Q04BadMrExtentIsProtocolError) {
   struct Case {
     const char* name;
@@ -699,7 +699,7 @@ TEST(ClientFix, Q04BadMrExtentIsProtocolError) {
   }
 }
 
-// Q11: a lost PUT_DONE must not hang the job; the deadline completes it and buffers are released.
+// A lost PUT_DONE must not hang the job; the deadline completes it and buffers are released.
 TEST(ClientFix, Q11LostPutDoneTimesOutAndReleases) {
   World w;
   FaultClient c(w);
@@ -738,7 +738,7 @@ TEST(ClientFix, Q11CancelWhileCommittingCompletesAborted) {
   EXPECT_EQ(c.core->pool_bytes_in_use(), 0u);
 }
 
-// Q12: server-supplied lookup extents that would wrap a naive `a + b > len` check are misses.
+// Server-supplied lookup extents that would wrap a naive `a + b > len` check are misses.
 TEST(ClientFix, Q12WrappingLookupValuesAreMisses) {
   for (int variant = 0; variant < 2; ++variant) {
     World w;
@@ -814,7 +814,7 @@ struct FacadeHarness {
   std::unique_ptr<Client> cl;
 };
 
-// Q11 (facade): the worker must not hang on a lost PUT_DONE.
+// Facade: the worker must not hang on a lost PUT_DONE.
 TEST(ClientFix, Q11FacadeWorkerExitsOnLostPutDone) {
   FacadeHarness* hp = nullptr;
   FacadeHarness h(1, [&hp] {
@@ -839,7 +839,7 @@ void stall_store_in_backoff(FaultPort& fp) {
   };
 }
 
-// Q13: an idle worker must not busy-spin.
+// An idle worker must not busy-spin.
 TEST(ClientFix, Q13IdleWorkerDoesNotSpin) {
   FacadeHarness h(1, {}, /*atomic_clock=*/true);
   stall_store_in_backoff(h.fp);
@@ -853,7 +853,7 @@ TEST(ClientFix, Q13IdleWorkerDoesNotSpin) {
   expect_all(h.wait(t), 1, KeyStatus::Aborted);
 }
 
-// Q14: the timeout runs from submit(), not from worker pickup.
+// The timeout runs from submit(), not from worker pickup.
 TEST(ClientFix, Q14TimeoutCountsFromSubmit) {
   std::atomic<bool> go{false};
   FacadeHarness* hp = nullptr;
@@ -873,7 +873,7 @@ TEST(ClientFix, Q14TimeoutCountsFromSubmit) {
   expect_all(h.wait(tb), 1, KeyStatus::Timeout);  // pre-fix: deadline restarted at pickup -> Committed
 }
 
-// Q15: requests that the runtime completes ABORTED without run() must not leak.
+// Requests that the runtime completes ABORTED without run() must not leak.
 TEST(ClientFix, Q15AbortedWithoutRunDoesNotLeakReq) {
   {
     FacadeHarness h(1, {}, true);
@@ -909,7 +909,7 @@ TEST(ClientFacade, WireOpenRejectsAnEmptyConfig) {  // Client::open is the wire 
   EXPECT_EQ(r.error().code, ErrorCode::InvalidArgument);
 }
 
-// ---- A3.5 M2: client metrics ---------------------------------------------------------
+// ---- Client metrics ---------------------------------------------------------
 
 // Value of the exposition line that starts with `series` (name{labels}), or -1.
 double series(const std::string& text, const std::string& s) {

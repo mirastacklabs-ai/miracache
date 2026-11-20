@@ -19,7 +19,7 @@ using NodeId = std::uint32_t;
 using EndpointId = std::uint64_t;
 using WrTag = std::uint64_t;  // caller-chosen work-request tag, echoed in the completion
 
-// QP transport retry (N04/Q05). verbs_cm sets retry_count = kQpRetryCount on every QP. On the active
+// QP transport retry. verbs_cm sets retry_count = kQpRetryCount on every QP. On the active
 // (client) side it also asks rdma_cm to pin the local ACK timeout exponent to kQpAckTimeoutExpMax
 // (rdma_set_option RDMA_OPTION_ID_ACK_TIMEOUT, best effort). If the kernel refuses, rdma_cm's own
 // value applies: packet_life_time + 1, which is 17 on current RoCE kernels (CMA_IBOE_PACKET_LIFETIME
@@ -55,12 +55,12 @@ struct MemRegion {
   std::uint32_t lkey = 0;
   std::uint32_t rkey = 0;
   Access access = Access::None;
-  // RL1: index of the device (fabric) this region was registered on. Set by MrManager, not by the fabric;
+  // index of the device (fabric) this region was registered on. Set by MrManager, not by the fabric;
   // rkeys are per device, so a region is identified by (device, rkey).
   std::uint32_t device = 0;
 };
 
-// RL1: what a fabric reports about its device for rail health (membership plan decision 11: port ACTIVE, the
+// what a fabric reports about its device for rail health (port ACTIVE, the
 // listener alive, no fatal async event in the last 10 s). Read on the loop thread.
 struct FabricHealth {
   std::string port_state = "ACTIVE";  // "ACTIVE", "DOWN", "INIT", "ARMED", ... (ibv_query_port)

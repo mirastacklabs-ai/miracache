@@ -10,13 +10,13 @@ import (
 	"miracache/controller/store"
 )
 
-// Drain state machine (decision 10), one desired node at a time, state kept in the store:
+// Drain state machine, one desired node at a time, state kept in the store:
 //
 //	active --Drain--> draining      epoch + 1 (out of the current view; still serves reads and continuations)
 //	draining --drain.continue_ms--> readonly   same epoch
 //	draining|readonly --drain.max_ms--> leave
 //	readonly --bytes_used == 0 (from /v1/identity)--> leave
-//	leave = absent from nodes; NO epoch bump (the current view does not change, P31)
+//	leave = absent from nodes; NO epoch bump (the current view does not change)
 //
 // The drain start is store.DesiredNode.DrainSince, so a restarted controller resumes mid-drain.
 // bytes_used == 0 ends the drain only in readonly: during draining continuations are still accepted.
@@ -60,7 +60,7 @@ func (m *Monitor) setReadonly(ctx context.Context, cs []candidate) {
 	res, err := m.cfg.Pub.Publish(ctx, publish.Change{Reason: fmt.Sprintf("drain: readonly %v", names), TolerateUnreachable: true, Edit: func(next *store.State) {
 		for i := range next.Nodes {
 			n := &next.Nodes[i]
-			// Re-check (V05): still draining with the same drain start.
+			// Re-check: still draining with the same drain start.
 			if c, ok := want[n.Admin]; ok && n.State == "draining" && n.DrainSince == c.drainSince {
 				n.State = "readonly"
 				applied[n.Admin] = true

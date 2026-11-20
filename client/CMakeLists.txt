@@ -8,7 +8,7 @@ target_include_directories(miracache_client PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/i
 # toml++ is an implementation detail: PRIVATE, never in a public header.
 target_link_libraries(miracache_client PUBLIC miracache_util miracache_crypto miracache_placement miracache_core_client miracache_store miracache_telemetry miracache_control Threads::Threads OpenSSL::SSL PRIVATE tomlplusplus::tomlplusplus)
 
-# ---- C ABI (A1.6 L4): libmiracache.so exports only mira_* (version script) -----------------
+# ---- C ABI: libmiracache.so exports only mira_* (version script) -----------------
 # Static deps are built PIC (top-level CMAKE_POSITION_INDEPENDENT_CODE). c_abi.cpp alone is
 # compiled with exceptions so each entry point can end in a catch-all.
 # Not built in the fuzz preset (libFuzzer coverage symbols have no runtime in a plain .so).

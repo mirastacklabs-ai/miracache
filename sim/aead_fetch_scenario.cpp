@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A1.5 S3 scenario: client READs pre-sealed blocks from a server MR into the landing pool
+// AEAD fetch scenario: client READs pre-sealed blocks from a server MR into the landing pool
 // over a sliced SimFabric (so a READ really lands slice by slice, out of order) and runs
 // the decrypt pipeline. Without a nemesis every block must validate (exit criterion: zero
 // validation failures). With a rogue writer scribbling the pool between slices and during

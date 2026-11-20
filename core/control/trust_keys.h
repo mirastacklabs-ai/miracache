@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The trust file (membership plan decision 4): public keys with roles. key_id is computed from
+// The trust file: public keys with roles. key_id is computed from
 // the key, never typed; a typed `id` is an error (goal 10).
 //
 //   min_sec_generation = 5            # optional pin (top level or inside a [[key]])

@@ -109,7 +109,7 @@ func newFakeNode(t *testing.T, trust *bundle.TrustKeys, id uint64) *fakeNode {
 			fmt.Fprint(w, `{"result":"dry_run_ok"}`)
 			return
 		}
-		if b.Body.Membership.Epoch < n.epoch { // receivers reject a lower epoch (decision 4)
+		if b.Body.Membership.Epoch < n.epoch { // receivers reject a lower epoch
 			w.WriteHeader(409)
 			fmt.Fprint(w, `{"error":"epoch backwards","reason":"epoch_backwards"}`)
 			return
@@ -362,7 +362,7 @@ func TestMembersAddSetRemove(t *testing.T) {
 	}
 }
 
-// Decision 13 / P01: a rollback restores config.* only. Nothing else, however the stored body
+// Decision 13: a rollback restores config.* only. Nothing else, however the stored body
 // differs from the present.
 func TestRollbackRestoresConfigOnly(t *testing.T) {
 	r := newRig(t, 3, 2)

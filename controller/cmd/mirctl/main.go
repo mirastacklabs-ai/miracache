@@ -1,8 +1,8 @@
-// Command mirctl is the miracache operator tool (membership plan decisions 12-14; MB10).
+// Command mirctl is the miracache operator tool.
 //
 //	mirctl bundle diff|publish|push|status   publish and inspect signed bundles, with or without a controller
 //	mirctl node add|drain|remove|confirm-remove|forget   membership changes through the controller API
-//	mirctl rbac set|list                   controller role bindings (RB3)
+//	mirctl rbac set|list                   controller role bindings
 //	mirctl keys gen                          generate an Ed25519 signing key
 //	mirctl secret gen|add-kver               engine-native deployment secret files
 //	mirctl audit verify                      verify the controller's audit chain

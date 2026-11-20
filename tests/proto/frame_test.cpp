@@ -64,7 +64,7 @@ TEST(Frame, VersioningTable) {
   ASSERT_FALSE(major);
   EXPECT_EQ(major.error().status, WireStatus::Unsupported);
   EXPECT_TRUE(major.error().close_qp);
-  EXPECT_TRUE(mut(5, 9));  // higher minor accepted (D12)
+  EXPECT_TRUE(mut(5, 9));  // higher minor accepted
   auto flags = mut(8, 0x10);
   ASSERT_FALSE(flags);
   EXPECT_EQ(flags.error().status, WireStatus::Malformed);
@@ -131,7 +131,7 @@ TEST(Tlv, IllFormed) {
   EXPECT_EQ(code(0, bytes({1, 0, 8, 0, 1, 2, 3, 4})), WireStatus::Malformed);              // value overruns
   EXPECT_EQ(code(0, bytes({1, 0, 3, 0, 1, 2, 3, 9})), WireStatus::Malformed);              // pad not zero
   EXPECT_EQ(code(0, bytes({1, 0, 0})), WireStatus::Malformed);                             // < 4 B
-  // critical: unknown -> Unsupported; D11 mismatch -> Malformed
+  // critical: unknown -> Unsupported; critical-flag mismatch -> Malformed
   const Bytes crit = bytes({1, 0x80, 0, 0, 0, 0, 0, 0});
   EXPECT_EQ(code(flag::CRITICAL_EXT, crit), WireStatus::Unsupported);
   EXPECT_EQ(code(0, crit), WireStatus::Malformed);

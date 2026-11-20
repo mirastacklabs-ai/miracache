@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run the pinned Go toolchain inside the dev container:
 #   deploy/docker/go.sh [-C dir] <go args...>   (e.g. -C controller build ./...)
-# The toolchain is a pinned tool, not part of the image (membership plan decision 16, Q03): the
+# The toolchain is a pinned tool, not part of the image: the
 # release below is downloaded into build/go (gitignored) on first use, its SHA-256 is verified
 # against the pins here (the values published at https://go.dev/dl/), and later runs reuse it.
 # GOCACHE, GOMODCACHE and GOPATH live under build/. -C dir (relative to the repo root) is handled

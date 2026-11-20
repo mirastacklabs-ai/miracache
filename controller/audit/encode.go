@@ -1,5 +1,5 @@
-// Package audit is the Go side of the hash-chained audit log `mira-audit-v1` (RBAC/audit plan
-// decision 5; C++ twin: core/control/audit.{h,cpp}). The writer produces files byte-identical to
+// Package audit is the Go side of the hash-chained audit log `mira-audit-v1`
+// (C++ twin: core/control/audit.{h,cpp}). The writer produces files byte-identical to
 // the C++ writer for the same entries; the verifier accepts every file the C++ writer produces.
 package audit
 
@@ -109,7 +109,7 @@ func Body(src Source, seq uint64, tsMS int64, e Entry, prev string) []byte {
 		case uint64:
 			b.WriteString(strconv.FormatUint(v, 10))
 		case int:
-			if v < 0 { // review w4 V13: a negative would wrap to a huge uint64 in the log
+			if v < 0 { // a negative would wrap to a huge uint64 in the log
 				panic("audit: detail integers must not be negative")
 			}
 			b.WriteString(strconv.FormatUint(uint64(v), 10))

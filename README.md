@@ -173,6 +173,9 @@ deploy/docker/go.sh -C controller build -o "$PWD/build/release/bin/" ./cmd/mira-
 # or container images: docker pull docker.io/mirastack/miracache-memnode:alpha (and miracache-controller), or deploy/docker/build.sh
 ```
 
+Release binaries and images are signed with Sigstore; the verify commands are in
+[`docs/operations.md`](docs/operations.md#container-images).
+
 Small programs that store and fetch one block (C++, C, Python) are in [`examples/`](examples/README.md).
 
 **2. Check each host**

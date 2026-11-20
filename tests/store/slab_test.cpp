@@ -126,7 +126,7 @@ TEST(Slab, StateWordIsWritingBeforeHeader) {
   EXPECT_EQ(d->stored_len, 10000u);
 }
 
-// Q10: one owner creates at most max_exact_classes_per_owner exact classes; further sizes use
+// One owner creates at most max_exact_classes_per_owner exact classes; further sizes use
 // the fixed ladder rungs, and a second owner is never refused because of the first one's classes.
 TEST(Slab, PerOwnerExactClassBudgetAndRungFallback) {
   Fixture f(wide_cfg());
@@ -182,7 +182,7 @@ TEST(Slab, LadderRungsAreMonotoneAndBounded) {
   }
 }
 
-// Q01: huge peer-supplied lengths must neither wrap align_up (divide by zero) nor allocate.
+// Huge peer-supplied lengths must neither wrap align_up (divide by zero) nor allocate.
 TEST(Slab, HugeLengthsAreRejectedNotWrapped) {
   Fixture f(small_cfg());
   const std::uint64_t run = f.arena->config().run_bytes;

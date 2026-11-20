@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A3.1 warm restart: the restart scan (store/restart.h) over a File-backed store re-opened in a new "process"
+// Warm restart: the restart scan (store/restart.h) over a File-backed store re-opened in a new "process"
 // (Arena, SlabAllocator, Store destroyed and rebuilt over the same files), after a clean shutdown or a crash.
 #include <cstring>
 #include <filesystem>
@@ -360,7 +360,7 @@ TEST(Restart, WallClockStepBetweenRunsIsDowntimeNotACrash) {
     n.inv();
     ASSERT_TRUE(n.arena->shutdown_clean());
   }
-  {  // F06: the stored last_used (1000 s) is in the future of the new clock: clamped to now, so the idle TTL is not extended
+  {  // The stored last_used (1000 s) is in the future of the new clock: clamped to now, so the idle TTL is not extended
     Node n(c, seconds(1000));
     n.scan();
     n.put(kA, 3, 3);
@@ -449,7 +449,7 @@ TEST(Restart, SameScopeIdUnderTwoPrincipalsIsNotAttributed) {
   n.inv();
 }
 
-// F01 (crash order): P (kA) has scope 1 DRAINING with blocks still on media, P' (kB) holds the same scope_id OPEN. A
+// Crash order: P (kA) has scope 1 DRAINING with blocks still on media, P' (kB) holds the same scope_id OPEN. A
 // scan killed at any point must leave a state in which the next scan still adopts nothing for the shared scope_id.
 void shared_scope_crash(RestartOptions::Stage stop_at) {
   TempDir td;
@@ -489,7 +489,7 @@ TEST(Restart, CrashAfterHeaderPassNeverAdoptsDoomedBlocksIntoTheOtherPrincipal) 
   shared_scope_crash(RestartOptions::Stage::HeadersScanned);
 }
 
-// F01 (torn record): the in-place rewrite of A's record was cut short (CRC fails); B holds the same scope_id OPEN.
+// Torn record: the in-place rewrite of A's record was cut short (CRC fails); B holds the same scope_id OPEN.
 TEST(Restart, TornRecordCountsAsAnOwnerOfItsScopeId) {
   TempDir td;
   const auto c = cfg(td.path());
@@ -526,7 +526,7 @@ TEST(Restart, TornRecordCountsAsAnOwnerOfItsScopeId) {
   n.inv();
 }
 
-// H05: a torn record whose principal reads as zero (a torn first write): nothing can be attributed, so the scan comes
+// A torn record whose principal reads as zero (a torn first write): nothing can be attributed, so the scan comes
 // back cold, reports the slot and counts the blocks under TornRecord (not plain Scope).
 TEST(Restart, TornRecordWithZeroPrincipalRestartsColdAndIsReported) {
   TempDir td;
@@ -565,7 +565,7 @@ TEST(Restart, TornRecordWithZeroPrincipalRestartsColdAndIsReported) {
   n.inv();
 }
 
-// F05: a CRC-valid record with a time beyond year 2262 (ms * 1e6 overflows int64) must not be undefined behaviour.
+// A CRC-valid record with a time beyond year 2262 (ms * 1e6 overflows int64) must not be undefined behaviour.
 TEST(Restart, HugePersistedTimesDoNotOverflow) {
   TempDir td;
   const auto c = cfg(td.path());

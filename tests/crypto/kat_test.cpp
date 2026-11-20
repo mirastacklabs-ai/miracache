@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Known-answer tests for the A1.5 S1 primitives. GCM vectors: McGrew & Viega, "The
+// Known-answer tests for the primitives. GCM vectors: McGrew & Viega, "The
 // Galois/Counter Mode of Operation (GCM)", AES-256 test cases 13-16. HKDF vectors:
 // RFC 5869 Appendix A.1-A.3. Registered a second time with hardware AES disabled
 // (see tests/CMakeLists.txt) so both OpenSSL code paths are covered.

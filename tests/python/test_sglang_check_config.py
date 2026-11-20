@@ -1,4 +1,4 @@
-"""R11: python -m miracache.check_sglang_config (pre-launch check, reused by preflight)."""
+"""python -m miracache.check_sglang_config (pre-launch check, reused by preflight)."""
 import contextlib
 import io
 import json

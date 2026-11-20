@@ -90,7 +90,7 @@ const char* class_name(std::uint8_t c) {
   return c < 3 ? n[c] : "?";
 }
 
-// ---- RB2 request bodies ------------------------------------------------------------------------
+// ---- Request bodies ------------------------------------------------------------------------
 // POST /v1/drain: empty, `{}` or `{"drain_ms":N}` (N in 0..600000). Strict like the ticket body.
 bool parse_drain_request(const std::string& body, std::optional<std::uint32_t>& drain_ms) {
   Json j{body};
@@ -181,7 +181,7 @@ const char* action_of(RouteId id) {
   return "?";
 }
 
-// ---- socket BIO that never raises SIGPIPE (A01) -----------------------------------------------
+// ---- socket BIO that never raises SIGPIPE -----------------------------------------------
 // OpenSSL's stock socket BIO uses write(2): a peer that already reset the connection makes the first
 // write kill the process unless SIGPIPE is ignored. This BIO sends with MSG_NOSIGNAL, so the
 // listener is safe whatever the process's signal disposition is.
@@ -227,7 +227,7 @@ constexpr long kTimeout = -2;
 constexpr int kSliceMs = 50;  // longest a connection thread sleeps before it re-checks the stop flag
 
 // Runs a non-blocking SSL op until it finishes or `deadline` passes (or `stop` is set). >0 result,
-// 0 closed, -1 error, -2 timeout/stopped. poll() is sliced and EINTR is retried (A06, A07).
+// 0 closed, -1 error, -2 timeout/stopped. poll() is sliced and EINTR is retried.
 template <typename F>
 long io(SSL* ssl, int fd, Nanos deadline, const std::atomic<bool>& stop, F op) {
   RealClock clock;
@@ -279,7 +279,7 @@ const char* http_reason(int code) {
 std::string err_body(const char* msg) { return std::string("{\"error\":\"") + msg + "\"}"; }
 
 // The spiffe:// URI SAN of the peer leaf; empty if none. `multi` is set when the leaf carries more
-// than one spiffe:// URI SAN (ambiguous identity: refused, A09).
+// than one spiffe:// URI SAN (ambiguous identity: refused).
 std::string peer_identity(SSL* ssl, bool& multi) {
   std::string id;
   multi = false;
@@ -497,7 +497,7 @@ AdminHttps::CredSigs AdminHttps::cred_sigs(const AdminOptions& o) {
   return s;
 }
 
-// P39: the 10 s stat check. A changed file is loaded as a whole (cert + key + ca); if it does not parse or the key does
+// The 10 s stat check. A changed file is loaded as a whole (cert + key + ca); if it does not parse or the key does
 // not match the certificate (a non-atomic replacement, a half-written file) the old material stays in use and the same
 // check runs again at the next tick, because the failed signature is not remembered.
 void AdminHttps::maybe_reload_credentials() {
@@ -563,7 +563,7 @@ bool AdminHttps::audit_record(const control::AuditEntry& e) {
     reg_.counter("miracache_audit_errors_total", "Audit entries that could not be written.").inc();
     return false;
   }
-  if (opt_.audit_failed) {  // U2-05: the signature gates bundles; the apply is logged to stderr only and counted
+  if (opt_.audit_failed) {  // the signature gates bundles; the apply is logged to stderr only and counted
     log::write(log::Level::Warn, "audit", e.action,
                {{"actor", e.actor}, {"role", e.role}, {"target", e.target}, {"result", e.result}, {"reason", e.reason},
                 {"generation", e.generation ? std::to_string(*e.generation) : std::string()}, {"audit_log", "unavailable"}});
@@ -584,7 +584,7 @@ void AdminHttps::audit_denied(const control::AuditEntry& e) {
   }
 }
 
-// Store thread (swap task) or the admin thread: the entries of an applied bundle (U2-06).
+// Store thread (swap task) or the admin thread: the entries of an applied bundle.
 void AdminHttps::write_apply_audit(const std::string& identity, const std::string& role, const PushOutcome& o) {
   auto make = [&](const char* action, const char* reason) {
     control::AuditEntry e;
@@ -653,16 +653,16 @@ void AdminHttps::accept_loop() {
   net::block_all_signals();
   while (!stop_.load()) {
     reap(false);
-    if (opt_.bundle) opt_.bundle->maybe_reload_trust();  // X13: the 10 s trust-file stat check, off the store loop
-    maybe_reload_credentials();                          // HR1/P39: the same for cert, key and ca
-    if (opt_.audit) opt_.audit->tick();  // RB2: write closed coalescing windows, fsync at most once a second
+    if (opt_.bundle) opt_.bundle->maybe_reload_trust();  // the 10 s trust-file stat check, off the store loop
+    maybe_reload_credentials();                          // the same for cert, key and ca
+    if (opt_.audit) opt_.audit->tick();  // write closed coalescing windows, fsync at most once a second
     pollfd p{lfd_, POLLIN, 0};
     if (net::poll_retry(&p, 1, kSliceMs) <= 0) continue;
     sockaddr_in peer{};
     socklen_t pl = sizeof peer;
     int fd = ::accept(lfd_, reinterpret_cast<sockaddr*>(&peer), &pl);
     if (fd < 0) continue;
-    // r7 R03: a connection thread that finished while we sat in poll() still counts against the limits
+    // A connection thread that finished while we sat in poll() still counts against the limits
     // until reaped; reap here so a client reconnecting right after a closed call is not refused per_ip.
     reap(false);
     net::set_nonblock_cloexec(fd);
@@ -673,7 +673,7 @@ void AdminHttps::accept_loop() {
       (void)::setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof on);
     }
 #endif
-    // Over a limit: close at once. No TLS, no I/O, nothing else on this thread (A02).
+    // Over a limit: close at once. No TLS, no I/O, nothing else on this thread.
     if (workers_.size() >= max_conns_.load()) {
       reject("busy");
       ::close(fd);
@@ -742,7 +742,7 @@ std::size_t AdminHttps::pump(Server& srv) {
     std::lock_guard<std::mutex> g(p->m);
     if (p->abandoned) continue;  // the waiter gave up: issue nothing
     p->ok = true;
-    // A08: check the whole batch against the caps first, so a failure never leaves earlier classes live.
+    // Check the whole batch against the caps first, so a failure never leaves earlier classes live.
     const std::uint32_t total = p->req.count * static_cast<std::uint32_t>(p->req.classes.size());
     if (auto st = srv.check_issue_capacity(p->identity, total); !st) {
       p->ok = false;
@@ -777,7 +777,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
   SSL_set_bio(ssl.get(), bio, bio);  // the SSL owns the BIO; the fd stays ours
   SSL_set_accept_state(ssl.get());
   SSL* s = ssl.get();
-  // Separate budgets: a short one for the handshake (A02), then the request budget.
+  // Separate budgets: a short one for the handshake, then the request budget.
   const int hs_ms = opt_.handshake_ms_for_test > 0 ? static_cast<int>(opt_.handshake_ms_for_test) : kHandshakeMs;
   const long hs = io(s, fd, clock.now() + std::chrono::milliseconds(hs_ms), stop, [&] { return static_cast<long>(SSL_accept(s)); });
   if (hs <= 0) {
@@ -808,7 +808,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
   const char* label = "other";
   const RouteRule* rule = nullptr;
   std::string method, path, query;
-  // RB2: the table that decides roles for this node (bundle mode: the applied bundle's; lab mode: [[admin.rbac]]).
+  // The table that decides roles for this node (bundle mode: the applied bundle's; lab mode: [[admin.rbac]]).
   const RbacTable& roles = opt_.bundle ? opt_.bundle->rbac() : lab_rbac_;
   // Audit helpers: a denial is coalesced per (identity, action, result) per second; an action is written at once.
   auto audit_entry = [&](const std::string& actor, const std::string& role, const char* action, const std::string& target,
@@ -857,7 +857,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
           }
         }
         // The bundle routes exist only in bundle mode ([control] trust_keys); lab mode answers 404 as before.
-        // RB2: the route table (rbac.h) decides. The bundle routes exist only in bundle mode.
+        // The route table (rbac.h) decides. The bundle routes exist only in bundle mode.
         rule = find_route(method, path);
         if (!rule) {
           bool visible = false;  // a known path with another method is 405; one hidden in lab mode is 404
@@ -870,11 +870,11 @@ void AdminHttps::serve(int fd, const std::string& peer) {
         if (rule->bundle_mode_only && !opt_.bundle) return reply("other", 404, "Not Found", err_body("not found"));
         route = rule->id;
         label = rule->path;
-        // Audit log configured but not open (U2-05): refuse only the audited operator / security-admin mutations. Tickets,
+        // Audit log configured but not open: refuse only the audited operator / security-admin mutations. Tickets,
         // identity and bundle keep working (the signature gates bundles; their entries go to stderr and a counter).
         if (opt_.audit_failed && (route == RouteId::Drain || route == RouteId::DropPrincipal))
           return reply(label, 503, "Service Unavailable", err_body("audit log unavailable"));
-        // X14: every route needs a single spiffe identity; refuse before the body is read.
+        // Every route needs a single spiffe identity; refuse before the body is read.
         const char* act = action_of(route);
         if (multi_san) {
           audit_deny("(ambiguous)", "none", act, "client certificate has more than one spiffe URI SAN");
@@ -884,7 +884,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
           audit_deny("(none)", "none", act, "client certificate has no spiffe URI SAN");
           return reply(label, 403, "Forbidden", err_body("client certificate has no spiffe URI SAN"));
         }
-        // Decision 4: role-gated routes. Bundle and identity need only the identity above (P03: the signature is the gate).
+        // role-gated routes. Bundle and identity need only the identity above (the signature is the gate).
         if (!roles.allows(identity, rule->need)) {
           const std::string msg = std::string("role ") + need_role(rule->need) + " required";
           audit_deny(identity, roles.label(identity), act, msg);
@@ -904,14 +904,14 @@ void AdminHttps::serve(int fd, const std::string& peer) {
     req.append(buf, static_cast<std::size_t>(n));
   }
   const std::string role_label = roles.label(identity);
-  // U2-18: the bindings may have changed (a bundle applied) while the body was being read: decide again.
+  // The bindings may have changed (a bundle applied) while the body was being read: decide again.
   if (!roles.allows(identity, rule->need)) {
     const std::string msg = std::string("role ") + need_role(rule->need) + " required";
     audit_deny(identity, role_label, action_of(route), msg);
     return reply(label, 403, "Forbidden", err_body(msg.c_str()));
   }
   if (route == RouteId::BundleGet || route == RouteId::BundlePost || route == RouteId::Identity) {
-    // Decision 4: these routes need only an authenticated mTLS identity. The signature is the gate for pushes.
+    // these routes need only an authenticated mTLS identity. The signature is the gate for pushes.
     BundleStore& bs = *opt_.bundle;  // never reassigned after start(), like `wakeup`
     HttpReply hr;
     if (route == RouteId::Identity) {
@@ -927,7 +927,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
                    [&](std::function<void(Server&)> task) { return run_on_store(std::move(task), stop); }, outcome);
       if (query != "dry_run=1") {
         // Rejected or failed: coalesced (a controller retry loop must not flood). Applied entries are written by the
-        // swap task (on_applied), so a push that timed out (504) and applies later is still audited (U2-06); a
+        // swap task (on_applied), so a push that timed out (504) and applies later is still audited; a
         // "replaced" envelope is written here; "noop" changed nothing.
         const std::string result = reply_field(hr.body, "result");
         if (hr.code == 200 && result == "replaced") {
@@ -966,7 +966,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
     }
     control::AuditEntry e = audit_entry(identity, role_label, "drain", "node", "ok", res->started ? "draining" : "already_draining");
     e.detail.emplace_back("drain_ms", std::uint64_t{drain_ms});
-    const bool audited = audit_record(e);  // U2-20: a failed append is told to the caller, not hidden
+    const bool audited = audit_record(e);  // a failed append is told to the caller, not hidden
     return reply(label, 200, "OK",
                  std::string("{\"result\":\"") + (res->started ? "draining" : "already_draining") +
                      "\",\"drain_ms\":" + std::to_string(drain_ms) + ",\"idle\":" + (res->idle ? "true" : "false") +
@@ -984,7 +984,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
     }
     // The raise is made durable in the floor file (max-only, like a bundle's drop_before) BEFORE the 200, so a restart
     // loads it (load_persisted_drop_before) and pre-cutoff scopes keep missing. With no state_dir there is nowhere to
-    // persist: the reply says "persisted":false (U2-17).
+    // persist: the reply says "persisted":false.
     const bool can_persist = !opt_.state_dir.empty();
     bool persisted = true;
     if (*st && can_persist) {
@@ -1015,7 +1015,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
     std::lock_guard<std::mutex> g(q_mu_);
     q_.push_back(p);
   }
-  if (opt_.wakeup) opt_.wakeup();  // r6 A7 (never reassigned after start(): no race with reload)
+  if (opt_.wakeup) opt_.wakeup();  // never reassigned after start(): no race with reload
   bool timed_out = false;
   {
     std::unique_lock<std::mutex> lk(p->m);
@@ -1030,14 +1030,14 @@ void AdminHttps::serve(int fd, const std::string& peer) {
       p->cv.wait_for(lk, std::chrono::milliseconds(20), [&] { return p->done; });
     }
   }
-  // Reply only after p->m is released: pump() on the store thread must never wait for a TLS write (A05).
+  // Reply only after p->m is released: pump() on the store thread must never wait for a TLS write.
   if (timed_out) {
     if (stop.load()) return;
     budget_expired(1, peer, store_wait_ms());
     return reply(label, 504, "Gateway Timeout", err_body("store thread busy"));
   }
   if (!p->ok) {
-    // Decision 6: ticket refusals (403 / 429 / 503) are coalesced per (identity, action, result) per second.
+    // ticket refusals (403 / 429 / 503) are coalesced per (identity, action, result) per second.
     const char* why = p->err.code == ErrorCode::AccessDenied ? "identity not allowed"
                       : p->err.code == ErrorCode::ResourceExhausted ? "ticket limit reached"
                       : p->err.code == ErrorCode::Busy ? "node draining" : nullptr;
@@ -1045,7 +1045,7 @@ void AdminHttps::serve(int fd, const std::string& peer) {
     switch (p->err.code) {
       case ErrorCode::AccessDenied: return reply(label, 403, "Forbidden", err_body("identity not allowed"));
       case ErrorCode::ResourceExhausted: return reply(label, 429, "Too Many Requests", err_body("ticket limit reached"));
-      case ErrorCode::Busy: return reply(label, 503, "Service Unavailable", err_body("node draining"));  // r7 R01
+      case ErrorCode::Busy: return reply(label, 503, "Service Unavailable", err_body("node draining"));
       case ErrorCode::InvalidArgument: return reply(label, 400, "Bad Request", err_body("invalid class, rail or count"));
       default: return reply(label, 500, "Internal Server Error", err_body("internal error"));
     }

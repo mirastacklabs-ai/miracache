@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A1.3 NIC detection and capability probes (spec 4.1/4.2). `NicFacts` is plain data; the
+// NIC detection and capability probes (spec 4.1/4.2). `NicFacts` is plain data; the
 // verbs-backed collector (nic_probe_verbs.cpp) fills it, tests fill it from fixtures. The
 // verdict and the renderers are pure functions of the facts, so they run without hardware.
 // Capability first, identity second: the verdict never looks at vendor identity.

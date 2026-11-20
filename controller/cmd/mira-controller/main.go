@@ -1,9 +1,9 @@
-// Command mira-controller is the single cluster controller (membership plan decision 12; MB8a).
+// Command mira-controller is the single cluster controller.
 //
 // It holds flock(store.lock) for its lifetime (a second instance refuses to start), publishes
 // signed bundles to the memory nodes' admin APIs over mTLS and runs the reconcile loop every 5 s.
 // With --api-listen it serves the HTTPS API (controller/api: bundle, status, members, config,
-// rollback; sec routes denied until RB3) and writes the audit log (--audit-dir).
+// rollback; sec routes denied by default) and writes the audit log (--audit-dir).
 //
 // Backup: copy the whole --store-dir and the two signing key files (the operator's duty). To
 // rebuild a lost state.json, run `mira-controller --recover-from <admin addr of the node with the
@@ -41,7 +41,7 @@ func main() {
 }
 
 func readSeed(path string) (ed25519.PrivateKey, error) {
-	// A signing key must not be readable by group or others (K12): the same check as mirctl's readSeed, so one
+	// A signing key must not be readable by group or others: the same check as mirctl's readSeed, so one
 	// file (mira:mira 0600) serves both.
 	st, err := os.Stat(path)
 	if err != nil {
@@ -174,7 +174,7 @@ func run() error {
 	}
 	mon := membership.New(membership.Config{Store: st, Pub: p, Client: client, Log: log,
 		RemoveWindow: *removeWindow, MaxReporters: *maxReporters, FailTimeout: *failTimeout, DrainContinue: *drainContinue, DrainMax: *drainMax, Rejoin: *rejoin})
-	// The audit log is opened before the monitor runs (U2-12): without one the monitor refuses its
+	// The audit log is opened before the monitor runs: without one the monitor refuses its
 	// automatic removals, replacements and drain steps and holds them as pending_removal.
 	var aw *audit.Writer
 	if *auditDir != "" {

@@ -280,7 +280,7 @@ class ObjClient(FakeClient):
         return "MISS"
 
 
-class TestNamespace(Base):  # R02
+class TestNamespace(Base):
     def test_fake_rejects_short_ns_like_the_real_client(self):
         core = TierCore(self.c, Layout(TPC, 4096, b"ns"))
         self.assertEqual(core.lookup("r", key("a1"), chain("a", 1)), Lookup.MISS)
@@ -291,7 +291,7 @@ class TestNamespace(Base):  # R02
         self.assertEqual(self.c.derive_calls[0][0]["ns"], NS32)
 
 
-class TestDrainTimeout(Base):  # R09
+class TestDrainTimeout(Base):
     def test_inflight_job_gets_failed_result_and_client_closed(self):
         pos = chain("a", 2)
         self.put(pos)
@@ -330,7 +330,7 @@ class TestDrainTimeout(Base):  # R09
         self.assertFalse(self.c.closed)
 
 
-class TestRetryPath(Base):  # R17
+class TestRetryPath(Base):
     def refusing(self):
         now = [0.0]
         core = TierCore(self.c, LAYOUT, clock=lambda: now[0])
@@ -384,7 +384,7 @@ class TestRetryPath(Base):  # R17
         self.assertIn("r1", self.core._reqs)
 
 
-class TestScopeLifetime(unittest.TestCase):  # R18
+class TestScopeLifetime(unittest.TestCase):
     def setUp(self):
         self.c = ObjClient()
         self.core = TierCore(self.c, LAYOUT)
@@ -435,7 +435,7 @@ class TestScopeLifetime(unittest.TestCase):  # R18
         self.assertEqual(self.core._lookups, {})
 
 
-class TestJobValidation(Base):  # R19
+class TestJobValidation(Base):
     def test_chunk_id_out_of_range_fails_job(self):
         core = TierCore(self.c, Layout(TPC, 4096, NS32, num_slots=4))
         pos = chain("a", 2)

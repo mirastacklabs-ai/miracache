@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-// In-process loopback (A1.6 L3): a real core/store stack on a server-side SimFabric node
+// In-process loopback: a real core/store stack on a server-side SimFabric node
 // (LoopbackServer) and a ServerPort that calls it directly (LoopbackPort). Control calls are
 // direct C++ calls; data moves over the fabric, so SimOptions slicing, torn reads and early
-// iWARP CQEs apply. S7 later replaces LoopbackPort with frames. Single-threaded: callers
+// iWARP CQEs apply. The wire adapter later replaces LoopbackPort with frames. Single-threaded: callers
 // serialise (the facade does).
 #pragma once
 

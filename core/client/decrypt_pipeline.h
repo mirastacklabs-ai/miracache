@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Decrypt pipeline (A1.5 S3): turns landed ciphertext into verified plaintext. A segment is
+// Decrypt pipeline: turns landed ciphertext into verified plaintext. A segment is
 // decrypted once all its bytes have landed (Spec gap 01:694). The outcome is reported only
 // after the seq check AND every segment tag have resolved. On any failure the whole engine
 // buffer is zeroed (Decision 3a). The DEK is an input per block (DEK_k from the KeySource);

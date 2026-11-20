@@ -44,7 +44,7 @@ class Arena {
   bool fresh() const noexcept { return fresh_; }          // media was formatted by this open
   bool was_clean() const noexcept { return was_clean_; }  // previous owner shut down cleanly
   const proto::Superblock& superblock() const noexcept { return sb_; }
-  // A3.1: the persisted scope table (null for a volatile store without a scope region).
+  // The persisted scope table (null for a volatile store without a scope region).
   ScopeTable* scope_table() noexcept { return scopes_.get(); }
 
   // Marks the superblock clean. Without it a later open reports was_clean() == false.
@@ -55,7 +55,7 @@ class Arena {
   Status write_superblock();  // bumps seq, writes the copy it selects, syncs it
   static Status persist_hwm(void* self, std::uint64_t hwm);
 
-  StateDirLock lock_;  // r9b T02: <state_dir>/node-id.lock, held while the arena lives (declared first: released last)
+  StateDirLock lock_;  // <state_dir>/node-id.lock, held while the arena lives (declared first: released last)
   StoreConfig cfg_;
   StoreLayout layout_;
   std::unique_ptr<Backing> backing_;

@@ -35,7 +35,7 @@ type Envelope struct {
 	Body     []byte // exact bytes of the body
 }
 
-// Marshal writes the envelope in the byte-exact form of decision 2:
+// Marshal writes the envelope in the byte-exact form:
 //
 //	mira-bundle-v1\n key_id: <16>\n sig: <128>\n sec_key_id: <16>\n sec_sig: <128>\n sec_len: <n>\n \n <sec><body>
 func (e *Envelope) Marshal() []byte {
@@ -96,7 +96,7 @@ func SignPublishOnly(pub ed25519.PrivateKey, prev *Envelope, body []byte) *Envel
 	}
 }
 
-// ParseEnvelope parses raw with every byte-exact rule of decision 2 (rules 1-6); any deviation is
+// ParseEnvelope parses raw with every byte-exact envelope rule (rules 1-6); any deviation is
 // an envelope_format reject. It does not verify signatures.
 func ParseEnvelope(raw []byte) (*Envelope, error) {
 	if len(raw) > MaxEnvelope {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// verbs/rdma_cm backend (spec 3, task A1.1). Built only with MIRACACHE_WITH_VERBS=ON.
+// verbs/rdma_cm backend (spec 3). Built only with MIRACACHE_WITH_VERBS=ON.
 // One VerbsCmFabric drives one RDMA device (one rail) from one thread; it is not
 // thread-safe. Several fabrics may share a device: a process-wide dispatcher per
 // ibv_context owns the async event fd and hands events to the owning fabric through a
@@ -59,7 +59,7 @@ std::string to_string(const NicCaps& caps);
 struct VerbsOptions {
   std::string device;                    // e.g. "rxe0"; empty = first device
   protocol::Setting protocol = protocol::Setting::Auto;  // fabric.protocol
-  // RL1: endpoint IDs of this fabric start here. A process with several fabrics (one per device) gives each its
+  // endpoint IDs of this fabric start here. A process with several fabrics (one per device) gives each its
   // own range (index << 48), so an EndpointId is unique across them.
   EndpointId ep_id_base = 0;
   // Test hook: advertise this protocol in connect private_data instead of the real one,
@@ -77,7 +77,7 @@ struct VerbsOptions {
   // Test hook: flush completions of destroyed QPs are discarded without settling their CQE
   // reservation, to exercise the zombie_grace expiry (a provider that never flushes).
   bool drop_zombie_flushes_for_test = false;
-  // A3.3 operating point (profiles/nic-profiles.toml; explicit config beats the profile). The
+  // NIC profile operating point (profiles/nic-profiles.toml; explicit config beats the profile). The
   // defaults are the pre-registry constants, so a caller that sets nothing behaves as before.
   std::uint8_t ack_timeout_exp = kQpAckTimeoutExpMax;  // active side: rdma_set_option ACK_TIMEOUT (RoCE)
   std::uint8_t retry_count = kQpRetryCount;            // rdma_conn_param.retry_count
@@ -136,7 +136,7 @@ class VerbsCmFabric final : public Fabric {
   // (device removal): DeviceFatal reaches every fabric on the device once, and fabrics opened
   // on the device later get it at open. Process-wide for that device until all its fabrics close.
   void kill_async_dispatcher_for_test();
-  // B11: where the QP attribute readback (once per rail, after RTS) publishes its gauges/counters (see
+  // Where the QP attribute readback (once per rail, after RTS) publishes its gauges/counters (see
   // verbs_cm/qp_readback.h). `extra` labels every series and log line (the client passes node_id + hostname of
   // the memory node). Thread-safe; nullptr unbinds (call before the registry dies). Readbacks made while
   // unbound are published at the next bind.
@@ -162,7 +162,7 @@ class VerbsCmFabric final : public Fabric {
   Status listen(AcceptFn on_accept, const ListenParams& params = {}) override;
   std::size_t poll(std::span<Completion> out, PollBudget budget = {}) override;
   int wait_fd() override;
-  // RL1: ibv_query_port state of the fabric port, fatal-event latch, and one liveness flag per listen() call.
+  // ibv_query_port state of the fabric port, fatal-event latch, and one liveness flag per listen() call.
   FabricHealth health() override;
 
  private:

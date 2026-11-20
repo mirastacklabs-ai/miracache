@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Client-side metrics (A3.5 M2): one Registry per Client, every child registered up front so the
+// Client-side metrics: one Registry per Client, every child registered up front so the
 // data path only does relaxed atomic adds through the cached pointers (no lookup, no lock, no
 // allocation). Labels are fixed enums; none carries a scope, session, key, salt or token value.
 #pragma once
@@ -44,7 +44,7 @@ struct ClientMetrics {
       put_ops[i] = &r.counter("miracache_client_put_ops_total", "Keys put, by result.", L({{"result", kPR[i]}}));
       put_bytes[i] = &r.counter("miracache_client_put_bytes_total", "Plaintext bytes of put keys, by result.", L({{"result", kPR[i]}}));
     }
-    // Same series as the Client's (no node label): MB6b counts StaleEpoch / Draining refusals here, QT2 the keys an Ok
+    // Same series as the Client's (no node label): bundle mode counts StaleEpoch / Draining refusals here, and the keys an Ok
     // ack skipped under the put token buckets (retry_after_ms > 0).
     static constexpr const char* kSk[] = {"stale_epoch", "draining", "throttled"};
     for (int i = 0; i < 3; ++i)
@@ -69,7 +69,7 @@ struct ClientMetrics {
     reconnect_fail = &r.counter("miracache_client_reconnect_fail_total", "Failed reconnect attempts.", L({}));
     session_up = &r.gauge("miracache_client_session_up", "1 while the wire session is up, 0 while down or connecting.", L({}));
     session_up->set(1);
-    // r7 R05: endpoints torn down that the fabric has not drained yet (aborted, QP in ERR, held until it
+    // Endpoints torn down that the fabric has not drained yet (aborted, QP in ERR, held until it
     // drains). Normally 0 within milliseconds of a session end; a value that stays up is a lost flush.
     undrained_zombies = &r.gauge("miracache_client_undrained_zombies", "Aborted endpoints still waiting for the fabric to drain them.", L({}));
     static constexpr const char* kTr[] = {"ok", "error"};
@@ -92,7 +92,7 @@ struct ClientMetrics {
 
   telemetry::Registry own_;
   telemetry::Registry& reg;
-  const bool shared_reg;  // L02: reg is the Client's registry, shared by every core of every node (and by a successor core)
+  const bool shared_reg;  // reg is the Client's registry, shared by every core of every node (and by a successor core)
   telemetry::Counter *lookup_keys[3], *fetch_ops[3], *fetch_bytes[3];
   telemetry::Counter *put_ops[5], *put_bytes[5], *rdma[5], *put_skipped[3];
   telemetry::Histogram *fetch_s[4], *put_s[4];

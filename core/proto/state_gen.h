@@ -13,7 +13,7 @@ enum class BlockState : std::uint8_t { Free = 0, Writing = 1, Committed = 2, Zom
 
 inline constexpr std::uint64_t kMaxGeneration = (std::uint64_t{1} << 56) - 1;
 
-// 0 is never a valid generation and the top 8 bits must be zero (plan D14).
+// 0 is never a valid generation and the top 8 bits must be zero.
 constexpr bool generation_valid(std::uint64_t g) { return g != 0 && g <= kMaxGeneration; }
 
 constexpr std::uint64_t pack_state_gen(BlockState s, std::uint64_t generation) {

@@ -45,7 +45,7 @@ class FakeClient:
         self.regions_used: list = []  # region= kwarg of each fetch/store, in call order
         self.closed = False
         self.on_close = None  # callable run at close(), before in-flight ops are dropped
-        self.max_block = None  # K03: the nodes' largest block (None = unknown); see check_block_size
+        self.max_block = None  # The nodes' largest block (None = unknown); see check_block_size
         self.block_checks: list = []  # block_bytes of each check_block_size call
 
     def _maybe_raise(self, name: str) -> None:
@@ -60,7 +60,7 @@ class FakeClient:
                                  "set future_client = True")
 
     def check_block_size(self, block_bytes):
-        """K03: as the real client; ``max_block`` (None = no node reports a limit) stands for
+        """As the real client; ``max_block`` (None = no node reports a limit) stands for
         the nodes' HELLO_ACK limit, compared with the plaintext size for simplicity."""
         self._maybe_raise("check_block_size")
         self.block_checks.append(block_bytes)

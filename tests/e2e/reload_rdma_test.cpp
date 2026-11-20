@@ -1,27 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR6: hot reload under load, end to end on rxe0 / siw0 (label `rdma`). The kver and certificate parts of the M2
+// Hot reload under load, end to end on rxe0 / siw0 (label `rdma`). The kver and certificate parts of the
 // hot-reload exit: 0 failed operations by the oracle (tests/util/oracle.h,
 // STRICT: every node and rail stays healthy) while the cluster is reconfigured under four traffic threads.
 //
 // Real processes: mira-memnode x 3 in BUNDLE mode ([control] trust_keys, state_dir, admin mTLS) and the real Go mirctl,
-// which publishes every new bundle generation straight to the nodes (no controller: one writer per cluster, decision 13).
+// which publishes every new bundle generation straight to the nodes (no controller: one writer per cluster).
 // One in-process C++ Client in bundle mode ([control] endpoints / trust_keys / state_dir, [tls] cert / key / ca,
-// scope.secret_file) with a ReloadableEngineNativeProvider, so the client's CredWatch runs (HR4).
+// scope.secret_file) with a ReloadableEngineNativeProvider, so the client's CredWatch runs.
 //
 // Windows (one reload each, traffic never stops; each ends when the cluster shows the change):
 //   1 lease_ttl_and_R      bundle: R 1 -> 2 (replica legs start) with memnode lease.ttl_s / max_s / put_timeout_s, then R 2 -> 1 and
 //                          other lease values (class A on both sides; the nodes log the changed keys, the client adopts R)
-//   2 subpool_bytes        bundle: landing.subpool_bytes 8 MiB -> 4 MiB (class B): every node is rebuilt, one at a time (HR3b)
+//   2 subpool_bytes        bundle: landing.subpool_bytes 8 MiB -> 4 MiB (class B): every node is rebuilt, one at a time
 //   3 client_certificate   the client's certificate and key are replaced (a new key, the same CA and identity) by one atomic
 //                          symlink swap; CredWatch loads them; then a bundle and a class B rebuild only succeed over HTTPS
 //                          connections made with the new certificate (the old one is no longer on disk)
 //   4 kver                 `mirctl secret add-kver`: the provider's `current` becomes 2; new ops derive new scopes (the old
 //                          ones are cold, a Miss is allowed), puts and gets under kver 2 work
-//   2b fetch_qps (HR7)     bundle: fabric.fetch_qps 2 -> 4 -> 2 -> the open-time value (class B): each change rebuilds every
+//   2b fetch_qps     bundle: fabric.fetch_qps 2 -> 4 -> 2 -> the open-time value (class B): each change rebuilds every
 //                          node with that many fetch QPs per rail; miracache_client_rail_fetch_qps shows it on every rail
-//                          of every node (the "QPs per rail" part of the M2 exit)
-// Topology (HR7, multi-rail plan decision 11): every node serves TWO rails on the one device, the device's own IPv4 and
-// RL1's lab address on the same netdev (the lab RDMA setup script: 10.98.0.1 for rxe0, 10.99.0.2 for siw0;
+//                          of every node (the "QPs per rail" part of the exit criterion)
+// Topology: every node serves TWO rails on the one device, the device's own IPv4 and
+// The lab address on the same netdev (the lab RDMA setup script: 10.98.0.1 for rxe0, 10.99.0.2 for siw0;
 // MIRACACHE_RDMA_RAIL2=<ip> overrides), both labelled subnet kLabSubnet; the client's one device (fabric.devices) has no
 // subnet (the wildcard), so it pairs both rails.
 // Skips cleanly without an RDMA device. Certs from deploy/examples/lab-certs.sh.
@@ -85,8 +85,8 @@ constexpr std::size_t kLen = 2000;
 constexpr milliseconds kPutTo{2000}, kLookTo{1000}, kFetchTo{2000};
 constexpr milliseconds kMargin{1000};
 constexpr std::size_t kPool0 = 8u << 20;  // [landing] subpool_bytes at open
-// HR7: both rails of a node live on the one lab device, possibly in two IPv4 subnets (rxe0: eth0 and 10.98.0.0/24). The
-// node rails carry one CIDR label (the bundle requires one); the client device has no subnet: the wildcard (run #219)
+// Both rails of a node live on the one lab device, possibly in two IPv4 subnets (rxe0: eth0 and 10.98.0.0/24). The
+// node rails carry one CIDR label (the bundle requires one); the client device has no subnet: the wildcard
 // pairs every rail of its protocol.
 constexpr const char* kLabSubnet = "0.0.0.0/0";
 
@@ -99,7 +99,7 @@ std::vector<std::string> devices() {
   return out;
 }
 
-// The second rail's address on `dev`'s netdev (RL1's lab addresses), or empty when unknown (then one rail).
+// The second rail's address on `dev`'s netdev (the lab addresses), or empty when unknown (then one rail).
 std::string rail2_ip(const std::string& dev) {
   if (const char* e = std::getenv("MIRACACHE_RDMA_RAIL2"); e != nullptr && *e != '\0') return e;
   if (dev == "rxe0") return "10.98.0.1";
@@ -332,13 +332,13 @@ class ReloadE2e : public ::testing::TestWithParam<std::string> {
     ip2_ = rail2_ip(dev);
     if (ip2_ == ip_) ip2_.clear();
     rails_ = ip2_.empty() ? 1 : 2;
-    if (rails_ == 1) {  // G10: never run one rail silently
+    if (rails_ == 1) {  // Never run one rail silently
       if (dev == "rxe0" || dev == "siw0") {
         ADD_FAILURE() << "device " << dev << " must run two rails, but its second address is missing or equals the first ("
                       << ip_ << "); fix the lab addresses or set MIRACACHE_RDMA_RAIL2";
         return false;
       }
-      std::fprintf(stderr, "[HR7] SKIP the 2-rail windows: device %s has no second rail address (set MIRACACHE_RDMA_RAIL2); "
+      std::fprintf(stderr, "[reload e2e] SKIP the 2-rail windows: device %s has no second rail address (set MIRACACHE_RDMA_RAIL2); "
                            "running one rail\n", dev.c_str());
     }
     char t[] = "/tmp/mira-hr6-XXXXXX";
@@ -558,7 +558,7 @@ class ReloadE2e : public ::testing::TestWithParam<std::string> {
   // Per-status counts and p50 / p99 per op kind over the ops that STARTED in [from_us, to_us).
   void window_report(const std::string& label, std::int64_t from_us, std::int64_t to_us) {
     std::ostringstream o;
-    o << "[HR6] " << label << " (" << static_cast<double>(to_us - from_us) / 1e6 << " s):";
+    o << "[reload e2e] " << label << " (" << static_cast<double>(to_us - from_us) / 1e6 << " s):";
     std::map<std::string, std::size_t> by_status;
     for (int op = 0; op < 3; ++op) {
       std::vector<std::int64_t> lat;
@@ -610,7 +610,7 @@ class ReloadE2e : public ::testing::TestWithParam<std::string> {
         },
         cap);
   }
-  // HR7: fetch QPs connected per "node_id/rail" (miracache_client_rail_fetch_qps; the series of learned IDs only).
+  // Fetch QPs connected per "node_id/rail" (miracache_client_rail_fetch_qps; the series of learned IDs only).
   std::map<std::string, long> rail_qps() const {
     static const std::regex id_re("node_id=\"([0-9]+)\""), rail_re("rail=\"([0-9]+)\"");
     std::map<std::string, long> out;
@@ -648,7 +648,7 @@ class ReloadE2e : public ::testing::TestWithParam<std::string> {
 
   // Clean-up state.
   std::string dir_, ip_, ip2_, skip_;
-  int rails_ = 1;  // rails per node (2 when the device has RL1's second lab address)
+  int rails_ = 1;  // rails per node (2 when the device has a second lab address)
   pid_t node_[kNodes] = {-1, -1, -1};
   int starts_[kNodes] = {0, 0, 0};
   int publishes_ = 0;
@@ -687,7 +687,7 @@ TEST_P(ReloadE2e, ReloadUnderTraffic) {
     base_qps_ = b.fetch_qps;
   }
   ASSERT_TRUE(until([&] { return rails_show(base_qps_); }, seconds(20))) << "rails: " << rail_qps_text();
-  std::fprintf(stderr, "[HR7] topology: %d rails per node (%s, %s); open-time fetch QPs per rail %u: %s\n", rails_, ip_.c_str(),
+  std::fprintf(stderr, "[reload e2e] topology: %d rails per node (%s, %s); open-time fetch QPs per rail %u: %s\n", rails_, ip_.c_str(),
                ip2_.empty() ? "-" : ip2_.c_str(), base_qps_, rail_qps_text().c_str());
   fill(seconds(40));
   start_traffic();
@@ -723,7 +723,7 @@ TEST_P(ReloadE2e, ReloadUnderTraffic) {
   const std::int64_t t2 = now_us();
   window_report("window 2 subpool_bytes 8 MiB -> 4 MiB, nodes rebuilt", t1, t2);
 
-  // ---- window 2b (HR7): fabric.fetch_qps 2 -> 4 -> 2 -> open-time (class B): QPs per rail, live ----
+  // ---- window 2b: fabric.fetch_qps 2 -> 4 -> 2 -> open-time (class B): QPs per rail, live ----
   {
     std::uint32_t cur = base_qps_;
     std::int64_t from = now_us();
@@ -740,7 +740,7 @@ TEST_P(ReloadE2e, ReloadUnderTraffic) {
       EXPECT_EQ(cl_->rebuild_failures(), 0u) << why;
       sleep_ms(1500);  // traffic on the new QP count before the next step
       const std::int64_t to = now_us();
-      std::fprintf(stderr, "[HR7] fetch_qps %u -> %u: rails %s\n", cur, want, rail_qps_text().c_str());
+      std::fprintf(stderr, "[reload e2e] fetch_qps %u -> %u: rails %s\n", cur, want, rail_qps_text().c_str());
       window_report("window 2b " + why, from, to);
       from = to;
       cur = want;
@@ -790,7 +790,7 @@ TEST_P(ReloadE2e, ReloadUnderTraffic) {
   const std::int64_t t3 = now_us();
   window_report("window 3 before the rotation took effect", t2, t_rot_done);
   window_report("window 3 after rotation (new bundle + rebuild over the new certificate)", t_rot_done, t3);
-  std::fprintf(stderr, "[HR6] window 3 certificate: swapped at +%.1f s, loaded after %.1f s\n", static_cast<double>(t_rot - t2) / 1e6,
+  std::fprintf(stderr, "[reload e2e] window 3 certificate: swapped at +%.1f s, loaded after %.1f s\n", static_cast<double>(t_rot - t2) / 1e6,
                static_cast<double>(t_rot_done - t_rot) / 1e6);
 
   // ---- window 4: kver rotation (mirctl secret add-kver) ----
@@ -812,7 +812,7 @@ TEST_P(ReloadE2e, ReloadUnderTraffic) {
         kv2_hits += r.op == 2 && r.st == KeyStatus::Hit;
         kv2_commits += r.op == 0 && r.st == KeyStatus::Committed;
       }
-  std::fprintf(stderr, "[HR6] window 4 kver loaded after %.1f s; ops under kver 2: committed puts=%llu, Hit fetches=%llu\n",
+  std::fprintf(stderr, "[reload e2e] window 4 kver loaded after %.1f s; ops under kver 2: committed puts=%llu, Hit fetches=%llu\n",
                static_cast<double>(t_kv_done - t_kv) / 1e6, static_cast<unsigned long long>(kv2_commits), static_cast<unsigned long long>(kv2_hits));
   EXPECT_GT(kv2_commits, 0u) << "no put committed under the new kver";
   EXPECT_GT(kv2_hits, 0u) << "no fetch hit under the new kver";
@@ -820,7 +820,7 @@ TEST_P(ReloadE2e, ReloadUnderTraffic) {
   // ---- verdict ----
   stop_traffic();
   const std::string rep = oracle_->report();
-  std::fprintf(stderr, "[HR6] %s\n", rep.c_str());
+  std::fprintf(stderr, "[reload e2e] %s\n", rep.c_str());
   EXPECT_EQ(oracle_->failed(), 0u) << rep;
   std::uint64_t hangs = 0;
   for (int t = 0; t < kThreads; ++t)

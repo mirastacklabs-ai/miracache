@@ -353,8 +353,8 @@ TEST(MessagesErrors, TlvTailMutations) {
     return mutate(resize_body(b, 48 + tlv.size()), {{8, flags}});
   };
   EXPECT_EQ(run(with(crit, flag::CRITICAL_EXT)), WireStatus::Unsupported) << "critical unknown";
-  EXPECT_EQ(run(with(crit, 0)), WireStatus::Malformed) << "D11: critical TLV without flag";
-  EXPECT_EQ(run(with(bytes({1, 0, 0, 0, 0, 0, 0, 0}), flag::CRITICAL_EXT)), WireStatus::Malformed) << "D11: flag without critical";
+  EXPECT_EQ(run(with(crit, 0)), WireStatus::Malformed) << "critical TLV without flag";
+  EXPECT_EQ(run(with(bytes({1, 0, 0, 0, 0, 0, 0, 0}), flag::CRITICAL_EXT)), WireStatus::Malformed) << "flag without critical";
   EXPECT_EQ(run(with(bytes({1, 0, 8, 0}), 0)), WireStatus::Malformed) << "truncated TLV";
   EXPECT_EQ(run(with(bytes({1, 0, 1, 0, 7, 9, 0, 0}), 0)), WireStatus::Malformed) << "padding not zero";
   EXPECT_EQ(run(with(bytes({1, 0, 3, 0, 1, 2, 3, 0}), 0)), WireStatus::Ok) << "skippable";

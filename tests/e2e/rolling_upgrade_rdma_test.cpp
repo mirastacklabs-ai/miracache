@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// UP1: rolling upgrade end to end on rxe0 / siw0 (label `rdma`). The A3.1 exit (spec 6.1, goal 8,
+// Rolling upgrade end to end on rxe0 / siw0 (label `rdma`). The exit criterion (spec 6.1, goal 8,
 // "UP1, NM1, FM1"): restart a 3-node cluster one node at a time under 4-thread traffic; misses, never errors; the cache
 // is kept (>= 99 % of a node's cached bytes still served after its warm restart).
 //
@@ -8,7 +8,7 @@
 // always carries the same bytes). Per node, in turn: read its store bytes / open scopes / node ID, SIGTERM (drain), the
 // exit code must be 0, start the same config on the same state_dir and store dir, wait until it listens, read the gauges
 // again, and let the client reconnect. The restart window of a node is excused for Refused / Timeout / Aborted (fault oracle, as
-// MB11 cases 3 and 4; Q1 option A; excused Aborted is counted apart in the report); wrong bytes never are. After the last node a serial re-read of the scopes filled
+// the membership e2e cases 3 and 4; excused Aborted is counted apart in the report); wrong bytes never are. After the last node a serial re-read of the scopes filled
 // before the upgrade must still hit (>= 99 %). p50 / p99 per phase are printed.
 // Certs from deploy/examples/lab-certs.sh. Skips cleanly without an RDMA device.
 #include <arpa/inet.h>
@@ -354,7 +354,7 @@ class RollingUpgradeE2e : public ::testing::TestWithParam<std::string> {
       metrics_port_[i] = free_port();
       const std::string n = std::to_string(i + 1);
       (void)std::filesystem::create_directories(store_root() + "/store" + n);
-      // A3.1: 4 segments (5 data runs of 256 KiB per 4 MiB segment: 20 runs, 5.2 MB per node): the working set (400 scopes x 4 keys
+      // 4 segments (5 data runs of 256 KiB per 4 MiB segment: 20 runs, 5.2 MB per node): the working set (400 scopes x 4 keys
       // x 4 KiB blocks x 2 replicas = 12.8 MB) fits in the 3 nodes (15.7 MB). With 3 segments (11.8 MB) the fill evicted under
       // pressure all along, so the sweep measured eviction, not the restart, and "used" moved with in-flight puts.
       std::ofstream f(dir_ + "/node" + n + ".toml");

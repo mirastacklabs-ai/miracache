@@ -36,7 +36,7 @@ Store::Store(Arena& arena, SlabAllocator& slab, const Clock& clock, Random& rng)
   lease_max_ = lease_max_ceiling_ = c.lease_max;
   invalidate_per_s_ = c.invalidate_per_s;
   default_policy_ = c.principal_default;
-  // 0 = computed (the loader's rule, K02): this node's n_segments x segment_bytes.
+  // 0 = computed (the loader's rule): this node's n_segments x segment_bytes.
   if (default_policy_.max_bytes == 0) default_policy_.max_bytes = static_cast<std::uint64_t>(c.segment_bytes) * c.n_segments;
 }
 
@@ -115,7 +115,7 @@ void Store::update_pressure() {
 void Store::set_policy(PrincipalId p, const PrincipalPolicy& pol) {
   MIRACACHE_CHECK(pol.max_scopes > 0 && pol.max_bytes > 0 && pol.idle_ttl > Nanos{0});
   policies_[p] = pol;
-  sweep_pending_ = true;  // MB3b: a cap cut converges through sweep_step
+  sweep_pending_ = true;  // a cap cut converges through sweep_step
 }
 
 const PrincipalPolicy& Store::policy_for(PrincipalId p) const {
@@ -124,7 +124,7 @@ const PrincipalPolicy& Store::policy_for(PrincipalId p) const {
 }
 
 bool Store::expired(PrincipalId p, const ScopeRec& r, Nanos now) const {
-  if (max_ttl_ > Nanos{0} && now.count() - r.opened_ns >= max_ttl_.count()) return true;  // decision 1: from opened_at
+  if (max_ttl_ > Nanos{0} && now.count() - r.opened_ns >= max_ttl_.count()) return true;  // retention counts from opened_at
   return now.count() - r.last_used_ns >= policy_for(p).idle_ttl.count();
 }
 
@@ -143,7 +143,7 @@ void Store::drop_block(std::uint64_t slot) {
     if (auto sc = zp.scopes.find(b.scope); sc != zp.scopes.end()) sc->second.leased_bytes -= b.e.len;
     if (!MIRACACHE_TEETH_ON(SkipSeq))  // TEETH: skip the seq flip
       arena_.state_gen().store(slot, proto::BlockState::Zombie, b.e.gen);
-    slab_.clear_header(b.e);  // A3.1: out of the index: never resumed after a crash
+    slab_.clear_header(b.e);  // out of the index: never resumed after a crash
   } else {
     slab_.free(b.e);
     forget_block(it);
@@ -259,7 +259,7 @@ void Store::drop_subtree(PState& ps, ScopeRec& r, const KeyHash& key) {
   for (auto it = order.rbegin(); it != order.rend(); ++it) remove_key(ps, r, *it, EvictReason::Invalidate);
 }
 
-// ---- SC1: scrub pins (internal leases owned by the scrubber; see scrub.h) ----
+// ---- Scrub pins (internal leases owned by the scrubber; see scrub.h) ----
 std::optional<Store::ScrubTarget> Store::scrub_pin_next(std::uint64_t& cursor) {
   for (auto it = blocks_.lower_bound(cursor); it != blocks_.end(); ++it) {
     BlockInfo& b = it->second;
@@ -322,7 +322,7 @@ std::size_t Store::drop_principal(PrincipalId p, Nanos drop_before) {
   if (pit == principals_.end()) return 0;
   PState& ps = pit->second;
   std::size_t n = 0;
-  // P15: compared with opened_at. Incremental: the scopes are doomed now (lookups miss, commits refuse) and their
+  // Compared with opened_at. Incremental: the scopes are doomed now (lookups miss, commits refuse) and their
   // blocks are freed under the sweep budget.
   for (auto it = ps.scopes.begin(); it != ps.scopes.end(); ++it) {
     if (!it->second.doomed && it->second.opened_ns < drop_before.count()) {
@@ -341,12 +341,12 @@ void Store::doom_scope(PrincipalId p, PState& ps, std::map<ScopeId, ScopeRec>::i
   ps.lru.erase(r.seq);
   ps.by_open.erase(r.epoch);
   ps.doomed.insert(it->first);
-  persist_drain(p, it->first, r);  // A3.1: a crash from here on never resumes its blocks
+  persist_drain(p, it->first, r);  // a crash from here on never resumes its blocks
   doomed_principals_.insert(p);
   doomed_blocks_ += r.keys.size();
 }
 
-// ---- MB3b: drop_before by opened_at, incremental; cap-cut convergence ---------------------------------
+// ---- drop_before by opened_at, incremental; cap-cut convergence ---------------------------------
 void Store::set_drop_cutoff(PrincipalId p, std::int64_t cutoff_ns) {
   auto [it, inserted] = drop_cutoff_.emplace(p, cutoff_ns);
   if (!inserted && cutoff_ns > it->second) it->second = cutoff_ns;
@@ -370,10 +370,10 @@ std::size_t Store::drop_scope_blocks(PState& ps, ScopeRec& r, std::size_t budget
     if (credit) *credit -= static_cast<std::int64_t>(len);
     ++n;
   };
-  // The cursor always names the next key to scan (Y02: a capped call resumes after what it scanned, or a long
+  // The cursor always names the next key to scan (a capped call resumes after what it scanned, or a long
   // chain never progresses), and r.drop_noleaf counts the non-leaves scanned in a row, across calls, since the
-  // scope last gained or lost a key (remove_key and commit_block reset it, V17). Each key is counted once per
-  // wrap, so reaching keys.size() means a whole wrap found no leaf (Z08).
+  // scope last gained or lost a key (remove_key and commit_block reset it). Each key is counted once per
+  // wrap, so reaching keys.size() means a whole wrap found no leaf.
   auto it = r.keys.lower_bound(r.drop_cursor);
   while (more() && !r.keys.empty() && r.drop_noleaf < r.keys.size()) {
     if (it == r.keys.end()) it = r.keys.begin();
@@ -399,7 +399,7 @@ std::size_t Store::drop_scope_blocks(PState& ps, ScopeRec& r, std::size_t budget
   }
   if (more() && !r.keys.empty() && r.drop_noleaf >= r.keys.size()) {
     // No leaf anywhere (a cyclic child index from prefix-shared keys), proven by a whole wrap, never by a capped
-    // scan (Z08): the scope is dead and unreadable, so the chain order no longer matters; remove in key order.
+    // scan: the scope is dead and unreadable, so the chain order no longer matters; remove in key order.
     while (more() && !r.keys.empty()) rm(r.keys.begin()->first);
   }
   return n;
@@ -415,7 +415,7 @@ std::size_t Store::sweep_doomed(std::size_t max_blocks) {
       doomed_principals_.erase(doomed_principals_.begin());
       continue;
     }
-    if (used >= max_blocks || credit_ <= 0) break;  // U2-16: record erasures count too
+    if (used >= max_blocks || credit_ <= 0) break;  // record erasures count too
     PState& ps = pit->second;
     auto sit = ps.scopes.find(*ps.doomed.begin());
     MIRACACHE_CHECK(sit != ps.scopes.end() && sit->second.doomed);
@@ -425,16 +425,16 @@ std::size_t Store::sweep_doomed(std::size_t max_blocks) {
     }
     if (!sit->second.keys.empty()) break;  // budget spent inside this scope: resume here next turn
     evict_scope(ps, sit, sit->second.doom_why);  // no keys left: only the record goes
-    ++used;                                      // U2-16: an erased record counts against the turn budget
+    ++used;                                      // an erased record counts against the turn budget
   }
   return used;
 }
 
-// Pressure (decision 3, step 3): global LRU leaves, block level, from high_pct down to low_pct.
+// Pressure: global LRU leaves, block level, from high_pct down to low_pct.
 std::size_t Store::sweep_pressure(std::size_t max_blocks) {
   if (!pressure_) return 0;
   const std::uint64_t cap = std::uint64_t{slab_.total_runs()} * arena_.config().run_bytes;
-  std::uint64_t used_bytes = used_hint_ ? *used_hint_ : total_used();  // U2-16: once per tick
+  std::uint64_t used_bytes = used_hint_ ? *used_hint_ : total_used();  // once per tick
   std::size_t used = 0;
   while (used < max_blocks && credit_ > 0) {
     if (static_cast<unsigned __int128>(used_bytes) * 100 <= static_cast<unsigned __int128>(cap) * low_pct_) {
@@ -458,7 +458,7 @@ std::size_t Store::sweep_pressure(std::size_t max_blocks) {
 
 std::size_t Store::sweep_step(std::size_t max_blocks) {
   refill_credit(clock_.now());
-  // U2-09: the turn's block budget is shared with the evictions the put path did since the last turn.
+  // The turn's block budget is shared with the evictions the put path did since the last turn.
   const std::size_t spent = turn_used_;
   turn_used_ = 0;
   if (!sweep_pending()) return 0;
@@ -484,7 +484,7 @@ std::size_t Store::sweep_flagged(std::size_t max_blocks) {
       break;
     }
     if (scanned >= kScanScopes || used >= max_blocks || credit_ <= 0) {
-      if (!(sweep_started_ && pit->first == sweep_p_)) {  // Y07: resume at this principal, not at the one before
+      if (!(sweep_started_ && pit->first == sweep_p_)) {  // resume at this principal, not at the one before
         sweep_started_ = true;
         sweep_p_ = pit->first;
         sweep_s_ = ScopeId{};
@@ -553,7 +553,7 @@ void Store::on_session_end(SessionId session) {
 std::uint64_t Store::evict(std::uint64_t bytes_wanted) {
   std::uint64_t freed = 0;
   while (freed < bytes_wanted) {
-    auto slot = ev_lru_.oldest();  // unleased leaves only (R14): no rescan
+    auto slot = ev_lru_.oldest();  // unleased leaves only: no rescan
     if (!slot) break;
     const BlockInfo& b = blocks_.at(*slot);
     PState& ps = principals_.at(b.principal);
@@ -619,9 +619,9 @@ void Store::evict_scope(PState& ps, std::map<ScopeId, ScopeRec>::iterator it, Ev
 }
 
 void Store::drop_lease(std::map<LeaseId, Lease>::iterator it) {
-  // Y17: blocks became evictable; a principal still over a cap cut converges again. A lease comes from one lookup
+  // Blocks became evictable; a principal still over a cap cut converges again. A lease comes from one lookup
   // in one scope, so its slots share one principal: checking each principal when its run of slots ends keeps this
-  // hot path allocation-free (Z08) and stays exact if slots ever mix principals (a principal's accounting only
+  // hot path allocation-free and stays exact if slots ever mix principals (a principal's accounting only
   // changes through its own slots, and its last slot always ends a run).
   auto rearm = [this](PrincipalId p) {
     auto pit = principals_.find(p);
@@ -691,7 +691,7 @@ std::uint32_t Store::drain_retry_ms(PrincipalId p, const ScopeId& s) const {
 Status Store::ensure_scope_for_root_put(PrincipalId p, const ScopeId& s, Nanos now) {
   const PrincipalPolicy& pol = policy_for(p);
   PState& ps = principals_[p];
-  std::size_t evicted = 0;  // U2-09: charged to the turn budget on every exit
+  std::size_t evicted = 0;  // charged to the turn budget on every exit
   const std::uint64_t bytes_before = ps.bytes;
   struct Charge {
     Store& st;
@@ -702,7 +702,7 @@ Status Store::ensure_scope_for_root_put(PrincipalId p, const ScopeId& s, Nanos n
   } charge{*this, ps, bytes_before, evicted};
   auto it = ps.scopes.find(s);
   if (it != ps.scopes.end() && (dead(p, it->second) || expired(p, it->second, now))) {
-    // Reopen of a dropped (drop_before) or expired (idle TTL, max_ttl) scope that is not yet reaped (P21): the old
+    // Reopen of a dropped (drop_before) or expired (idle TTL, max_ttl) scope that is not yet reaped: the old
     // blocks go (bounded per call, leased ones turn ZOMBIE) and the put is refused (drain_retry_ms says when to come
     // back) until none are left; then a fresh record with a new opened_at replaces it.
     ScopeRec& old = it->second;
@@ -716,7 +716,7 @@ Status Store::ensure_scope_for_root_put(PrincipalId p, const ScopeId& s, Nanos n
     it = ps.scopes.end();
   }
   if (it == ps.scopes.end()) {
-    // QT2/P09: bounded. Live scopes (the LRU) are counted, so a doomed one no longer holds a slot. A victim that fits in
+    // Bounded. Live scopes (the LRU) are counted, so a doomed one no longer holds a slot. A victim that fits in
     // what is left of this call's 64-block budget goes whole; a larger one is only doomed (O(1)): it leaves the LRU
     // and the sweep frees its blocks under the one budget.
     std::size_t budget = kSweepBlocks;
@@ -732,7 +732,7 @@ Status Store::ensure_scope_for_root_put(PrincipalId p, const ScopeId& s, Nanos n
         doom_scope(p, ps, victim, EvictReason::Cap);
       }
     }
-    // A3.1: a scope that cannot have a record is refused, never opened in memory only: after a crash its blocks would
+    // A scope that cannot have a record is refused, never opened in memory only: after a crash its blocks would
     // be indistinguishable from those of another principal's scope with the same scope_id.
     std::uint32_t rec = ScopeTable::kNone;
     if (ScopeTable* t = arena_.scope_table()) {
@@ -769,7 +769,7 @@ Status Store::commit_block(PrincipalId p, const ScopeId& s, const KeyHash& key, 
   PState& ps = pit->second;
   auto it = ps.scopes.find(s);
   if (it != ps.scopes.end() && !it->second.doomed && expired(p, it->second, now)) {
-    doom_scope(p, ps, it, EvictReason::Ttl);  // Y17: never a whole-scope free in one call; the sweep frees it
+    doom_scope(p, ps, it, EvictReason::Ttl);  // never a whole-scope free in one call; the sweep frees it
   }
   if (it == ps.scopes.end()) return Error{ErrorCode::AccessDenied, "store: no scope"};
   if (dead(p, it->second)) return Error{ErrorCode::AccessDenied, "store: scope dropped mid-put"};  // drop_before
@@ -781,20 +781,20 @@ Status Store::commit_block(PrincipalId p, const ScopeId& s, const KeyHash& key, 
   // Check the quota BEFORE evicting anything: bytes that cannot be reclaimed (this scope,
   // zombies, leased blocks of other scopes) must leave room, else fail without side effects.
   if (ps.bytes + ps.zombie_bytes + e.len > pol.max_bytes) {
-    // QT2: O(1), never a walk over the blocks (a lookup-latency risk at the cap). Exact: the unleased bytes outside the
+    // O(1), never a walk over the blocks (a lookup-latency risk at the cap). Exact: the unleased bytes outside the
     // target scope = (principal bytes - scope bytes) - (principal leased bytes - scope leased bytes), both kept incrementally.
     const std::uint64_t reclaimable = (ps.bytes - it->second.bytes) - (ps.leased_bytes - it->second.leased_bytes);
     if (ps.bytes + ps.zombie_bytes + e.len > pol.max_bytes + reclaimable)
       return Error{ErrorCode::ResourceExhausted, "store: max_bytes"};
   }
-  std::size_t evicted_blocks = 0;  // P09: a cap cut must not evict the whole overage in one call
+  std::size_t evicted_blocks = 0;  // a cap cut must not evict the whole overage in one call
   const std::uint64_t bytes_before = ps.bytes;
   auto full = [&]() -> Status {
-    charge_call(evicted_blocks, bytes_before > ps.bytes ? bytes_before - ps.bytes : 0);  // U2-09
+    charge_call(evicted_blocks, bytes_before > ps.bytes ? bytes_before - ps.bytes : 0);
     return Error{ErrorCode::ResourceExhausted, "store: max_bytes"};
   };
   if (ps.bytes + ps.zombie_bytes + e.len > pol.max_bytes) {
-    // U2-04: dead blocks (expired or dropped scopes) go first, inside the same 64-block bound; live scopes only after.
+    // Dead blocks (expired or dropped scopes) go first, inside the same 64-block bound; live scopes only after.
     evicted_blocks += drain_doomed(p, ps, kSweepBlocks);
   }
   while (ps.bytes + ps.zombie_bytes + e.len > pol.max_bytes) {
@@ -804,7 +804,7 @@ Status Store::commit_block(PrincipalId p, const ScopeId& s, const KeyHash& key, 
     if (v != ps.lru.end() && v->second == s) ++v;
     if (v == ps.lru.end()) return full();
     auto victim = ps.scopes.find(v->second);
-    // Y17/P20: block granular. A victim that fits in what is left of this call's 64 goes whole (as before);
+    // Block granular. A victim that fits in what is left of this call's 64 goes whole (as before);
     // a larger one loses its leaves (tail first) up to the bound and stays, still the oldest, for the next call.
     const std::size_t room = kSweepBlocks - evicted_blocks;
     const std::size_t got = drop_scope_blocks(ps, victim->second, room, EvictReason::Cap);
@@ -824,7 +824,7 @@ Status Store::commit_block(PrincipalId p, const ScopeId& s, const KeyHash& key, 
   MIRACACHE_CHECK(blocks_.emplace(e.gen_slot, b).second);
   run_blocks_[slab_.run_of(e)].insert(e.gen_slot);
   r.keys.emplace(key, e.gen_slot);
-  r.drop_noleaf = 0;  // V17: a key inserted behind the drop cursor may be a leaf; never fall back to key order
+  r.drop_noleaf = 0;  // a key inserted behind the drop cursor may be a leaf; never fall back to key order
   r.children[pfx].insert(key);
   lru_.touch(e.gen_slot);
   refresh_evictable(e.gen_slot);
@@ -874,10 +874,10 @@ LookupAck Store::lookup(SessionId session, const LookupReq& req) {
   auto sit = ps.scopes.find(req.scope);
   if (sit == ps.scopes.end() || expired(req.principal, sit->second, now) || dead(req.principal, sit->second)) return ack;
   ScopeRec& r = sit->second;
-  // Per-session lease cap (Q09): over the cap the ack is all-MISS with lease 0. A MISS is always
+  // Per-session lease cap: over the cap the ack is all-MISS with lease 0. A MISS is always
   // valid on wire v0 (the client recomputes), and no hit is ever returned without a lease.
   if (auto sl = session_leases_.find(session);
-      sl != session_leases_.end() &&  // no-wrap compare (r6 B2): count >= max (teeth: max + 1)
+      sl != session_leases_.end() &&  // no-wrap compare: count >= max (teeth: max + 1)
       std::uint64_t{sl->second} >= std::uint64_t{arena_.config().max_leases_per_session} + (MIRACACHE_TEETH_ON(LeaseCapLax) ? 1u : 0u))
     return ack;
   Lease lease;
@@ -949,7 +949,7 @@ void Store::tick() {
     drop_lease(leases_.find(lease_expiry_.begin()->second));
     if (mx_) bump(mx_->lease_expired);
   }
-  // Reaping at block granularity (decision 3): an expired scope is only marked here (unlinked, lookups miss); its
+  // Reaping at block granularity: an expired scope is only marked here (unlinked, lookups miss); its
   // blocks are freed by the budgeted sweep below. Marking is cheap but capped per tick, the rest next tick.
   constexpr std::size_t kMarkPerTick = 1024;
   std::size_t marked = 0;
@@ -970,7 +970,7 @@ void Store::tick() {
       ++marked;
     }
   }
-  used_hint_ = total_used();  // U2-16: once per tick
+  used_hint_ = total_used();  // once per tick
   update_pressure();
   const std::size_t swept = sweep_step();
   if (swept > 0) used_hint_ = total_used();  // the gauge reports the state after this turn's work
@@ -978,7 +978,7 @@ void Store::tick() {
     if (mx_->occupancy_ratio_ppm) mx_->occupancy_ratio_ppm->set(static_cast<std::int64_t>(occupancy_ppm()));
     if (mx_->evict_backlog_blocks) mx_->evict_backlog_blocks->set(static_cast<std::int64_t>(doomed_blocks_));
   }
-  // Q18: drop per-principal state that holds nothing (no scopes, reservations or zombies).
+  // Drop per-principal state that holds nothing (no scopes, reservations or zombies).
   for (auto it = principals_.begin(); it != principals_.end();) {
     const PState& ps = it->second;
     it = ps.scopes.empty() && ps.inflight == 0 && ps.zombie_bytes == 0 ? principals_.erase(it) : std::next(it);
@@ -1015,21 +1015,21 @@ Status Store::reserve_inflight(PrincipalId p, std::uint64_t bytes, const ScopeId
     const std::uint64_t used = ps.bytes + ps.zombie_bytes + ps.inflight;
     return used > cap || bytes > cap - used;
   };
-  if (over()) {  // R13: free the principal's own unleased leaves, LRU first; never others' blocks
+  if (over()) {  // free the principal's own unleased leaves, LRU first; never others' blocks
     const std::set<std::uint64_t> prot = scope ? protected_slots(p, *scope, protect) : std::set<std::uint64_t>{};
-    {  // T01: bytes eviction can never reclaim (zombies, reservations, leased and protected blocks).
+    {  // bytes eviction can never reclaim (zombies, reservations, leased and protected blocks).
        // If even those leave no room, refuse now: evicting would destroy data for nothing.
        // (Ancestors of leased blocks are also stuck; not counted, so this errs towards trying.)
-      // S01: leased bytes are kept incrementally; only the protect set is walked (O(protect)).
+      // Leased bytes are kept incrementally; only the protect set is walked (O(protect)).
       std::uint64_t fixed = ps.zombie_bytes + ps.inflight + ps.leased_bytes;
       for (std::uint64_t slot : prot)
         if (const BlockInfo& b = blocks_.at(slot); b.leases == 0) fixed += b.e.len;
       if (fixed > cap || bytes > cap - fixed) return full;
     }
-    std::size_t removed = 0;  // P09: bounded per call; the rest converges through sweep_step()
+    std::size_t removed = 0;  // bounded per call; the rest converges through sweep_step()
     const std::uint64_t bytes_before = ps.bytes;
-    auto charge = [&] { charge_call(removed, bytes_before > ps.bytes ? bytes_before - ps.bytes : 0); };  // U2-09
-    removed += drain_doomed(p, ps, kSweepBlocks);  // U2-04: dead blocks before any live scope loses data
+    auto charge = [&] { charge_call(removed, bytes_before > ps.bytes ? bytes_before - ps.bytes : 0); };
+    removed += drain_doomed(p, ps, kSweepBlocks);  // dead blocks before any live scope loses data
     while (over()) {
       if (removed >= kSweepBlocks) {
         sweep_pending_ = true;
@@ -1175,7 +1175,7 @@ Status Store::check_invariants() const {
     if (lease_expiry_.count({l.expiry.count(), id}) == 0) return corrupt("lease expiry index");
     for (std::uint64_t slot : l.slots) ++counts[slot];
   }
-  for (const auto& [slot, n] : scrub_pins_) counts[slot] += n;  // SC1: scrub pins count as leases
+  for (const auto& [slot, n] : scrub_pins_) counts[slot] += n;  // scrub pins count as leases
   if (lease_expiry_.size() != leases_.size()) return corrupt("lease expiry index size");
   {
     std::map<SessionId, std::uint32_t> per_session;
@@ -1207,7 +1207,7 @@ Status Store::check_invariants() const {
     if (b.leases > 0 && (sg.state(slot) == proto::BlockState::Free || sg.generation(slot) != b.e.gen))
       return corrupt("LeaseSafety: leased block free or reused");
   }
-  // Evictable-leaf indexes (R14) equal the recomputed set, in lru_ order; run index covers blocks_.
+  // Evictable-leaf indexes equal the recomputed set, in lru_ order; run index covers blocks_.
   {
     std::size_t want = 0, per_principal = 0, indexed = 0;
     for (const auto& [slot, b] : blocks_) {
@@ -1239,7 +1239,7 @@ Status Store::check_invariants() const {
   return {};
 }
 
-// ---- A3.1: scope records and the warm-restart hooks ----
+// ---- Scope records and the warm-restart hooks ----
 std::uint64_t Store::wall_ms(std::int64_t clock_ns) const {
   const __int128 w = static_cast<__int128>(clock_ns) + wall_offset_ns_;
   return w <= 0 ? 0 : static_cast<std::uint64_t>(w / 1'000'000);

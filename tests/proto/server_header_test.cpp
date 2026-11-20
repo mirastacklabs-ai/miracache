@@ -157,7 +157,7 @@ TEST(ServerHeader, ValidatePairChecksStoredLenCoversPayloadAndTags) {
   EXPECT_FALSE(min_stored_len(e));
   s.stored_len = ~std::uint64_t{0};
   EXPECT_FALSE(validate(s, e, ~std::uint64_t{0}));
-  e.plaintext_len = 0;                     // D17: empty plaintext still has one segment/tag
+  e.plaintext_len = 0;                     // empty plaintext still has one segment/tag
   EXPECT_EQ(*min_stored_len(e), 64u + 16u);
   s.stored_len = 80;
   EXPECT_TRUE(validate(s, e, 80));

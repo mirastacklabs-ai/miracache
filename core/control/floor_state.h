@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The persisted bundle floor (membership plan decision 4): the highest generation and its body
+// The persisted bundle floor: the highest generation and its body
 // hash, the highest sec_generation and its sec hash, the highest epoch, and the per-principal
 // drop_before maxima. One file, `<state_dir>/bundle-floor`, guarded by flock on
 // `<state_dir>/bundle-floor.lock`, written atomically (tmp + fsync + rename), and updated
@@ -36,7 +36,7 @@ enum class Verdict : std::uint8_t {
   Replace,  // equal generation, equal body hash, same sec: no apply; a new valid signature may
             // replace the stored envelope (key rotation re-sign / idempotent re-push)
 };
-// An equal generation and body hash with a higher sec_generation is rejected (equal_generation, W07):
+// An equal generation and body hash with a higher sec_generation is rejected (equal_generation):
 // a new `sec` needs a new generation.
 
 // The failure of FloorState::commit: either the floor's verdict (`rejected`, `reject` set: the
@@ -50,7 +50,7 @@ struct CommitError {
   CommitError(Error e) : io(e) {}                            // NOLINT
 };
 
-// Pure acceptance check of an already verified and parsed bundle against `floor` (decision 4).
+// Pure acceptance check of an already verified and parsed bundle against `floor`.
 // Order: generation, epoch, then the security rules. `pinned_min_sec_generation` is the trust
 // file's pin (0 = none), which applies even on a blank floor.
 Expected<Verdict, BundleError> check_against_floor(const Floor& floor, const BundleView& bundle,
@@ -65,7 +65,7 @@ class FloorState {
   // malformed one is an error (a corrupt floor is never treated as blank).
   Expected<Floor, Error> load() const;
 
-  // Under the exclusive lock: re-runs check_against_floor on the file as it is now (W06), so of
+  // Under the exclusive lock: re-runs check_against_floor on the file as it is now, so of
   // two processes that checked the same floor only the first commit wins; the loser gets the
   // reject (CommitError::rejected). Apply: merges the bundle into the file, max-only (every number
   // only rises, a hash follows its number, drop_before maxima are kept) and returns Apply.
@@ -73,7 +73,7 @@ class FloorState {
   // pin (0 = none), as for check_against_floor. Safe from several processes and threads.
   Expected<Verdict, CommitError> commit(const BundleView& bundle, std::uint64_t pinned_min_sec_generation = 0) const;
 
-  // RB2 (POST /v1/drop_principal): raises the stored drop_before maximum of `name` to at least `drop_before_unix_s`
+  // raises the stored drop_before maximum of `name` to at least `drop_before_unix_s`
   // (max-only; a lower value writes nothing). Durable (tmp + fsync + rename + dir fsync) before it returns. Does not
   // touch the generation fields, so a blank floor stays blank for bundle acceptance.
   Status raise_drop_before(const std::string& name, std::int64_t drop_before_unix_s) const;

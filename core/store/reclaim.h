@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Reclaim helpers for the store (A1.4 S5): the per-principal INVALIDATE token bucket and
+// Reclaim helpers for the store: the per-principal INVALIDATE token bucket and
 // the block LRU used by the evictor. Pure data structures; time comes from the caller.
 #pragma once
 
@@ -46,10 +46,10 @@ class TokenBucket {
   std::int64_t last_ns_ = 0;
 };
 
-// Put admission bucket (QT2, quota plan decision 4): `rate` units per second, burst = one second's worth, refilled
+// Put admission bucket: `rate` units per second, burst = one second's worth, refilled
 // continuously from the caller's clock. rate == 0 means unlimited. With `allow_debt` a cost is admitted while the
 // balance is positive and the balance may go negative, so a cost larger than one second's budget is still
-// admitted once the debt is repaid (P22); without it the cost must fit the balance. Not used for INVALIDATE.
+// admitted once the debt is repaid; without it the cost must fit the balance. Not used for INVALIDATE.
 class PutBucket {
  public:
   // 0 = admitted (and charged). Otherwise the milliseconds until the same cost would be admitted (>= 1).

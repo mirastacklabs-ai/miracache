@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// Memory-region manager for the memory node (A1.4 S4a, spec 6.3).
+// Memory-region manager for the memory node (spec 6.3).
 //
-// Fetch side: one RemoteRead MR per arena segment covering ONLY its data runs (Q2: never the superblock, header
+// Fetch side: one RemoteRead MR per arena segment covering ONLY its data runs (never the superblock, header
 // table, scope region or slack; its addr is segment base + data_off), plus one for the state_gen array, all
 // registered stepwise (step_registration() registers ONE piece per call, because real
 // registration of multi-GiB segments takes seconds). The registered prefix grows from
@@ -25,7 +25,7 @@ namespace miracache::store {
 
 class MrManager {
  public:
-  // One device = one fabric with its fetch and ingest PDs (RL1: MRs are per device, so rkeys are per rail; rails on
+  // One device = one fabric with its fetch and ingest PDs (MRs are per device, so rkeys are per rail; rails on
   // one device share them).
   struct DeviceSpec {
     fabric::Fabric* fabric = nullptr;
@@ -79,7 +79,7 @@ class MrManager {
     std::vector<fabric::MemRegion> segs;
     std::optional<fabric::MemRegion> array;
   };
-  std::span<std::byte> data_span(std::uint32_t seg) const;  // the data runs of `seg` (Q2)
+  std::span<std::byte> data_span(std::uint32_t seg) const;  // the data runs of `seg`
   Arena& arena_;
   std::vector<Dev> devs_;
   std::map<std::uint64_t, fabric::MemRegion> writes_;  // by write_key

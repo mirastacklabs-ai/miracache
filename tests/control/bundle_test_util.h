@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Test-only signer for the bundle envelope, written directly against OpenSSL EVP (not the
-// library under test) so the goldens are produced independently. Test seeds (membership plan,
-// MB2 row): publish key seed bytes 0x01..0x20, security key seed bytes 0x21..0x40.
+// library under test) so the goldens are produced independently. Test seeds:
+// publish key seed bytes 0x01..0x20, security key seed bytes 0x21..0x40.
 #pragma once
 
 #include <openssl/evp.h>
@@ -133,7 +133,7 @@ inline std::string u32be(std::uint32_t n) {
   return s;
 }
 
-// Signs `sec` and `body` per decision 2. `len_in_signature` overrides the u32be value (rule 6 tests).
+// Signs `sec` and `body` per the bundle signing rule. `len_in_signature` overrides the u32be value (rule 6 tests).
 inline Parts sign_parts(const std::string& sec, const std::string& body, const Seed& pub_seed = publish_seed(),
                         const Seed& sec_seed = security_seed(), std::int64_t len_in_signature = -1) {
   Parts p;

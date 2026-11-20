@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 /*
- * miracache C ABI (A1.6 L4). Stable surface for non-C++ callers (the Python binding loads
+ * miracache C ABI. Stable surface for non-C++ callers (the Python binding loads
  * this through ctypes). Rules:
  *   - Every symbol is `mira_*`; opaque handles, POD structs, no C++ types, no callbacks.
  *   - No C++ exception crosses the ABI; every call returns an int status (MIRA_OK == 0) or a

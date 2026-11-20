@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Block segmenter (A1.5 S2): seals/opens a whole block as STREAM segments.
+// Block segmenter: seals/opens a whole block as STREAM segments.
 // Stored block = 64 B extent header || segment 0 || ... (each segment: ciphertext || 16 B tag).
 // Header, AAD and nonce layouts come from proto/extent_header.h; nothing is re-derived here.
 #pragma once
@@ -29,7 +29,7 @@ struct BlockMeta {
   std::uint8_t segment_log2;
 };
 
-// D17 geometry. Offsets are relative to the start of the stored block (header included).
+// Geometry. Offsets are relative to the start of the stored block (header included).
 struct Layout {
   std::uint32_t segments = 0;
   std::uint64_t stored_len = 0;

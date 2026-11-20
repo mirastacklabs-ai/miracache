@@ -68,7 +68,7 @@ jobs:
           {
             echo
             echo "Verify: \`sha256sum -c SHA256SUMS\`, then"
-            echo "\`cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS\`"
+            echo "\`cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS\` (cosign 3.x)"
           } >> build/notes.md
       - name: Create the GitHub Release (or replace the assets of an existing one)
         env:
@@ -129,22 +129,42 @@ jobs:
             beta-*) moving=beta ;;
             ga-*) moving=latest ;;
           esac
+          chan="${TAG%%-*}"
+          # The moving tag follows only the newest release of its channel, so a backfill of an old tag leaves it alone.
+          # Ask the repository itself: the checkout is shallow at the tag and has no other tags.
+          if ! tags=$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${chan}-*"); then
+            echo "::error::could not list the ${chan}-* tags of ${GITHUB_REPOSITORY}"; exit 1
+          fi
+          newest=$(printf '%s\n' "$tags" | sed -n 's|.*refs/tags/||p' | grep -E '^(alpha|beta|ga)-[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
+          if [ -z "$newest" ]; then
+            echo "::error::no ${chan}-* release tag found in ${GITHUB_REPOSITORY}"; exit 1
+          fi
+          if [ "$TAG" = "$newest" ]; then
+            move=true
+          else
+            move=false
+            echo "::notice::$TAG is not the newest $chan release ($newest): :$moving left alone"
+          fi
           : > build-images.md
           for name in miracache-memnode miracache-controller; do
             ref="docker.io/$NAMESPACE/$name"
-            docker tag "$ref:$TAG" "$ref:$moving"
-            docker push "$ref:$moving"
+            if [ "$move" = true ]; then
+              docker tag "$ref:$TAG" "$ref:$moving"
+              docker push "$ref:$moving"
+            fi
             # The registry is authoritative: local RepoDigests omit the docker.io/ prefix, so never grep them.
             digest=$(docker buildx imagetools inspect "$ref:$TAG" --format '{{json .Manifest}}' | jq -r .digest)
             if ! printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
               echo "::error::no valid registry digest for $ref:$TAG (got: '$digest')"; exit 1
             fi
             cosign sign --yes "$ref@$digest"
-            echo "- \`$ref:$TAG\` (also \`:$moving\`), digest \`$digest\`" >> build-images.md
+            also=""
+            if [ "$move" = true ]; then also=" (also \`:$moving\`)"; fi
+            echo "- \`$ref:$TAG\`$also, digest \`$digest\`" >> build-images.md
           done
           {
             echo "### Container images"
             cat build-images.md
             echo
-            echo "Verify: \`cosign verify --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer https://token.actions.githubusercontent.com <image>@<digest>\`"
+            echo "Verify: \`cosign verify --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/' --certificate-oidc-issuer https://token.actions.githubusercontent.com <image>@<digest>\` (cosign 3.x)"
           } >> "$GITHUB_STEP_SUMMARY"

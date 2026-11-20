@@ -38,6 +38,22 @@ controller's `go.mod` asks only for Go 1.22.0 as the language minimum, so your o
 (`go build ./...` inside `controller/`) with no toolchain download. Dependencies are not vendored: the only module is `github.com/BurntSushi/toml`, fetched through
 `GOPROXY` (point it at your mirror if needed).
 
+### Container images
+
+Each release publishes `docker.io/mirastack/miracache-memnode` and `docker.io/mirastack/miracache-controller`
+(linux/amd64), tagged `alpha-X.Y.Z` plus a moving `alpha` that follows the newest alpha release. Pin a release tag in
+production. The images are signed with Sigstore by the release workflow; verify before you run one (cosign 3.x):
+
+```sh
+cosign verify docker.io/mirastack/miracache-memnode:alpha-X.Y.Z \
+  --certificate-identity-regexp '^https://github.com/mirastacklabs-ai/miracache/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+MIRA_IMAGE=docker.io/mirastack/miracache-memnode:alpha-X.Y.Z \
+  MIRA_CONFIG=/etc/miracache/memnode.toml MIRA_PKI_DIR=/etc/miracache/pki deploy/docker/run-memnode.sh
+```
+
+The run scripts and their flags are described in [`deploy/docker/`](../deploy/docker/README.md).
+
 Examples that store and fetch one block through the C++ API, the C ABI and the Python package are in
 [`examples/`](../examples/README.md); the C and C++ ones are built by the same CMake run (`-DMIRACACHE_EXAMPLES=OFF`
 skips them).

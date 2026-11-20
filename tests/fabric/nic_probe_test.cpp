@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Unit tests for the NIC probe verdict and renderers on fixture attribute sets (no hardware).
 // Provenance per fixture: [D] documented (R/13 capability matrix, kernel/rdma-core source),
-// [A] assumed (typical value, to be replaced by a real capture; see tasks A1.3).
+// [A] assumed (typical value, to be replaced by a real capture).
 #include <gtest/gtest.h>
 
 #include <algorithm>

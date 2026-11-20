@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Metrics library (A3.5 M1): golden exposition text, histogram bucket edges, exact totals under
+// Metrics library: golden exposition text, histogram bucket edges, exact totals under
 // concurrency (run under tsan in CI).
 #include <cstdint>
 #include <string>
@@ -84,7 +84,7 @@ TEST(Metrics, DuplicateRegistrationReturnsSameChild) {
   EXPECT_EQ(r.n_families(), 1u);
 }
 
-// H08: a hidden child leaves the exposition but stays valid; registering its labels again brings it back.
+// A hidden child leaves the exposition but stays valid; registering its labels again brings it back.
 TEST(Metrics, HiddenChildIsNotExportedAndComesBackWhenRegisteredAgain) {
   Registry r;
   auto& old_g = r.gauge("t_state", "S.", {{"node_id", "unknown"}});

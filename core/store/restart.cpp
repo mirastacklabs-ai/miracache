@@ -124,7 +124,7 @@ Expected<RestartReport> restart_scan(Arena& arena, SlabAllocator& slab, Store& s
           ScopeId s{};
           std::memcpy(s.data(), b.data() + proto::scr::scope_id, s.size());
           if (p == 0 || std::all_of(s.begin(), s.end(), [](std::uint8_t v) { return v == 0; })) {
-            blind = true;  // H05: reported (blind_record_slots, TornRecord discards); the memory node logs it
+            blind = true;  // reported (blind_record_slots, TornRecord discards); the memory node logs it
             rep.blind_record_slots.push_back(slot);
           } else {
             owners[s].emplace(p, false);  // a not-open owner (an OPEN record for the same pair keeps its true)
@@ -239,7 +239,7 @@ Expected<RestartReport> restart_scan(Arena& arena, SlabAllocator& slab, Store& s
           rep.shared_scopes[si->second].bytes += c.cls;
           continue;
         }
-        if (blind) {  // H05: a torn record with an unreadable owner: nothing on media can be attributed
+        if (blind) {  // a torn record with an unreadable owner: nothing on media can be attributed
           discard(DiscardReason::TornRecord, c);
           continue;
         }

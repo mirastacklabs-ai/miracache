@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// MR manager and put path (A1.4 S4) on SimFabric, including sliced placement and the
+// MR manager and put path on SimFabric, including sliced placement and the
 // iWARP early WRITE CQE (a CQE is not placement).
 #include <array>
 #include <cstring>
@@ -520,7 +520,7 @@ TEST(Put, RandomScenarioKeepsInvariants) {
   }
 }
 
-// ---- S5: doomed puts and the mixed reclaim scenario ----
+// ---- Doomed puts and the mixed reclaim scenario ----
 
 TEST(PutDoomed, DroppedScopeKeepsMrUntilCommitThenAbortedDoomed) {
   Fx fx;
@@ -672,7 +672,7 @@ TEST(PutReclaim, RandomScenarioKeepsInvariants) {
   }
 }
 
-// ---- fix round 1 (Q01, Q02, Q05-Q08, Q16, Q19) --------------------------------------------
+// ---- fix round 1 --------------------------------------------
 
 // Puts a block without writing it: the arena starts zeroed, so the zero-payload CRC matches.
 bool put_zero(Fx& fx, PrincipalId p, int scope, int k, std::size_t len) {
@@ -682,7 +682,7 @@ bool put_zero(Fx& fx, PrincipalId p, int scope, int k, std::size_t len) {
   return res.status == CommitStatus::Ok && res.e.size() == 1 && res.e[0].status == 0;
 }
 
-TEST(PutFix, HugeOrOversizedStoredLenIsMalformedNotRetryable) {  // Q01, Q06
+TEST(PutFix, HugeOrOversizedStoredLenIsMalformedNotRetryable) {
   Fx fx;
   const std::uint64_t run = cfg().run_bytes;
   for (std::uint64_t huge : {~std::uint64_t{0}, ~std::uint64_t{0} - 4095, run + 1}) {
@@ -696,7 +696,7 @@ TEST(PutFix, HugeOrOversizedStoredLenIsMalformedNotRetryable) {  // Q01, Q06
   fx.inv();
 }
 
-// s12 (tpu-sync cross-check C6): a stored_len below the 64 B extent header can never be a valid block, and the restart
+// A stored_len below the 64 B extent header can never be a valid block, and the restart
 // scan discards such a header as corrupt: refused at PUT_BEGIN. 64 passes the door (the node cannot see the extent's own
 // minimum at PUT_BEGIN; a too-short extent fails AEAD at the client's first read and is invalidated).
 TEST(PutFix, StoredLenBelowTheExtentHeaderIsMalformed) {
@@ -711,7 +711,7 @@ TEST(PutFix, StoredLenBelowTheExtentHeaderIsMalformed) {
   fx.inv();
 }
 
-TEST(PutFix, TruncatedSixteenByteParentResolves) {  // Q02
+TEST(PutFix, TruncatedSixteenByteParentResolves) {
   Fx fx;
   PutKey a = Fx::key(1, 0, 4096), b = Fx::key(2, 0, 4096, 1);
   b.parent = {};
@@ -730,7 +730,7 @@ TEST(PutFix, TruncatedSixteenByteParentResolves) {  // Q02
   fx.inv();
 }
 
-TEST(PutFix, SkippedKeyStaysInflightWhenAnotherPutEnds) {  // Q05
+TEST(PutFix, SkippedKeyStaysInflightWhenAnotherPutEnds) {
   for (int how = 0; how < 3; ++how) {  // cancel, commit, endpoint down
     Fx fx;
     const auto ep_a = fx.ep;
@@ -760,7 +760,7 @@ TEST(PutFix, SkippedKeyStaysInflightWhenAnotherPutEnds) {  // Q05
   }
 }
 
-TEST(PutFix, FullArenaEvictsCommittedUnleasedBlocksAndRetriesOnce) {  // Q07
+TEST(PutFix, FullArenaEvictsCommittedUnleasedBlocksAndRetriesOnce) {
   Fx fx;
   const std::size_t run = cfg().run_bytes;
   for (int p = 1; p <= 80; ++p) EXPECT_TRUE(put_zero(fx, p, 1, 1, run)) << "principal " << p;
@@ -768,7 +768,7 @@ TEST(PutFix, FullArenaEvictsCommittedUnleasedBlocksAndRetriesOnce) {  // Q07
   fx.inv();
 }
 
-TEST(PutFix, InflightQuotaPerPrincipalAndPerEndpoint) {  // Q08
+TEST(PutFix, InflightQuotaPerPrincipalAndPerEndpoint) {
   Fx fx;
   const std::size_t run = cfg().run_bytes;  // principal max_bytes = 1 MiB = 4 runs
   for (int i = 1; i <= 4; ++i) ASSERT_EQ(fx.begin(1, 1, {Fx::key(i, 0, run)}).status, BeginStatus::Ok) << i;
@@ -804,7 +804,7 @@ TEST(PutFix, InflightQuotaPerPrincipalAndPerEndpoint) {  // Q08
   fe.inv();
 }
 
-TEST(PutFix, HopelessReservationRefusedWithoutEvicting) {  // T01 (review r3 scenario, scaled 16 MiB -> 1 MiB)
+TEST(PutFix, HopelessReservationRefusedWithoutEvicting) {
   Fx fx;
   const std::size_t blk = 64u << 10;
   for (int k = 1; k <= 6; ++k) ASSERT_TRUE(put_zero(fx, 1, 1, k, blk)) << k;  // 384 KiB committed
@@ -822,7 +822,7 @@ TEST(PutFix, HopelessReservationRefusedWithoutEvicting) {  // T01 (review r3 sce
   fx.inv();
 }
 
-TEST(PutFix, LeasedBytesKeptIncrementally) {  // S01: T01 refusal counts leased blocks without scanning all keys
+TEST(PutFix, LeasedBytesKeptIncrementally) {  // the refusal counts leased blocks without scanning all keys
   Fx fx;
   const std::size_t len = 128u << 10;
   for (int k = 1; k <= 8; ++k) ASSERT_TRUE(put_zero(fx, 1, 1, k, len)) << k;  // 1 MiB: the cap
@@ -838,7 +838,7 @@ TEST(PutFix, LeasedBytesKeptIncrementally) {  // S01: T01 refusal counts leased 
   fx.inv();
 }
 
-TEST(PutFix, ForeignEndpointCannotProbePutIds) {  // Q16
+TEST(PutFix, ForeignEndpointCannotProbePutIds) {
   Fx fx;
   auto ack = fx.begin(1, 1, {Fx::key(1, 0, 4096)});
   const auto second = fx.connect();
@@ -850,7 +850,7 @@ TEST(PutFix, ForeignEndpointCannotProbePutIds) {  // Q16
   EXPECT_EQ(fx.puts->n_puts(), 1u);
 }
 
-TEST(PutFix, TimeoutNotificationCarriesEndpoint) {  // Q19
+TEST(PutFix, TimeoutNotificationCarriesEndpoint) {
   Fx fx;
   auto ack = fx.begin(1, 1, {Fx::key(1, 0, 4096)});
   ASSERT_EQ(ack.status, BeginStatus::Ok);
@@ -874,7 +874,7 @@ int fill_runs_each_with_a_leased_block(Fx& fx) {
   return n;
 }
 
-TEST(PutEvict, NoFreeableRunEvictsNothingAndRefusesLonger) {  // R05
+TEST(PutEvict, NoFreeableRunEvictsNothingAndRefusesLonger) {
   Fx fx;
   const int n = fill_runs_each_with_a_leased_block(fx);
   ASSERT_GE(n, 20);
@@ -891,7 +891,7 @@ TEST(PutEvict, NoFreeableRunEvictsNothingAndRefusesLonger) {  // R05
   fx.inv();
 }
 
-TEST(PutEvict, EvictionNeverDoomsThePutsOwnChain) {  // R06
+TEST(PutEvict, EvictionNeverDoomsThePutsOwnChain) {
   Fx fx;
   const std::size_t run = cfg().run_bytes;
   ASSERT_TRUE(put_zero(fx, 1, 1, 1, run));  // the parent: the LRU-oldest block of the arena
@@ -909,7 +909,7 @@ TEST(PutEvict, EvictionNeverDoomsThePutsOwnChain) {  // R06
   fx.inv();
 }
 
-TEST(PutEvict, EvictionNeverTakesASkippedKeyOfTheBatch) {  // R06
+TEST(PutEvict, EvictionNeverTakesASkippedKeyOfTheBatch) {
   Fx fx;
   const std::size_t run = cfg().run_bytes;
   ASSERT_TRUE(put_zero(fx, 1, 1, 1, run));
@@ -923,7 +923,7 @@ TEST(PutEvict, EvictionNeverTakesASkippedKeyOfTheBatch) {  // R06
   fx.inv();
 }
 
-TEST(PutFix, ZeroPrefixKeyAndKeyEqualToItsParentPrefixAreMalformed) {  // R12
+TEST(PutFix, ZeroPrefixKeyAndKeyEqualToItsParentPrefixAreMalformed) {
   Fx fx;
   PutKey zero = Fx::key(1, 0, 4096);
   zero.key = {};
@@ -941,7 +941,7 @@ TEST(PutFix, ZeroPrefixKeyAndKeyEqualToItsParentPrefixAreMalformed) {  // R12
   fx.inv();
 }
 
-TEST(PutQuota, CommittedPlusInflightStaysWithinMaxBytesByEvictingOwnLeaves) {  // R13
+TEST(PutQuota, CommittedPlusInflightStaysWithinMaxBytesByEvictingOwnLeaves) {
   Fx fx;
   const std::size_t run = cfg().run_bytes;  // principal max_bytes = 4 runs
   ASSERT_TRUE(put_zero(fx, 2, 1, 1, run));  // another principal's block must never be touched

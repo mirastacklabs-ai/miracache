@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// RB1: hash-chained audit log `mira-audit-v1` (RBAC/audit plan decisions 5-7, review P19/P35/Q09).
+// Hash-chained audit log `mira-audit-v1`.
 //
 // Goldens live in proto/golden/audit_v1/. Regenerate them (inside the dev container) with
 //   MIRA_AUDIT_GOLDEN_WRITE=1 miracache_control_tests --gtest_filter='AuditGolden.Regenerate'
 // The regular run checks that the writer reproduces them byte for byte and that the verifier
-// accepts EVERY file there (a glob: MB8b adds go_sample.jsonl and it is checked automatically).
+// accepts EVERY file there (a glob: go_sample.jsonl and any later file are checked automatically).
 #include <gtest/gtest.h>
 
 #include <sys/stat.h>
@@ -402,7 +402,7 @@ TEST(Audit, CrashRightAfterRotationFallsBackToPredecessor) {
   EXPECT_TRUE(r.ok) << r.text();
 }
 
-// X10: recovery scans back to the last line that verifies and drops the rest.
+// Recovery scans back to the last line that verifies and drops the rest.
 TEST(Audit, UnverifiableTailEntriesAreDroppedAndRecovered) {
   TempDir td;
   scenario_basic(td.path);
@@ -424,7 +424,7 @@ TEST(Audit, UnverifiableTailEntriesAreDroppedAndRecovered) {
   EXPECT_EQ(r.entries, 3u);
 }
 
-// X05: the old file is fsynced before the new file exists.
+// The old file is fsynced before the new file exists.
 TEST(Audit, RotationFsyncsOldFileBeforeCreatingNew) {
   TempDir td;
   Clock clk;
@@ -449,7 +449,7 @@ TEST(Audit, RotationFsyncsOldFileBeforeCreatingNew) {
   EXPECT_EQ(calls[0].second, 1u) << "the old file must be fsynced while the new file does not exist yet";
 }
 
-// X09: anchor detects tail truncation, rewrite and oldest-file deletion; result carries the range.
+// Anchor detects tail truncation, rewrite and oldest-file deletion; result carries the range.
 TEST(Audit, AnchorDetectsTruncationRewriteAndDeletion) {
   TempDir td;
   scenario_rotation(td.path);
@@ -488,7 +488,7 @@ TEST(Audit, AnchorDetectsTruncationRewriteAndDeletion) {
   EXPECT_FALSE(audit_verify_paths(files, &wrong).ok);
 }
 
-// X17a: a failed fsync after the line was written returns ok; sync() reports and retries.
+// A failed fsync after the line was written returns ok; sync() reports and retries.
 TEST(Audit, FsyncFailureKeepsEntryAndStaysDirty) {
   TempDir td;
   Clock clk;
@@ -510,7 +510,7 @@ TEST(Audit, FsyncFailureKeepsEntryAndStaysDirty) {
   EXPECT_TRUE(audit_verify_paths(sorted_names(td.path)).ok);
 }
 
-// X17b: a short write whose rollback fails reopens through recovery on the next append.
+// A short write whose rollback fails reopens through recovery on the next append.
 TEST(Audit, FailedRollbackReopensThroughRecovery) {
   TempDir td;
   Clock clk;
@@ -542,7 +542,7 @@ TEST(Audit, FailedRollbackReopensThroughRecovery) {
   EXPECT_EQ(r.entries, 3u);
 }
 
-// X17c: one body build (one clock read) per append without rotation.
+// One body build (one clock read) per append without rotation.
 TEST(Audit, OneClockReadPerAppend) {
   TempDir td;
   int reads = 0;
@@ -557,7 +557,7 @@ TEST(Audit, OneClockReadPerAppend) {
   EXPECT_EQ(reads - before, 5);
 }
 
-// X18: the verifier type-checks string fields and quotes; a second writer is refused.
+// The verifier type-checks string fields and quotes; a second writer is refused.
 TEST(Audit, VerifierTypeChecksFields) {
   TempDir td;
   scenario_basic(td.path);
@@ -602,7 +602,7 @@ TEST(Audit, SecondWriterOnSameDirIsRefused) {
   EXPECT_EQ(b.error().code, miracache::ErrorCode::Busy);
 }
 
-// X20(d): batching is observable through the fsync hook.
+// Batching is observable through the fsync hook.
 TEST(Audit, BatchedFsyncSkipsWithinIntervalAndSyncFlushes) {
   TempDir td;
   Clock clk;  // +250 ms per entry
@@ -751,7 +751,7 @@ TEST(AuditCoalescer, FloodProducesBoundedLog) {
   EXPECT_NE(slurp(td.path + "/audit-1.jsonl").find("\"count\":100000,"), std::string::npos);
 }
 
-// ---- goldens (Q09: every file) ----------------------------------------------------------------
+// ---- goldens (every file) ----------------------------------------------------------------
 
 TEST(AuditGolden, Regenerate) {
   if (!std::getenv("MIRA_AUDIT_GOLDEN_WRITE")) GTEST_SKIP() << "set MIRA_AUDIT_GOLDEN_WRITE=1 to rewrite the goldens";
@@ -772,7 +772,7 @@ TEST(AuditGolden, WriterReproducesGoldens) {
   }
 }
 
-// V13: the C++ writer, fed the six entries the Go writer used for go_sample.jsonl (controller/audit/audit_test.go
+// The C++ writer, fed the six entries the Go writer used for go_sample.jsonl (controller/audit/audit_test.go
 // sampleEntries), produces the same bytes: both directions are byte-exact, not only "the verifier accepts the file".
 TEST(AuditGolden, CppWriterReproducesGoSample) {
   TempDir td;
@@ -811,7 +811,7 @@ TEST(AuditGolden, CppWriterReproducesGoSample) {
 
 TEST(AuditGolden, VerifyEveryFile) {
   // Each directory holding audit-<seq>.jsonl files is one chain; every other *.jsonl (basic,
-  // controller, and MB8b's go_sample.jsonl) is a chain of its own.
+  // controller, and go_sample.jsonl) is a chain of its own.
   std::size_t chains = 0, files = 0;
   bool saw_go_style_escape = false;
   std::vector<fs::path> dirs{golden_root()};

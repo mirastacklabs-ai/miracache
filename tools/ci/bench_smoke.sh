@@ -2,7 +2,7 @@
 # End-to-end pipeline smoke (not numbers): a real mira-memnode on a soft-RDMA device, plus the
 # agentbench KV-tier stage driving miracache.bench.agentbench_backend.MiracacheBackend over the
 # real libmiracache (wire mode, mTLS tickets). $0: local soft-RDMA only.
-#   MIRA_EXTRA_RO_MOUNT=$HOME/repos/github/private/agentbench:/agentbench \
+#   MIRA_EXTRA_RO_MOUNT=/path/to/agentbench:/agentbench \
 #     tools/dev/run.sh --rdma tools/ci/bench_smoke.sh [device]        (default device rxe0)
 # agentbench source is found via AGENTBENCH_SRC (default /agentbench, the read-only mount).
 # Steps: build memnode + libmiracache (dev preset) -> lab certs + secret -> memnode up with

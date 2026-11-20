@@ -1,4 +1,4 @@
-"""A3.5 M2: Client.metrics()/metrics_dict(), mira_poll POLL_ERROR handling, adapter counters and
+"""Client.metrics()/metrics_dict(), mira_poll POLL_ERROR handling, adapter counters and
 the adapter /metrics endpoint. The fake-lib and fake-client tests need no native library; the
 real-lib test skips without MIRACACHE_LIB."""
 import ctypes
@@ -141,7 +141,7 @@ class TestClientMetrics(FakeLibCase):
 
 class TestScrapeIsOffTheDataPath(FakeLibCase):
     def test_metrics_does_not_wait_for_the_data_path_lock(self):
-        # M01: a scrape used to take Client._mu, so a slow data-path call stalled the exporter
+        # A scrape used to take Client._mu, so a slow data-path call stalled the exporter
         # (and the exporter stalled the engine's calls).
         c = self.install(FakeLib())
         out = []
@@ -165,7 +165,7 @@ class TestScrapeIsOffTheDataPath(FakeLibCase):
 
 class TestParkedLookupAnswers(FakeLibCase):
     def test_unconsumed_answers_are_dropped_after_a_few_seconds(self):
-        # P01: an engine that gave up on a request never re-asks; its parked answer must not stay.
+        # An engine that gave up on a request never re-asks; its parked answer must not stay.
         lib = FakeLib(status_need=2)
         c = self.install(lib)
         t = [100.0]
@@ -409,7 +409,7 @@ class TestHttpEndpoint(unittest.TestCase):
             self.assertIsNone(start_metrics_server({"metrics_port": port}, 0, lambda: ""))
 
     def test_idle_connections_are_capped_and_never_block_a_scrape(self):
-        # M01: 10 peers connect and say nothing. Handler threads stay <= the cap (extra
+        # 10 peers connect and say nothing. Handler threads stay <= the cap (extra
         # connections get 503 and are closed), idle ones time out after 5 s, and a scrape
         # succeeds within 6 s.
         srv = MetricsServer("127.0.0.1", 0, lambda: "a 1\n")

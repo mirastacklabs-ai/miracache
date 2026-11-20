@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SC1: the background scrubber (spec 6.5, review P28). A cursor walks the committed blocks in gen_slot order, and for
+// The background scrubber (spec 6.5). A cursor walks the committed blocks in gen_slot order, and for
 // each one recomputes the CRC32C of the stored extent and compares it with the header's payload_crc; a mismatch drops
 // the block and its subtree through the INVALIDATE path.
 //

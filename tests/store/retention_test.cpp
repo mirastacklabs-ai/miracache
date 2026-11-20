@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// QT1: retention (max_ttl, reopen of an expired scope), the one eviction budget (bytes per second and blocks per turn),
-// pressure watermarks, incremental drop_before by opened_at, and the per-call bound in commit_block (Y17).
+// Retention (max_ttl, reopen of an expired scope), the one eviction budget (bytes per second and blocks per turn),
+// pressure watermarks, incremental drop_before by opened_at, and the per-call bound in commit_block.
 #include <memory>
 #include <vector>
 
@@ -334,7 +334,7 @@ TEST(Pressure, MetricsAreSetEachTick) {
   EXPECT_EQ(occ.value(), 0);
 }
 
-// Y17/P20: one commit_block never evicts more than 64 blocks, even from one huge victim scope.
+// One commit_block never evicts more than 64 blocks, even from one huge victim scope.
 TEST(CommitBlock, VictimScopeIsDrainedBlockGranularly) {
   Fx f;
   PrincipalPolicy pol = cfg().principal_default;
@@ -360,7 +360,7 @@ TEST(CommitBlock, VictimScopeIsDrainedBlockGranularly) {
   f.inv();
 }
 
-// V17: a key inserted into a scope that a bounded eviction is draining must reset the non-leaf run, and the drain
+// A key inserted into a scope that a bounded eviction is draining must reset the non-leaf run, and the drain
 // still frees leaf first (check_invariants proves no block is ever left without its parent).
 TEST(CommitBlock, V17InsertIntoAScopeBeingDrainedStillFreesLeafFirst) {
   Fx f;

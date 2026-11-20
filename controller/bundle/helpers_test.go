@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Shared test seeds (MB2 uses the same): publish key seed bytes 0x01..0x20, security key seed
+// Shared test seeds (the bundle goldens use the same): publish key seed bytes 0x01..0x20, security key seed
 // bytes 0x21..0x40. A third key (0x41..0x60) holds both roles.
 func seedFrom(first byte) []byte {
 	s := make([]byte, 32)

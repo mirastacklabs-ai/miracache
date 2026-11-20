@@ -19,10 +19,10 @@ import (
 	"miracache/controller/store"
 )
 
-// ReconcilePeriod is how often the reconcile loop runs (decision 12): every 5 s.
+// ReconcilePeriod is how often the reconcile loop runs: every 5 s.
 const ReconcilePeriod = 5 * time.Second
 
-// Defaults (decision 10 and 12).
+// Defaults.
 const (
 	DefaultAckWait   = 2000 * time.Millisecond // publish.ack_wait_ms
 	DefaultClockSkew = 300 * time.Second       // publish.clock_skew_s
@@ -49,7 +49,7 @@ type Config struct {
 	Store       *store.Store
 	Trust       *bundle.TrustKeys
 	PublishKey  ed25519.PrivateKey // holds the publish role in Trust
-	SecurityKey ed25519.PrivateKey // holds the security role in Trust (v1: online, decision 12 / Q13)
+	SecurityKey ed25519.PrivateKey // holds the security role in Trust (v1: online)
 	Client      *NodeClient
 	Author      string
 	AckWait     time.Duration // per node call (identity, dry run, push); 0 = DefaultAckWait
@@ -69,7 +69,7 @@ type Change struct {
 	// (used by the reconcile republish; they are caught up later).
 	TolerateUnreachable bool
 	// AllowIDChange lists admin addresses whose reported node ID may replace the one in the current
-	// bundle (a granted replacement, U2-10). For every other address a changed ID is not copied.
+	// bundle (a granted replacement). For every other address a changed ID is not copied.
 	AllowIDChange map[string]bool
 }
 
@@ -112,7 +112,7 @@ func New(cfg Config) *Publisher {
 // Stopped reports whether publishing was stopped by a sec reject.
 func (p *Publisher) Stopped() bool { return p.stopped.Load() }
 
-// Visible returns the envelope that became client-visible (decision 10 step 6): the last publish,
+// Visible returns the envelope that became client-visible: the last publish,
 // after its ack wait.
 func (p *Publisher) Visible() []byte {
 	p.mu.Lock()
@@ -120,7 +120,7 @@ func (p *Publisher) Visible() []byte {
 	return append([]byte(nil), p.visible...)
 }
 
-// nodeAttrs are the log attributes of a memory node: ID, hostname and IP (decision 15).
+// nodeAttrs are the log attributes of a memory node: ID, hostname and IP.
 func (p *Publisher) nodeAttrs(admin string) []any {
 	id, ok := p.seen[admin]
 	if !ok {
@@ -179,7 +179,7 @@ func (p *Publisher) push(ctx context.Context, admin string, env []byte, dryRun b
 	return p.cfg.Client.Push(cctx, admin, env, dryRun)
 }
 
-// stopForSec stops publishing and logs the remedy (Q06): the store is behind the cluster's
+// stopForSec stops publishing and logs the remedy: the store is behind the cluster's
 // security state. highest is the admin address of the node with the highest sec_generation.
 func (p *Publisher) stopForSec(rejecter string, highest string, err error) error {
 	p.stopped.Store(true)
@@ -268,7 +268,7 @@ func parseConfig(src string) (map[string]any, error) {
 	return doc.Config, nil
 }
 
-// Publish builds, dry-runs, signs and pushes the next bundle (decisions 10 and 12).
+// Publish builds, dry-runs, signs and pushes the next bundle.
 func (p *Publisher) Publish(ctx context.Context, ch Change) (*Result, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -283,8 +283,8 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 	if err != nil {
 		return nil, err
 	}
-	// Y13: finish or discard an earlier publish first. An unresolved record (a node unreachable, no
-	// reachable node holding it) is superseded by this publish (Z03): it is replaced by this publish's
+	// Finish or discard an earlier publish first. An unresolved record (a node unreachable, no
+	// reachable node holding it) is superseded by this publish: it is replaced by this publish's
 	// intent record, and this publish moves above its generation, sec_generation and epoch, so a node
 	// that later returns holding it is simply behind (a re-push) and never sees a number reused.
 	var floor *pendingFloor
@@ -342,7 +342,7 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 		live = append(live, a)
 	}
 
-	// 2. Next generation (P11) and next sec_generation (Q06).
+	// 2. Next generation and next sec_generation.
 	base := cur.Generation
 	baseSec := cur.SecGeneration
 	baseEpoch := uint64(0)
@@ -392,13 +392,13 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 		}
 	}
 	if secChanged {
-		// P03: every new sec keeps at least one security-admin, and only known roles.
+		// Every new sec keeps at least one security-admin, and only known roles.
 		if err := rbac.CheckTransition(prevRBAC, next.RBAC); err != nil {
 			return nil, err
 		}
 	}
 	now := p.cfg.Now().UTC()
-	// H09: only a drop_before this edit introduces or changes can be the caller's fault. A stored value that is
+	// Only a drop_before this edit introduces or changes can be the caller's fault. A stored value that is
 	// unchanged and now looks "in the future" (the controller clock stepped back) is accepted with a warning, so
 	// the cluster stays publishable.
 	edited := &bundle.Sec{SecGeneration: sec.SecGeneration, RBAC: sec.RBAC, Principals: make([]bundle.Principal, 0, len(sec.Principals))}
@@ -426,7 +426,7 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 			rails, rerr := railsOf(id, d.Admin)
 			switch {
 			case rerr == nil && idChangeHeld(lastBody, d.Admin, id.NodeID, ch.AllowIDChange):
-				// U2-10: the address reports another ID than the bundle has and nobody granted the
+				// The address reports another ID than the bundle has and nobody granted the
 				// replacement (the failure detector holds it under static stability): keep the old entry.
 				p.logNode(slog.LevelWarn, d.Admin, "node reports a new ID without a granted replacement; keeping its entry from the current bundle", "reported_id", id.NodeID)
 				useOld = true
@@ -461,7 +461,7 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 	case lastBody == nil:
 		m.Epoch, m.PreviousEpoch = baseEpoch+1, baseEpoch
 	case !equalViews(curView, viewOf(lastBody.Membership.Nodes)) || baseEpoch > lastBody.Membership.Epoch:
-		// Y09: a node above the last body's epoch (a second writer) names another view at that
+		// A node above the last body's epoch (a second writer) names another view at that
 		// number, so an unchanged view still moves to baseEpoch + 1.
 		m.Epoch, m.PreviousEpoch = baseEpoch+1, baseEpoch
 		for _, v := range viewOf(lastBody.Membership.Nodes) {
@@ -510,8 +510,8 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 	}
 	highest, _ := highestSec(ids, joinAdmin)
 
-	// 5. Dry run against every live node before anything is published (P16). A refusal by the
-	// joining node aborts the join only (Y14); a sec reject from any other node stops publishing.
+	// 5. Dry run against every live node before anything is published. A refusal by the
+	// joining node aborts the join only; a sec reject from any other node stops publishing.
 	dry := fanout(live, func(a string) error { return p.push(ctx, a, raw, true) })
 	for _, a := range live {
 		if err := dry[a]; err != nil {
@@ -527,8 +527,8 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 		}
 	}
 
-	// 6. The state the commit writes, and the intent record written before anything is pushed (Y13).
-	// Nodes the last body had and this one does not still get the removing bundle (Y10).
+	// 6. The state the commit writes, and the intent record written before anything is pushed.
+	// Nodes the last body had and this one does not still get the removing bundle.
 	inNext := map[string]bool{}
 	for _, d := range next.Nodes {
 		inNext[d.Admin] = true
@@ -561,7 +561,7 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 		return nil, fmt.Errorf("writing the intent record: %w", err)
 	}
 	clearPending := func() {
-		// Restores the store as loaded: no record, or the unresolved one this publish superseded (Z03).
+		// Restores the store as loaded: no record, or the unresolved one this publish superseded.
 		if err := p.cfg.Store.Commit(cur.Generation, cur.Clone()); err != nil {
 			p.cfg.Log.Error("could not clear the intent record", "err", err)
 		}
@@ -569,7 +569,7 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 	commit := func() error { return p.cfg.Store.Commit(cur.Generation, final) }
 	res := &Result{Generation: gen, SecGeneration: sec.SecGeneration, Epoch: m.Epoch, Envelope: raw}
 
-	// 7. Join: the NEW node first; without its ack the join aborts (Q05). A sec reject from the new
+	// 7. Join: the NEW node first; without its ack the join aborts. A sec reject from the new
 	// node aborts the join only: the new node's state says nothing about the cluster's.
 	rest := live
 	if joinAdmin != "" {
@@ -642,14 +642,14 @@ func (p *Publisher) publishLocked(ctx context.Context, ch Change) (*Result, erro
 }
 
 // pendingFloor is what an unresolved intent record may have reached on an unreachable node: the
-// numbers the next publish must move above (Z03).
+// numbers the next publish must move above.
 type pendingFloor struct {
 	gen, sec, epoch uint64
 }
 
-// resolvePending settles the intent record of an earlier publish (Y13). If a node holds exactly the
+// resolvePending settles the intent record of an earlier publish. If a node holds exactly the
 // pushed body, the push happened: the commit is completed (a store error other than a CAS conflict
-// keeps the record and is returned, Z07). If every node was reached and none holds it, the record is
+// keeps the record and is returned). If every node was reached and none holds it, the record is
 // discarded. Otherwise (a node unreachable) the record stays, st is unchanged, and the floor of the
 // record is returned: reconcile carries on without completing it, and the next publish supersedes it.
 func (p *Publisher) resolvePending(ctx context.Context, st *store.State) (*pendingFloor, error) {
@@ -692,7 +692,7 @@ func (p *Publisher) resolvePending(ctx context.Context, st *store.State) (*pendi
 			}
 			p.cfg.Log.Error("ALERT: intent record could not be completed and was discarded", "generation", pd.Generation, "err", err)
 		default:
-			// Z07: a node acked this body; discarding the record would revert an acked change. Keep it.
+			// A node acked this body; discarding the record would revert an acked change. Keep it.
 			p.logNode(slog.LevelError, held, "ALERT: could not complete the store commit of an acked publish; the intent record is kept", "generation", pd.Generation, "err", err)
 			return nil, fmt.Errorf("completing intent record %d: %w", pd.Generation, err)
 		}

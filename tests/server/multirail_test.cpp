@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// RL1: memory-node rails over the simulator. Two devices x two rails: one listener per rail, rkeys per device
+// memory-node rails over the simulator. Two devices x two rails: one listener per rail, rkeys per device
 // (SEG_TABLE carries one per rail), a segment readable only when registered on every device, a put on the ingest
 // rail it began on, one session across rails, a flushed rail that leaves the session and its leases alone, and real
 // per-rail health (port state, listener, fatal events) in the server snapshot and in GET /v1/identity.
@@ -553,7 +553,7 @@ TEST(RailHealth, TickRefreshesAndMetricsFollow) {
   EXPECT_NE(t.find("miracache_qp_active{node_id=\"9\",class=\"ingest\",rail=\"3\"} 0"), std::string::npos);
 }
 
-// Q2: a fetch rkey reaches the data runs only. A valid rkey on either device must be refused for the superblock,
+// A fetch rkey reaches the data runs only. A valid rkey on either device must be refused for the superblock,
 // segment meta, run table, header table, the scope region and anything past the data (incl. segment 0's reserved tail
 // runs), and a read that straddles the start or end of the data; block bytes read back exactly.
 void check_fetch_mr_bounds(std::uint32_t scope_records, bool expect_reserved) {

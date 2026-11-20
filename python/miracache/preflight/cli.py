@@ -28,7 +28,7 @@ def _common(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--root", default="/", help="filesystem root for node facts")
     ap.add_argument("--no-node-facts", action="store_true")
     ap.add_argument("--min-memlock-mib", type=int, default=1024)
-    ap.add_argument("--nic-report", help="mira-nicprobe --json output (A1.3 hook)")
+    ap.add_argument("--nic-report", help="mira-nicprobe --json output")
     ap.add_argument("--json", action="store_true")
 
 

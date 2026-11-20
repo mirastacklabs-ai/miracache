@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR4 (P39): client credential and secret rotation. [tls] cert/key/ca files are re-read by the stat check and new
+// Client credential and secret rotation. [tls] cert/key/ca files are re-read by the stat check and new
 // HTTPS connections use the new certificate; the secret file's new `current` kver reaches the provider. Any failure
 // (non-atomic cert/key pair, half-written file, wrong mode) keeps the OLD material, is counted, and is retried.
 // Certs come from deploy/examples/lab-certs.sh into a temp dir. Also run under the tsan preset (reload thread vs. traffic).

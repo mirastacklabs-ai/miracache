@@ -13,7 +13,7 @@ import (
 	"miracache/controller/store"
 )
 
-// V01: a lasting partition erodes nothing beyond the budget, however long it lasts.
+// A lasting partition erodes nothing beyond the budget, however long it lasts.
 func TestLastingPartitionRemovesAtMostTheBudget(t *testing.T) {
 	r := newRig(t, hosts(6), "", nil) // base 6: budget 2
 	r.tick(0)
@@ -32,7 +32,7 @@ func TestLastingPartitionRemovesAtMostTheBudget(t *testing.T) {
 	}
 }
 
-// V01: with two nodes or fewer nothing is automatic; the last member can never be removed.
+// With two nodes or fewer nothing is automatic; the last member can never be removed.
 func TestSmallClusterNeedsConfirmAndLastMemberStays(t *testing.T) {
 	r := newRig(t, hosts(2), "", nil)
 	r.tick(0)
@@ -55,7 +55,7 @@ func TestSmallClusterNeedsConfirmAndLastMemberStays(t *testing.T) {
 	}
 }
 
-// V18: a replacement counts in the stability window.
+// A replacement counts in the stability window.
 func TestReplacementsCountAgainstBudget(t *testing.T) {
 	r := newRig(t, hosts(6), "", nil) // budget 2
 	r.tick(0)
@@ -78,7 +78,7 @@ func TestReplacementsCountAgainstBudget(t *testing.T) {
 	}
 }
 
-// ---- V02: automatic actions are audited ---------------------------------------------------------------
+// ---- Automatic actions are audited ---------------------------------------------------------------
 
 func auditRig(t *testing.T, n int, cfgTOML string) (*rig, string) {
 	dir := t.TempDir()
@@ -179,7 +179,7 @@ func TestAutomaticDrainReplacementAndAEADAreAudited(t *testing.T) {
 	}
 }
 
-// ---- V05: operator action between decision and publish wins -------------------------------------------
+// ---- Operator action between decision and publish wins -------------------------------------------
 
 type racePub struct {
 	Publisher
@@ -262,7 +262,7 @@ func TestFailureRemovalRechecksStateInsideTheEdit(t *testing.T) {
 	}
 }
 
-// ---- V16: one cap policy --------------------------------------------------------------------------------
+// ---- One cap policy --------------------------------------------------------------------------------
 
 func TestReportCapPolicy(t *testing.T) {
 	r := newRig(t, hosts(2), "", func(c *Config) { c.MaxReporters = 2 })

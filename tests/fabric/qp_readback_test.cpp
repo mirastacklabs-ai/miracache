@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// B11: QP attribute readback compare/format/once/metrics logic, no hardware.
+// QP attribute readback compare/format/once/metrics logic, no hardware.
 #include "fabric/verbs_cm/qp_readback.h"
 
 #include <gtest/gtest.h>
@@ -143,7 +143,7 @@ TEST(QpReadback, ReportBeforeBindIsPublishedAtBindOnce) {
   r.set_metrics(nullptr, {});
 }
 
-// F3 (K07): claim -> set_metrics -> report. The bind between claim and report must not publish zeros.
+// Claim -> set_metrics -> report. The bind between claim and report must not publish zeros.
 TEST(QpReadback, ClaimBindReportPublishesRealValues) {
   Capture cap;
   telemetry::Registry reg;
@@ -165,7 +165,7 @@ TEST(QpReadback, ClaimBindReportPublishesRealValues) {
   r.set_metrics(nullptr, {});
 }
 
-// F3 (K07): report -> set_metrics (the order that always worked) stays correct.
+// Report -> set_metrics (the order that always worked) stays correct.
 TEST(QpReadback, ReportThenBindPublishesRealValues) {
   Capture cap;
   telemetry::Registry reg;
@@ -180,7 +180,7 @@ TEST(QpReadback, ReportThenBindPublishesRealValues) {
   r.set_metrics(nullptr, {});
 }
 
-// F3 (K08): the labels change when the client learns the node ID: the "unknown" series is hidden, the new one carries
+// The labels change when the client learns the node ID: the "unknown" series is hidden, the new one carries
 // the real values and the mismatch counts (once, not doubled).
 TEST(QpReadback, RebindWithLearnedIdHidesUnknownSeries) {
   Capture cap;
@@ -208,7 +208,7 @@ TEST(QpReadback, RebindWithLearnedIdHidesUnknownSeries) {
   r.set_metrics(nullptr, {});
 }
 
-// F3 (K19): the passive side leaves retry_count unset (its retry_cnt comes from the client's REQ): no mismatch.
+// The passive side leaves retry_count unset (its retry_cnt comes from the client's REQ): no mismatch.
 TEST(QpReadback, PassiveRetryCountNotCompared) {
   QpExpect passive;  // retry_count unset, as VerbsCmFabric::readback_qp builds it for the passive side
   passive.rnr_retry = 6;
@@ -218,7 +218,7 @@ TEST(QpReadback, PassiveRetryCountNotCompared) {
   EXPECT_EQ(qp_compare(QpAttrs{0, 1, 6, 0, 4096}, active).size(), 1u);
 }
 
-// L06: a report made while the identity says "unknown" is logged again, once, when the node ID and hostname are learned.
+// A report made while the identity says "unknown" is logged again, once, when the node ID and hostname are learned.
 TEST(QpReadback, UnknownIdentityLineIsRepeatedOnceWithTheRealOne) {
   Capture cap;
   telemetry::Registry reg;
@@ -239,7 +239,7 @@ TEST(QpReadback, UnknownIdentityLineIsRepeatedOnceWithTheRealOne) {
   r.set_metrics(nullptr, {});
 }
 
-// L06: with the identity known at readback time there is one line and no repeat on a later bind.
+// With the identity known at readback time there is one line and no repeat on a later bind.
 TEST(QpReadback, KnownIdentityLineIsNotRepeated) {
   Capture cap;
   telemetry::Registry reg;
@@ -252,7 +252,7 @@ TEST(QpReadback, KnownIdentityLineIsNotRepeated) {
   EXPECT_EQ(count(cap.text(), "level=info"), 1u) << cap.text();
 }
 
-// L06: the failure WARN is repeated too, and a relabel to another unknown does not repeat anything.
+// The failure WARN is repeated too, and a relabel to another unknown does not repeat anything.
 TEST(QpReadback, QueryFailureWarnRepeatedWhenIdentityLearned) {
   Capture cap;
   QpReadback r;
@@ -265,7 +265,7 @@ TEST(QpReadback, QueryFailureWarnRepeatedWhenIdentityLearned) {
   EXPECT_EQ(count(cap.text(), "node_id=7"), 1u);
 }
 
-// L07 (review s9b): labels A -> B -> A give back A's (hidden) counter series; it is shown again with the count it had,
+// Labels A -> B -> A give back A's (hidden) counter series; it is shown again with the count it had,
 // not counted a second time. Holds for the mismatch counter and the query-failure counter.
 TEST(QpReadback, RelabelBackToEarlierLabelsDoesNotCountTwice) {
   Capture cap;

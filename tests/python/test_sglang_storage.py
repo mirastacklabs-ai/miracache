@@ -137,7 +137,7 @@ class RegionClient(FakeClient):
         return self._op("put", scope, keys, offsets, lengths, region)
 
     def store(self, scope, keys, parents=None, positions=None, offsets=None, lengths=None, region=None):
-        """Legacy path (pre-R04 adapters used it); the real client's store has no deadline."""
+        """Legacy path (older adapters used it); the real client's store has no deadline."""
         self._maybe_raise("store")
         return StoreReply("OK", self.put(scope, keys, parents, positions, offsets, 0, lengths, region))
 
@@ -214,7 +214,7 @@ def zero(pool, page):
 
 class TestRoundTrip(unittest.TestCase):
     def test_every_layout_roundtrips_all_buffers(self):
-        """research/19 row 10b + R10: K and V (and every layer / kv-split buffer) survive."""
+        """K and V (and every layer / kv-split buffer) survive."""
         for name, mk, bpp in all_layouts(PS, 8):
             with self.subTest(name):
                 s, c, pool = make(pool=mk())
@@ -232,7 +232,7 @@ class TestRoundTrip(unittest.TestCase):
                 self.assertEqual(c.region_calls[0][2], [s.block_bytes] * 4)
 
     def test_kv_split_buffers_have_different_sizes(self):
-        """R10: page_first_kv_split returns k, v, index_k, scale per page with distinct sizes."""
+        """page_first_kv_split returns k, v, index_k, scale per page with distinct sizes."""
         pool = FakeMLAKVSplitHostPool(PS, 8)
         _, sizes = pool.get_page_buffer_meta(pool.tokens(0))
         self.assertEqual(len(set(sizes)), 4)
@@ -313,7 +313,7 @@ class TestRoundTrip(unittest.TestCase):
 
 
 class TestStagingSafety(unittest.TestCase):
-    """R04: a region an op may still touch is never reused."""
+    """A region an op may still touch is never reused."""
 
     def test_every_op_has_a_deadline_shorter_than_the_wait(self):
         s, c, pool = make()
@@ -400,7 +400,7 @@ class TestStagingSafety(unittest.TestCase):
 
 
 class TestCompletions(unittest.TestCase):
-    """R20."""
+    """Completions: a same-poll released event is not dropped."""
 
     def test_same_poll_released_event_is_not_dropped(self):
         s, c, pool = make_timed()
@@ -437,7 +437,7 @@ class TestCompletions(unittest.TestCase):
 
 class TestPrefixKeys(unittest.TestCase):
     def test_none_or_empty_prefix_is_root_batch(self):
-        """research/19 row 11: None (hybrid controller, empty prefix) is a root batch, not a miss."""
+        """None (hybrid controller, empty prefix) is a root batch, not a miss."""
         s, c, pool = make()
         fill(pool, [0, 1])
         for ex in (HiCacheStorageExtraInfo(), None, info([])):
@@ -449,7 +449,7 @@ class TestPrefixKeys(unittest.TestCase):
             self.assertEqual(s.batch_get_v1(KEYS[:2], pool.indices([2, 3]), ex), [True, True])
 
     def test_root_batches_counted_and_all_root_warns_once(self):
-        """R11: a 100% root-batch rate (SGLang flag off) is visible at runtime."""
+        """A 100% root-batch rate (SGLang flag off) is visible at runtime."""
         s, c, pool = make()
         s.batch_set_v1(["c1"], pool.indices([0]), info(["c0"]))
         self.assertEqual((s.counters["batches"], s.counters.get("root_batches", 0)), (1, 0))
@@ -492,7 +492,7 @@ def dtype_pool(dtype="torch.bfloat16", **kw):
 
 
 class TestNamespaceGolden(unittest.TestCase):
-    """The SGLang ns: which fields (R19) and the exact bytes. A change here is a deliberate cold
+    """The SGLang ns: which fields and the exact bytes. A change here is a deliberate cold
     cache for every SGLang deployment (all scope IDs and keys change)."""
 
     def make_v(self, version="0.5.23", pool=None, **kw):
@@ -586,7 +586,7 @@ class LayerMajorPool(FakeMHAHostPool):
 
 
 class TestLayoutProbe(unittest.TestCase):
-    """R10."""
+    """Layout probe: a non-page-major pool is refused."""
 
     def test_non_page_major_pool_refused(self):
         s = MiraHiCacheStorage(cfg(), {}, client=RegionClient())
@@ -636,7 +636,7 @@ class FakeOpenClient:
 
 
 class TestClientConfig(unittest.TestCase):
-    """R03."""
+    """Client configuration: miracache.config is required, unknown keys are refused, config and secret_file reach Client.open."""
 
     def setUp(self):
         FakeOpenClient.calls = []
@@ -672,7 +672,7 @@ class TestClientConfig(unittest.TestCase):
 
 class TestRefusals(unittest.TestCase):
     def test_constructor_is_the_real_shape_without_host_pool(self):
-        """research/19 row 7b: (storage_config, kwargs={}) works with no pool and no page_size."""
+        """(storage_config, kwargs={}) works with no pool and no page_size."""
         s = MiraHiCacheStorage(cfg(), {}, client=RegionClient())
         self.assertFalse(s.ready)
         self.assertEqual(s.batch_exists(KEYS, info([])), 0)  # before registration: a miss, no raise
@@ -686,11 +686,11 @@ class TestRefusals(unittest.TestCase):
             MiraHiCacheStorage(cfg(pp_size=2), {}, client=RegionClient())
 
     def test_no_miracache_pp_size_fallback(self):
-        """research/19 row 9b: pp_size is always on the real config; the old extra key is ignored."""
+        """pp_size is always on the real config; the old extra key is ignored."""
         MiraHiCacheStorage(cfg(extra={"miracache_pp_size": 4}), {}, client=RegionClient())
 
     def test_expect_prefix_keys_flag_required(self):
-        """research/19 row 11: our own flag; message names BOTH flags."""
+        """Our own flag; message names BOTH flags."""
         with self.assertRaises(MiraRefusal) as cm:
             MiraHiCacheStorage(cfg(flag=False), {}, client=RegionClient())
         self.assertIn("miracache_expect_prefix_keys", str(cm.exception))
@@ -700,7 +700,7 @@ class TestRefusals(unittest.TestCase):
                                client=RegionClient())
 
     def test_small_page_refused_at_registration_not_init(self):
-        """research/19 row 7b/10a: the page-size refusal moved to register_mem_pool_host."""
+        """The page-size refusal moved to register_mem_pool_host."""
         s = MiraHiCacheStorage(cfg(), {}, client=RegionClient())
         with self.assertRaisesRegex(MiraRefusal, "page-size"):
             s.register_mem_pool_host(FakeMHAHostPool(8))
@@ -791,7 +791,7 @@ class TestNeverRaise(unittest.TestCase):
 
 
 class TestSignatures(unittest.TestCase):
-    """Every adapter method name/param/return type against research/19 (upstream names)."""
+    """Every adapter method name/param/return type against the upstream names."""
 
     def test_param_names_match_upstream(self):
         for name, (params, _ret) in REAL_SIGNATURES.items():
@@ -799,7 +799,7 @@ class TestSignatures(unittest.TestCase):
             self.assertEqual(ours, params, name)
 
     def test_v2_names_and_types(self):
-        """research/19 row 8e."""
+        """Method names, parameters and return types match upstream."""
         s, _, _ = make()
         r = s.batch_exists_v2(["a", "b"], [PoolTransfer("mamba", keys=["x"])], info([]))
         self.assertEqual(type(r).__name__, PoolTransferResult.__name__)
@@ -820,7 +820,7 @@ class TestSignatures(unittest.TestCase):
         self.assertIsNone(s.get("k"))
 
     def test_fake_config_has_all_upstream_fields(self):
-        """research/19 row 9a."""
+        """The fake config has every upstream field."""
         want = ["tp_rank", "tp_size", "pp_rank", "pp_size", "attn_cp_rank", "attn_cp_size",
                 "is_mla_model", "enable_storage_metrics", "is_page_first_layout", "model_name",
                 "tp_lcm_size", "should_split_heads", "dp_rank", "extra_config", "unified_suffixes",
@@ -857,7 +857,7 @@ class PollOnceRaises(RegionClient):
 
 
 class TestStrayCompletions(unittest.TestCase):
-    """s12 (tpu-sync cross-check C5): past STRAY_CAP buffered completions only the ones nobody waits for are dropped;
+    """Past STRAY_CAP buffered completions only the ones nobody waits for are dropped;
     the op in flight and the quarantined ops keep theirs (else the op times out / the region never retires)."""
 
     def test_overflow_keeps_awaited_and_quarantined(self):
@@ -973,7 +973,7 @@ class TestReviewR3(unittest.TestCase):
         self.assertTrue(c.closed)
 
 
-class TestBlockSizeCheck(unittest.TestCase):  # review s9 K03
+class TestBlockSizeCheck(unittest.TestCase):
     def test_page_too_large_for_a_node_refuses_at_registration(self):
         s, c, _ = make()
         block = s.block_bytes

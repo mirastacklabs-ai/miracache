@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR1: the store-side setters behind the class A keys (Store::set_limits, set_retention, set_evict,
+// The store-side setters behind the class A keys (Store::set_limits, set_retention, set_evict,
 // SlabAllocator::set_max_exact_classes_per_owner, PutPath::set_timeouts). Each one changes the NEXT operation only;
 // leases already granted and puts already begun keep what they were given.
 #include <memory>

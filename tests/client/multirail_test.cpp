@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// RL2: client rails and connections (multi-rail plan decisions 1, 5, 6, 7, 9) over the simulator, against an RL1
+// Client rails and connections over the simulator, against a
 // memory node with two devices, one rail each (distinct rkeys per device), and a client with two local devices.
 // Each rail has its own endpoint set (control, fetch_qps fetch, ingest) in one session; ClientCore talks to the two
 // multiplexing endpoints. Flushing rail 1 keeps the node Up and puts move; the rail comes back on its own backoff;
@@ -117,16 +117,16 @@ struct Res {
 
 // Server: device 0 (sim node 1) carries rail 0, device 1 (sim node 2) rail 1, with distinct rkeys. Client: device 0
 // (node 3) pairs with rail 0, device 1 (node 4) with rail 1.
-// RL3: the fetch shape (4 MiB blocks, slices, QP windows, a short lease) and the sim audit of the fetch rules.
+// The fetch shape (4 MiB blocks, slices, QP windows, a short lease) and the sim audit of the fetch rules.
 struct Shape {
   bool big = false;  // 32 MiB segments of 8 MiB runs (a 4 MiB block needs a run above 4 MiB), 64 MiB per principal, a 48 MiB pool
   Nanos lease_ttl = seconds(1000);
   std::uint64_t slice_bytes = 0, window_bytes = 0;
-  Nanos renew_every{0};          // RL3 leftover: ClientCoreOptions::renew_every (0 = the default)
+  Nanos renew_every{0};          // ClientCoreOptions::renew_every (0 = the default)
   Nanos lease_max = seconds(2000);
-  bool no_port = false;          // run #235: only the node and the devices (a Client builds the port and core from `wtmpl`)
-  unsigned reconnect_ms = 0;     // run #235: reconnect_min_ms (max: 4x) when nonzero
-  // J06a test: rail 1's client device as the port sees it (a wrapper around c1); null = c1 itself.
+  bool no_port = false;          // Only the node and the devices (a Client builds the port and core from `wtmpl`)
+  unsigned reconnect_ms = 0;     // reconnect_min_ms (max: 4x) when nonzero
+  // Rail 1's client device as the port sees it (a wrapper around c1); null = c1 itself.
   std::function<fabric::Fabric*(fabric::SimFabric&)> wrap_rail1;
 };
 struct MR {
@@ -163,7 +163,7 @@ struct MR {
     WireOptions wo;
     wo.node = 1;
     wo.rail_tickets = [this](fabric::EpClass cls, std::uint8_t rail) -> Expected<proto::Ticket> {
-      server::Server* srv = ticket_server ? ticket_server(rail) : server.get();  // J07: two processes, one per rail
+      server::Server* srv = ticket_server ? ticket_server(rail) : server.get();  // Two processes, one per rail
       auto t = srv->issue_ticket("lab", cls, rail, 1);
       if (!t) return t.error();
       return (*t)[0];
@@ -175,11 +175,11 @@ struct MR {
     wo.label = "n1";
     wo.window_bytes = shape.window_bytes;
     wo.hostname = [] { return std::string("memnode-a"); };
-    wo.on_local_failure = [this](unsigned rail, const std::string& dev, const Error&) {  // G09
+    wo.on_local_failure = [this](unsigned rail, const std::string& dev, const Error&) {
       const char* call = fabric::last_local_failure().call;
       local_fail.push_back(std::to_string(rail) + " " + dev + " " + (call ? call : "?"));
     };
-    wo.on_rails_up = [this](const std::vector<unsigned>& rails, bool rejoin) {  // Q03
+    wo.on_rails_up = [this](const std::vector<unsigned>& rails, bool rejoin) {
       std::string s = rejoin ? "rejoin" : "reconnect";
       for (unsigned r : rails) s += " " + std::to_string(r);
       rails_up.push_back(s);
@@ -188,13 +188,13 @@ struct MR {
     r0.index = 0, r0.addr = kRail[0], r0.route = 1, r0.device = "cdev0";
     r1.index = 1, r1.addr = kRail[1], r1.route = 2, r1.fab = shape.wrap_rail1 ? shape.wrap_rail1(c1) : &c1, r1.device = "cdev1";
     wo.rails = {r0, r1};
-    wo.rail_build_off_lock = true;  // run #233: ka() runs build_rails() after keepalive(), as the Client
+    wo.rail_build_off_lock = true;  // ka() runs build_rails() after keepalive(), as the Client
     wo.rail = kRail[0];
     if (shape.reconnect_ms) wo.reconnect_min_ms = shape.reconnect_ms, wo.reconnect_max_ms = 4 * shape.reconnect_ms;
     wtmpl = wo;
     if (shape.no_port) return;
     port = std::make_unique<WirePort>(c0, clock, salts, std::move(wo));
-    // RL3: one audit over both client devices; the core reports every span it gives back.
+    // One audit over both client devices; the core reports every span it gives back.
     audit.classify = [](fabric::WrTag t) -> std::optional<fabric::SimWrAudit::TagInfo> {
       auto f = ClientCore::fetch_tag(t);
       if (!f) return std::nullopt;
@@ -237,7 +237,7 @@ struct MR {
     server->run_once();
     for (auto& s : extra) s->run_once();
   }
-  // One keepalive tick of the Client (run #233): keepalive() under the client lock, then build_rails() off it.
+  // One keepalive tick of the Client: keepalive() under the client lock, then build_rails() off it.
   bool ka() {
     port->keepalive();
     return port->build_rails();  // true: the next tick comes soon (the Client: next_in(1))
@@ -318,15 +318,15 @@ struct MR {
   CounterSalts salts;
   server::ServerConfig scfg;  // the config the node was created with
   std::unique_ptr<server::Server> server;
-  // F04: the process a restart replaced. Kept (its endpoints stay connected) but never run: two servers polling one sim
+  // The process a restart replaced. Kept (its endpoints stay connected) but never run: two servers polling one sim
   // device would take each other's completions.
   std::unique_ptr<server::Server> old_server;
-  // J07: more processes that run with `server` (each on its own devices), and which one issues a rail's tickets.
+  // More processes that run with `server` (each on its own devices), and which one issues a rail's tickets.
   std::vector<std::unique_ptr<server::Server>> extra;
   std::function<server::Server*(std::uint8_t rail)> ticket_server;
-  std::vector<std::string> local_fail;  // G09: "rail device call" of each rail rejoin a local device refused
-  std::vector<std::string> rails_up;    // Q03: "reconnect 0 1" / "rejoin 1" of each on_rails_up call
-  WireOptions wtmpl;  // the port options (run #235: a Client opens its own port from them)
+  std::vector<std::string> local_fail;  // "rail device call" of each rail rejoin a local device refused
+  std::vector<std::string> rails_up;    // "reconnect 0 1" / "rejoin 1" of each on_rails_up call
+  WireOptions wtmpl;  // the port options (a Client opens its own port from them)
   std::unique_ptr<WirePort> port;
   std::unique_ptr<ClientCore> core;
 };
@@ -350,7 +350,7 @@ TEST(MultiRail, TwoRailsCarryTrafficAndExactBytes) {
   EXPECT_NE(m.find("miracache_client_rail_state{node=\"n1\",node_id=\"1\",hostname=\"memnode-a\",rail=\"1\",addr=\"10.0.1.1:7471\"} 2"),
             std::string::npos)
       << m;
-  // F08 (goal 10): the unpaired-rail count carries the node's ID, hostname and address too.
+  // The unpaired-rail count carries the node's ID, hostname and address too.
   EXPECT_NE(m.find("miracache_client_rail_unpaired{node=\"n1\",node_id=\"1\",hostname=\"memnode-a\",addr=\"10.0.0.1:7471\"} 0"),
             std::string::npos)
       << m;
@@ -392,7 +392,7 @@ TEST(MultiRail, RailFlushKeepsNodeUpPutsMoveAndTheRailReturns) {
   EXPECT_TRUE(w.core->check_invariants());
 }
 
-// F04: the memory node restarts while rail 1 is down; rail 0 has not noticed yet (keepalive_ms 0: a suspect rail is never
+// The memory node restarts while rail 1 is down; rail 0 has not noticed yet (keepalive_ms 0: a suspect rail is never
 // given up, so the old session stays Up on rail 0 as long as we like). Rail 1 rejoins the new process with the old
 // conn_id and gets a SEG_TABLE whose table_gen restarted from zero (here it stays
 // below the old one: the new process has fewer segments). Before the fix the rail went up on the OLD process's table
@@ -457,7 +457,7 @@ TEST(MultiRail, RailRejoiningARestartedNodeNeverUsesTheOldTable) {
   EXPECT_TRUE(w.core->check_invariants());
 }
 
-// H02: as F04, but the new process has the SAME segment count, so its table_gen reaches the old value and the F04 check
+// A restart the table_gen check cannot see: the new process has the SAME segment count, so its table_gen reaches the old value and that check
 // (older tables only) cannot see the restart. The boot nonce in HELLO_ACK can: the rejoining rail's HELLO_ACK names
 // another process, its SEG_TABLE never replaces the session's, the rail never takes work, and the session goes Down
 // once and reconnects both rails to the new process. (Mutator: with the nonce comparison disabled rail 1 goes up in the
@@ -485,7 +485,7 @@ TEST(MultiRail, RestartWithTheSameSegmentCountIsDetectedByTheBootNonce) {
   w.old_server = std::move(w.server);
   w.server = std::move(*s);
   for (int i = 0; i < 400 && w.server->table_gen() < old_gen; ++i) w.drive();
-  ASSERT_EQ(w.server->table_gen(), old_gen) << "same segments, same table_gen: invisible to the F04 check";
+  ASSERT_EQ(w.server->table_gen(), old_gen) << "same segments, same table_gen: invisible to the check";
 
   bool restarted = false, stale_up = false;
   const Nanos until = w.clock.now() + seconds(8);
@@ -519,7 +519,7 @@ TEST(MultiRail, RestartWithTheSameSegmentCountIsDetectedByTheBootNonce) {
   EXPECT_TRUE(w.core->check_invariants());
 }
 
-// H02: a rail that reconnects to the SAME process (same boot nonce) rejoins the live session: no restart, no Down.
+// A rail that reconnects to the SAME process (same boot nonce) rejoins the live session: no restart, no Down.
 TEST(MultiRail, RailRejoiningTheSameProcessKeepsTheSession) {
   MR w;
   ASSERT_TRUE(w.core);
@@ -541,7 +541,7 @@ TEST(MultiRail, RailRejoiningTheSameProcessKeepsTheSession) {
   EXPECT_EQ(w.check_fetch(sk, a, da), 0u);
 }
 
-// R22 (J07): restarts a rejoining rail notices are damped only while the rails reach two processes. A session that
+// Restarts a rejoining rail notices are damped only while the rails reach two processes. A session that
 // comes up without a rail that is merely unreachable (no rail refused for another boot nonce) resets the count, so a
 // node whose rail 1 is unreachable at every reconnect still has each restart handled. Before the fix the count only
 // reset on a session with every rail, and the 4th restart was damped as "mis-wired" (the session stayed on the old
@@ -590,7 +590,7 @@ TEST(MultiRail, RestartsWhileARailIsUnreachableAreNeverDamped) {
   EXPECT_EQ(w.port->restarts_detected(), static_cast<std::uint64_t>(kCycles));
 }
 
-// G09 (review G07, Q6): a rail rejoin that the LOCAL device refuses (CQ/QP limit) is handed to the Client with its rail,
+// A rail rejoin that the LOCAL device refuses (CQ/QP limit) is handed to the Client with its rail,
 // device and the failing call (it counts it by cause and logs it once, as a build); the rail retries on its backoff and
 // comes back once the device has room.
 TEST(MultiRail, RailRejoinLocalResourceFailureIsReported) {
@@ -610,12 +610,12 @@ TEST(MultiRail, RailRejoinLocalResourceFailureIsReported) {
   w.c1.inject_local_failure(nullptr);
   w.run_for(seconds(3));
   EXPECT_EQ(w.port->rail_state(1), WirePort::RailState::Up);
-  // Q03: the rejoin that took is handed to the Client once, for that rail only (it closes the rail's failure entry).
+  // The rejoin that took is handed to the Client once, for that rail only (it closes the rail's failure entry).
   ASSERT_EQ(w.rails_up.size(), 1u);
   EXPECT_EQ(w.rails_up[0], "rejoin 1");
 }
 
-// L13 (review s9b): the session reconnect after a node restart (every rail Down -> session Down -> Connecting -> Up) is
+// The session reconnect after a node restart (every rail Down -> session Down -> Connecting -> Up) is
 // not a rail rejoin: a refusal of the LOCAL device there (siw0: "prepare QP mapping failed") must reach the Client
 // through the same hook, per rail, with the failing call; the session comes back once the device has room.
 TEST(MultiRail, SessionReconnectLocalResourceFailureIsReported) {
@@ -638,7 +638,7 @@ TEST(MultiRail, SessionReconnectLocalResourceFailureIsReported) {
   w.c1.inject_local_failure(nullptr);
   w.run_for(seconds(5));
   EXPECT_TRUE(w.port->session_up());
-  // Q03 / Q09: the reconnect that took is handed to the Client once, with every rail it connected (the Client closes
+  // The reconnect that took is handed to the Client once, with every rail it connected (the Client closes
   // their failure entries; the Client-level counter, log line and recovery line are covered by
   // MembershipSlots.SessionReconnectLocalFailureIsLoggedRecoveredAndLoggedAgain).
   ASSERT_FALSE(w.rails_up.empty());
@@ -646,11 +646,11 @@ TEST(MultiRail, SessionReconnectLocalResourceFailureIsReported) {
   for (std::size_t k = 1; k < w.rails_up.size(); ++k) EXPECT_EQ(w.rails_up[k].rfind("rejoin ", 0), 0u) << w.rails_up[k];
 }
 
-// RL2 follow-up B: a rail's reconnect never stalls the other rails. Rail 1 comes back against a slow memory node (300 ms
+// A rail's reconnect never stalls the other rails. Rail 1 comes back against a slow memory node (300 ms
 // each way on its link: its HELLOs and SEG_TABLE take 600 ms and more). The keepalive tick that starts the reconnect
 // returns at once and later ticks take the replies, so rail-0 fetches keep their latency bound the whole time (before
 // the follow-up, that tick waited for the HELLOs under the client lock and every fetch behind it waited too).
-// Run #233: the same with a slow CONNECT (each of rail 1's connects takes `connect_delay`): the connects run in
+// The same with a slow CONNECT (each of rail 1's connects takes `connect_delay`): the connects run in
 // build_rails(), off the lock. The sim is single-threaded, so the off-lock part runs between two fetches (no job waits
 // on it, as the Client's job threads do not wait on its keepalive thread); `held` is what the tick under the lock costs.
 struct SlowRejoin {
@@ -725,14 +725,14 @@ TEST(MultiRail, RailReconnectAgainstASlowNodeNeverStallsTheOtherRail) {
   slow_rejoin(milliseconds(300), Nanos{0}, s);
 }
 
-// Run #233: every connect of rail 1 takes 1 s (its set: 1 control + 2 fetch + 1 ingest = 4 s of connects).
+// Every connect of rail 1 takes 1 s (its set: 1 control + 2 fetch + 1 ingest = 4 s of connects).
 TEST(MultiRail, RailConnectAgainstASlowConnectNeverStallsTheOtherRail) {
   SlowRejoin s;
   slow_rejoin(Nanos{0}, seconds(1), s, 50);  // the connects run between two fetches here: fewer fetches see the rejoin
   EXPECT_GE(s.built_for, seconds(4)) << "the slow part was the connects, and they ran in build_rails (off the lock)";
 }
 
-// Run #233: a stop (abort_connect) during the off-lock build: the endpoints it connected are released (the device is back
+// A stop (abort_connect) during the off-lock build: the endpoints it connected are released (the device is back
 // to its endpoint count before the rejoin), the device comes back to the port, no rail goes up, nothing stays lent. The
 // lent build reuses the rail's PD and landing registration, so there is no PD or registration to give back.
 TEST(MultiRail, RailBuildAbortedByStopLeaksNothing) {
@@ -767,7 +767,7 @@ TEST(MultiRail, RailBuildAbortedByStopLeaksNothing) {
   EXPECT_EQ(w.c1.endpoint_count(), base_c1);
 }
 
-// Run #233: a set built off the lock for a session that ended before it was swapped in is given back (its endpoints go
+// A set built off the lock for a session that ended before it was swapped in is given back (its endpoints go
 // to the fabric as zombies, reaped), and the next session connects both rails afresh.
 TEST(MultiRail, RailBuildOfAnEndedSessionIsGivenBack) {
   MR w;
@@ -800,7 +800,6 @@ TEST(MultiRail, RailBuildOfAnEndedSessionIsGivenBack) {
   EXPECT_EQ(w.check_fetch(sk, a, da), 0u);
 }
 
-// ---- run #235 (review s8 wave15 J01, J04, J10) ----
 // The value of the first series `name{...}` whose labels contain every fragment (-1: none).
 double metric(const std::string& text, const std::string& name, std::initializer_list<const char*> frags) {
   std::size_t at = 0;
@@ -829,7 +828,7 @@ std::unique_ptr<Client> open_client(MR& w, std::function<void()> drive, unsigned
   return cl ? std::move(*cl) : nullptr;
 }
 
-// J01: two worker threads run puts and fetches through a Client while its keepalive thread rejoins rail 1 off the
+// Two worker threads run puts and fetches through a Client while its keepalive thread rejoins rail 1 off the
 // lock; every connect on rail 1's device takes 150 ms (sim). Rail 1 is down at open, so its first attempts fail inside
 // build_rails (released on the lent device), then it is restored and rejoins (HELLOs + SEG_TABLE) without a session
 // end. Exact bytes, every op Committed/Hit (strict oracle), rail 1 carries READs after, and no path under the client
@@ -936,7 +935,7 @@ TEST(MultiRail, LentDeviceIsNeverTouchedUnderTheLockWhileJobThreadsRun) {
   EXPECT_EQ(WirePort::lend_violations(), v0) << "a path under the client lock touched the lent device";
 }
 
-// J04: a RENEW_ACK filed just before the session ends moves no deadline of the next session (renewed is cleared with
+// A RENEW_ACK filed just before the session ends moves no deadline of the next session (renewed is cleared with
 // renew_sent at the session end).
 TEST(MultiRail, RenewedAckOfAnEndedSessionIsDropped) {
   MR w;
@@ -979,7 +978,7 @@ TEST(MultiRail, RenewedAckOfAnEndedSessionIsDropped) {
   EXPECT_TRUE(out.empty());
 }
 
-// J10: a Client destroyed while a rail set built off the lock is staged (built, not swapped in yet): the abort-all
+// A Client destroyed while a rail set built off the lock is staged (built, not swapped in yet): the abort-all
 // pass gives it back with the rest, and device 1 is back to no endpoint once the Client is gone.
 TEST(MultiRail, ClientDestroyedWithABuiltRailSetLeaksNothing) {
   Shape sh;
@@ -1053,7 +1052,7 @@ TEST(MultiRail, SuspectRailTakesNoNewWork) {
   EXPECT_TRUE(w.port->session_up());
 }
 
-// ---- RL3: fetch slicing, the seq rule and re-issue (multi-rail plan decisions 8, 9) ----------------------------------
+// ---- Fetch slicing, the seq rule and re-issue (multi-rail) ----------------------------------
 // 4 MiB blocks, 1 MiB slices, a 2 MiB window per fetch QP, 2 rails x 2 fetch QPs.
 Shape rl3_shape(Nanos lease_ttl = seconds(1000)) {
   Shape s;
@@ -1190,7 +1189,7 @@ TEST(MultiRailSlicing, RailFlushedMidFetchReissuesOnlyAfterItsFlushCqes) {
 
 TEST(MultiRailSlicing, LeaseNearExpiryIsAMissNotAReissue) {
   // A 40 ms lease and a slow rail 1 (50 ms each way): by the time rail 1's slices flush, t_lease_granted + ttl - guard
-  // has passed, so its blocks are misses (P40), never a re-issue that could read a block the lease no longer pins.
+  // has passed, so its blocks are misses, never a re-issue that could read a block the lease no longer pins.
   MR w(2, 100, rl3_shape(milliseconds(40)));
   ASSERT_TRUE(w.core);
   auto sk = scope_keys(6);
@@ -1218,7 +1217,7 @@ TEST(MultiRailSlicing, LeaseNearExpiryIsAMissNotAReissue) {
   EXPECT_TRUE(w.core->check_invariants());
 }
 
-// RL3 leftover: a confirmed RENEW moves the re-issue deadline to (RENEW send time + granted ttl - guard). A 40 ms lease
+// A confirmed RENEW moves the re-issue deadline to (RENEW send time + granted ttl - guard). A 40 ms lease
 // renewed every 5 ms and a slow rail 1 (50 ms each way) flushed at 45 ms: past the LOOKUP's lease, within the renewed
 // one, so its slices are re-read on rail 0 with exact bytes. (Before: the LOOKUP time stayed the deadline: misses.)
 TEST(MultiRailSlicing, RenewedLeaseAllowsAReissuePastTheLookupLease) {
@@ -1251,7 +1250,7 @@ TEST(MultiRailSlicing, RenewedLeaseAllowsAReissuePastTheLookupLease) {
   EXPECT_TRUE(w.core->check_invariants());
 }
 
-// RL3 leftover: renewals that the node caps (lease.max 50 ms after the grant) stop moving the deadline; a flush at 60 ms
+// Renewals that the node caps (lease.max 50 ms after the grant) stop moving the deadline; a flush at 60 ms
 // (after the renewed lease, before the slow rail 1 lands) is a miss, never a re-issue.
 TEST(MultiRailSlicing, FlushPastTheRenewedLeaseIsAMiss) {
   Shape sh = rl3_shape(milliseconds(40));
@@ -1328,7 +1327,7 @@ TEST(MultiRail, ConfigRejectsMoreThanFourRails) {
   EXPECT_EQ(devs->devices[1].subnet, "10.0.1.0/24");
   EXPECT_EQ(devs->device, "mlx5_0");
   EXPECT_FALSE(load_config(head + rails(1) + "]\n[fabric]\ndevice = \"a\"\ndevices = [{device = \"b\"}]\n"));
-  // H01: one wildcard (blank subnet) device at most; a second would never be paired.
+  // One wildcard (blank subnet) device at most; a second would never be paired.
   auto one_wild = load_config(head + rails(2) + "]\n[fabric]\ndevices = [{device = \"mlx5_0\"}, "
                                                "{device = \"mlx5_1\", subnet = \"10.0.1.0/24\"}]\n");
   ASSERT_TRUE(one_wild) << one_wild.error().context;
@@ -1339,7 +1338,7 @@ TEST(MultiRail, ConfigRejectsMoreThanFourRails) {
       << two_wild.error().context;
 }
 
-// Run #219 (RL4 finding): bundle nodes always report a subnet per rail (the address's /24). A local device with a
+// Bundle nodes always report a subnet per rail (the address's /24). A local device with a
 // blank subnet is a wildcard: it takes every rail of the client's protocol that no subnet device claims.
 ClientConfig pairing_cfg(std::vector<LocalDevice> devs, FabricProtocol proto = FabricProtocol::Auto) {
   ClientConfig c;
@@ -1403,7 +1402,7 @@ TEST(RailPairing, ExactSubnetWinsOverTheWildcard) {
   EXPECT_EQ(p[3].device, 0u) << "a rail with no subnet: the first wildcard";
 }
 
-// H01: the wildcard taking a rail that has a subnet is logged once per (node, rail), with the node's ID, hostname and
+// The wildcard taking a rail that has a subnet is logged once per (node, rail), with the node's ID, hostname and
 // addr; a legacy rail with no subnet and an exact-subnet pair are not logged.
 TEST(RailPairing, WildcardTakingASubnetRailIsLoggedOnce) {
   char tmpl[] = "/tmp/mira-wild-XXXXXX";
@@ -1460,7 +1459,7 @@ TEST(RailPairing, ProtocolMismatchStaysUnpairedEvenOnTheWildcard) {
   EXPECT_EQ(unpaired, 1u);
 }
 
-// ---- run #279: tests for J06a, J07 (review s8 wave15; fixed in run #267) ----
+// ---- Rail device wrapper tests ----
 // The log lines of a test's scope, in a temp file: count(msg) counts the lines that carry `msg` (and node_id=1).
 struct LogCapture {
   LogCapture() {
@@ -1528,7 +1527,7 @@ class CqErrorFabric final : public fabric::Fabric {
   fabric::Fabric& in_;
 };
 
-// J06a (review s8 wave15): rail 1's device reports a CqError while it is lent to a rail build that fails (the node's
+// Rail 1's device reports a CqError while it is lent to a rail build that fails (the node's
 // rail is still down). release_made() polls it off the lent fabric; it must reach ClientCore (counted as an RDMA error,
 // kind "other") as the same completion polled under the lock does. Before the fix release_made threw it away.
 TEST(MultiRail, CqErrorPolledWhileReleasingAFailedRailBuildReachesTheCore) {
@@ -1573,10 +1572,10 @@ TEST(MultiRail, CqErrorPolledWhileReleasingAFailedRailBuildReachesTheCore) {
   EXPECT_EQ(w.port->rail_state(1), WirePort::RailState::Down);
 }
 
-// J07 (review s8 wave15) and R22: a mis-wired node, whose rail 0 reaches process A and rail 1 process B (each on its
+// A mis-wired node, whose rail 0 reaches process A and rail 1 process B (each on its
 // own devices, both running). Every session comes up on rail 0 (A) with rail 1 refused for B's boot nonce; rail 1's
 // rejoin then sees B's nonce and ends the session. After 3 such ends in a row the session stays, rail 1 stays down on
-// the long backoff, and one Error line says so (with both nonces). Then (R22) a session that comes up while rail 1 is
+// the long backoff, and one Error line says so (with both nonces). Then a session that comes up while rail 1 is
 // merely unreachable (no rail refused for another nonce) resets the count: rail 1's next rejoin to B is handled as a
 // restart again (Warn, the session reconnects), not damped.
 TEST(MultiRail, MisWiredRailIsDampedAfterThreeNonceRestartsAndACleanSessionResetsTheCount) {
@@ -1638,7 +1637,7 @@ TEST(MultiRail, MisWiredRailIsDampedAfterThreeNonceRestartsAndACleanSessionReset
   for (const auto& l : {std::string("session_boot_nonce="), std::string("rail_boot_nonce=")})
     EXPECT_NE(logs.text().find(l), std::string::npos) << "both nonces are logged: " << l;
 
-  // R22: a session that comes up with rail 1 merely unreachable (no rail refused for another nonce) resets the count.
+  // A session that comes up with rail 1 merely unreachable (no rail refused for another nonce) resets the count.
   ASSERT_TRUE(w.s0.fail_rail(kRail[0]));
   ASSERT_TRUE(w.s1.fail_rail(kRail[1]));
   ASSERT_TRUE(run_until([&] { return !w.port->session_up(); }, seconds(5)));

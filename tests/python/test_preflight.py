@@ -232,7 +232,7 @@ class TestSglang(Base):
         self.assertIn("sglang.interface_v1", self.ids(rep, "fail"))
 
     def test_client_config_missing_fails(self):
-        """R03: preflight reuses check_sglang_config, which needs miracache.config."""
+        """Preflight reuses check_sglang_config, which needs miracache.config."""
         for mc in ({}, {"secret_file": "/s"}, None):
             extra = dict(SG_EXTRA, miracache=mc) if mc is not None else {
                 k: v for k, v in SG_EXTRA.items() if k != "miracache"}

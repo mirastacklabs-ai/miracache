@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
-// The client's bundle watcher (membership plan decisions 1, 4, 8, 9; MB5).
+// The client's bundle watcher.
 //
 // It pulls the signed cluster bundle from the memory nodes' admin listeners (`GET /v1/bundle?after=G`),
 // verifies it (both Ed25519 signatures, role binding, the shared floor file) and hands a verified
-// `MembershipSnap` to a callback. It changes nothing else: placement and the node tables are MB6a's.
+// `MembershipSnap` to a callback. It changes nothing else: placement and the node tables belong to the bundle membership code.
 //
-//   * Floor vs applied (P12). The floor is the shared max-only file `<state_dir>/bundle-floor`: it only
+//   * Floor vs applied. The floor is the shared max-only file `<state_dir>/bundle-floor`: it only
 //     rejects older bundles. The applied generation is per process, in memory. A bundle is accepted when
 //     it is >= the floor (an equal one with an equal hash is fine) and newer than this process's applied
 //     generation, so a second process on the same host, or a restart, applies the current generation too.
-//   * Start-up (P36). The first fetch polls EVERY endpoint without `after` and takes the highest valid
+//   * Start-up. The first fetch polls EVERY endpoint without `after` and takes the highest valid
 //     bundle: one stale endpoint cannot pin a process with an empty state_dir to an old bundle.
 //   * Poll every `poll_ms` (30 s), one endpoint per poll, round-robin. Once a bundle is applied its
 //     `nodes[].admin` addresses come first in the list (the configured endpoints stay as a fallback).
-//   * Wake (P17). `on_reply_generation()` is cheap and thread-safe; call it with the `bundle_gen_lo` of any
+//   * Wake. `on_reply_generation()` is cheap and thread-safe; call it with the `bundle_gen_lo` of any
 //     reply frame. A value ahead of the applied generation wakes the watcher once per value (edge
-//     triggered); the first fetch goes to the node that replied (Q05), then the other endpoints in turn
+//     triggered); the first fetch goes to the node that replied, then the other endpoints in turn
 //     (a 304 while a higher generation is known rotates), at most one full cycle, then the chase ends.
 //     Fetches are at least `min_interval_ms` apart (200 ms) and back off exponentially on failure.
 //   * push_envelope(admin): POSTs the current envelope to a lagging or newly added node; once per success

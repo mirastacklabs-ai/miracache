@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// RB2: memory-node RBAC, audit wiring and the admin routes (RBAC/audit plan decisions 2-6).
-//   * the route table equals decision 4; every route x every role (allowed, denied, no SAN);
-//   * bundle / identity need only plain mTLS, also on a blank node (P03);
+// Memory-node RBAC, audit wiring and the admin routes (RBAC and audit)
+//   * the route table equals the plan; every route x every role (allowed, denied, no SAN);
+//   * bundle / identity need only plain mTLS, also on a blank node;
 //   * bindings follow the applied bundle; lab mode follows [[admin.rbac]] (SIGHUP);
-//   * a denial flood is coalesced to about one entry per second (P19);
+//   * a denial flood is coalesced to about one entry per second;
 //   * audit entries for bundle apply / rejection / ticket refusal / drain / drop_principal verify as a chain, carry
 //     node ID + host + IP, and GET /v1/identity shows the anchor (audit_seq, audit_head);
 //   * the audit log cannot be opened: the admin API is refused, the data plane serves;
@@ -83,7 +83,7 @@ struct Https {
   }
 };
 
-// `mid`, when set, runs between the request head and its body (U2-18).
+// `mid`, when set, runs between the request head and its body.
 Https tls_call(std::uint16_t port, const std::string& who, const std::string& req, const std::function<void()>& mid = nullptr) {
   const auto& c = certs();
   Https r;
@@ -375,7 +375,7 @@ TEST(Rbac, RouteTableEqualsDecision4) {
 
 // ---- role matrix ----------------------------------------------------------------------------------
 
-TEST(Rbac, BundleAndIdentityNeedOnlyMtlsEvenOnABlankNode) {  // P03
+TEST(Rbac, BundleAndIdentityNeedOnlyMtlsEvenOnABlankNode) {
   Node n(true);
   // Blank node: no bundle, no bindings. A certificate with a SAN reaches identity and the bundle push.
   for (const char* who : {kViewer, kOperator, kSecAdmin, kScopeProv, kNoRole}) {
@@ -451,7 +451,7 @@ TEST(Rbac, EveryRouteTimesEveryRole) {
   EXPECT_EQ(n.call(kOperator, "GET", "/v1/drain").code(), 405);
   EXPECT_EQ(n.call(kSecAdmin, "GET", "/v1/drop_principal").code(), 405);
   EXPECT_EQ(n.call(kOperator, "POST", "/v1/identity").code(), 405);
-  EXPECT_EQ(n.call(kOperator, "POST", "/v1/stats").code(), 404);  // cut by review P34
+  EXPECT_EQ(n.call(kOperator, "POST", "/v1/stats").code(), 404);  // route removed
 
   // Every denial and the metric.
   std::string m;
@@ -593,7 +593,7 @@ TEST(RbacAudit, EntriesVerifyCarryTheSourceAndShowInIdentity) {
   EXPECT_FALSE(control::audit_verify_paths(paths, &ahead).ok);
 }
 
-TEST(RbacAudit, ADenialFloodIsCoalescedToAboutOneEntryPerSecond) {  // P19
+TEST(RbacAudit, ADenialFloodIsCoalescedToAboutOneEntryPerSecond) {
   Node n(true);
   ASSERT_EQ(n.call(kNoRole, "POST", "/v1/bundle", env(42, 5)).code(), 200);
   const auto base = n.audit->seq();
@@ -621,7 +621,7 @@ TEST(RbacAudit, ADenialFloodIsCoalescedToAboutOneEntryPerSecond) {  // P19
   EXPECT_TRUE(control::audit_verify_paths(control::list_audit_files(n.audit_dir)).ok);
 }
 
-TEST(RbacAudit, CoalescerKeepsAnUnflushedWindowWhenTheSecondChanges) {  // review w4 V03 (Go had this bug)
+TEST(RbacAudit, CoalescerKeepsAnUnflushedWindowWhenTheSecondChanges) {
   control::AuditCoalescer co;
   control::AuditEntry e;
   e.actor = "spiffe://x/a";
@@ -638,7 +638,7 @@ TEST(RbacAudit, CoalescerKeepsAnUnflushedWindowWhenTheSecondChanges) {  // revie
   EXPECT_EQ(rest[0].count, 3u);
 }
 
-TEST(RbacAudit, OpenFailureRefusesOnlyTheAuditedMutationsAndTheRestKeepsServing) {  // U2-05
+TEST(RbacAudit, OpenFailureRefusesOnlyTheAuditedMutationsAndTheRestKeepsServing) {
   Node n(true, Node::Audit::Broken);
   ASSERT_FALSE(n.audit_open_ok);
   ASSERT_TRUE(n.admin);
@@ -668,7 +668,7 @@ TEST(RbacAudit, OpenFailureRefusesOnlyTheAuditedMutationsAndTheRestKeepsServing)
   EXPECT_TRUE(n.server->issue_ticket("spiffe://prod/vllm-host-1", fabric::EpClass::Control, 0, 1));
 }
 
-TEST(RbacAudit, ALateApplyAfter504IsStillAudited) {  // U2-06
+TEST(RbacAudit, ALateApplyAfter504IsStillAudited) {
   Node n(true);
   const auto port = n.admin->port();
   // The store thread does not pump: the push waits kStoreWaitMs and answers 504 apply_timeout.
@@ -686,7 +686,7 @@ TEST(RbacAudit, ALateApplyAfter504IsStillAudited) {  // U2-06
   EXPECT_EQ(with(ls, "\"action\":\"bindings.change\"").size(), 1u);
 }
 
-TEST(RbacAudit, ABindingRevokedWhileTheBodyIsReadIsDenied) {  // U2-18
+TEST(RbacAudit, ABindingRevokedWhileTheBodyIsReadIsDenied) {
   Node n(true);
   ASSERT_EQ(n.call(kNoRole, "POST", "/v1/bundle", env(42, 5)).code(), 200);  // client-2 is operator
   const auto port = n.admin->port();
@@ -709,7 +709,7 @@ TEST(RbacAudit, ABindingRevokedWhileTheBodyIsReadIsDenied) {  // U2-18
   EXPECT_FALSE(n.server->draining());
 }
 
-TEST(RbacAudit, AnchorShowsTheLastFsyncedEntry) {  // U2-19
+TEST(RbacAudit, AnchorShowsTheLastFsyncedEntry) {
   const std::string d = make_dir();
   std::atomic<bool> fsync_ok{false};
   AdminAuditOptions ao;
@@ -737,7 +737,7 @@ TEST(RbacAudit, AnchorShowsTheLastFsyncedEntry) {  // U2-19
   (void)std::system(("rm -rf " + d).c_str());
 }
 
-TEST(RbacAudit, AFailedAppendIsToldToTheCaller) {  // U2-20
+TEST(RbacAudit, AFailedAppendIsToldToTheCaller) {
   Node n(true);
   ASSERT_EQ(n.call(kNoRole, "POST", "/v1/bundle", env(42, 5)).code(), 200);
   n.fail_audit_writes = true;
@@ -867,7 +867,7 @@ TEST(RbacDrop, TheRaiseIsDurableAndSurvivesARestart) {
   f.server->apply_bundle(v);  // no drop_before in the bundle
   ASSERT_TRUE(f.server->store().ensure_scope_for_root_put(pid, f.sc(1), f.clock.now()));  // opened before the cutoff
   f.clock.advance_by(100s);
-  ASSERT_TRUE(load_persisted_drop_before(*f.server, n.state_dir));  // main's start-up helper (U2-21)
+  ASSERT_TRUE(load_persisted_drop_before(*f.server, n.state_dir));  // main's start-up helper
   f.settle();
   EXPECT_FALSE(f.server->store().has_scope(pid, f.sc(1)));  // still misses after the restart
   ASSERT_TRUE(f.server->store().ensure_scope_for_root_put(pid, f.sc(2), f.clock.now()));
@@ -875,7 +875,7 @@ TEST(RbacDrop, TheRaiseIsDurableAndSurvivesARestart) {
   EXPECT_TRUE(f.server->store().has_scope(pid, f.sc(2)));  // opened after the cutoff: lives
 }
 
-TEST(RbacDrop, AFutureDropBeforeIsRefusedAndALaterRealDropWorks) {  // U2-02
+TEST(RbacDrop, AFutureDropBeforeIsRefusedAndALaterRealDropWorks) {
   Node n(true);
   // A bundle with a drop_before ahead of the wall clock + 300 s is refused (schema), nothing applied or persisted.
   auto fut = n.call(kNoRole, "POST", "/v1/bundle", tu::make_envelope(tu::sec_toml(5, "2099-01-01T00:00:00Z"), tu::body_toml(42, 7, 6)));
@@ -909,7 +909,7 @@ TEST(RbacDrop, AFutureDropBeforeIsRefusedAndALaterRealDropWorks) {  // U2-02
   EXPECT_TRUE(n.server->store().has_scope(pid, store::ScopeId{{2}}));
 }
 
-TEST(RbacDrop, TheReplySaysWhenNothingWasPersisted) {  // U2-17
+TEST(RbacDrop, TheReplySaysWhenNothingWasPersisted) {
   Node n(false, Node::Audit::Off, {{"spiffe://lab/client-3", {"security-admin"}}});
   n.persist = false;
   n.start();
@@ -922,7 +922,7 @@ TEST(RbacDrop, TheReplySaysWhenNothingWasPersisted) {  // U2-17
   EXPECT_NE(r2.body().find("\"persisted\":true"), std::string::npos);
 }
 
-TEST(RbacDrop, StartUpFloorLoadHelper) {  // U2-07, U2-21
+TEST(RbacDrop, StartUpFloorLoadHelper) {
   const std::string d = make_dir();
   Fx f;
   EXPECT_TRUE(load_persisted_drop_before(*f.server, ""));  // no state_dir: nothing to load

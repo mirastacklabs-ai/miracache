@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB4: epoch and owner-set enforcement on the memory node (membership plan decision 8; C2/C3), through wire frames
+// Epoch and owner-set enforcement on the memory node, through wire frames
 // over SimFabric. One test per refusal reason, the owner-set check with R = 2 and zones, GOAWAY on removal, a
-// re-added node serving again (P08), lab mode untouched, and client-vs-server agreement over the golden placement
+// re-added node serving again, lab mode untouched, and client-vs-server agreement over the golden placement
 // files (the client computes owner_set(view_from_bundle(...)); the server must reach the same answer).
 #include <algorithm>
 #include <array>
@@ -425,7 +425,7 @@ TEST(Epoch, RootPutAcceptedOnlyInTheOwnerSetElseSkip) {
   EXPECT_GT(other, 0);
   EXPECT_EQ(f.server->puts().n_puts(), static_cast<std::size_t>(owned));
   EXPECT_EQ(f.metric("miracache_put_epoch_refused_total", "reason=\"not_owner\""), static_cast<double>(other));
-  // V10: a SKIP-all answer is one ok request, not two.
+  // A SKIP-all answer is one ok request, not two.
   EXPECT_EQ(f.metric("miracache_requests_total", "op=\"put_begin\",status=\"ok\""), static_cast<double>(owned + other));
   EXPECT_TRUE(f.server->check_invariants());
   // A continuation is not an owner-set question (it extends where the parent lives).
@@ -448,7 +448,7 @@ TEST(Epoch, ServerAgreesWithTheClientsOwnerSetForR1R2R3WithZones) {
       for (int k = 0; k < 64; ++k) {
         const auto sc = Fx::scope_of(k);
         bool want = false;
-        // The client's own pick (V11): Client::OwnerSetForTest builds it the way publish_bundle + run_bundle do.
+        // The client's own pick: Client::OwnerSetForTest builds it the way publish_bundle + run_bundle do.
         const auto set = Client::OwnerSetForTest(b.body, std::span<const std::uint8_t, 32>(sc));
         EXPECT_EQ(set.size(), r);
         for (auto id : set) want = want || id == f.self;
@@ -545,7 +545,7 @@ TEST(Epoch, SigtermLatchRefusesRootsInBundleMode) {
   f.commit_root(e.ing, sc, 1, 5);
   f.server->begin_drain(proto::GoawayReason::Shutdown, 2500);
   f.pump();
-  EXPECT_EQ(f.server->member_state(), Server::MemberState::Active);  // the bundle still says active (P08)
+  EXPECT_EQ(f.server->member_state(), Server::MemberState::Active);  // the bundle still says active
   Reply root = f.put_begin(e.ing, sc, 5, 0, 5);
   ASSERT_TRUE(root.error());
   EXPECT_EQ(root.err_status(), WireStatus::Draining);
@@ -553,14 +553,14 @@ TEST(Epoch, SigtermLatchRefusesRootsInBundleMode) {
   EXPECT_TRUE(Fx::accepted(f.put_begin(e.ing, sc, 2, 1, 5)));  // continuation of a chain: allowed
 }
 
-TEST(Epoch, RemovalSendsGoawayRefusesNewSessionsAndReAddServesAgain) {  // P08
+TEST(Epoch, RemovalSendsGoawayRefusesNewSessionsAndReAddServesAgain) {
   Fx f;
   f.apply(1, 5, {nview(f.self), nview(f.self + 1)});
   Ing e(f);
   const auto sc = f.find_scope(true);
   f.commit_root(e.ing, sc, 1, 5);
   f.inbox[e.ctl->id()].clear();
-  f.apply(2, 5, {nview(f.self + 1)});  // a bundle without this node; the current view does not change (P31)
+  f.apply(2, 5, {nview(f.self + 1)});  // a bundle without this node; the current view does not change
   EXPECT_EQ(f.server->member_state(), Server::MemberState::Removed);
   int goaways = 0;
   for (auto& r : f.inbox[e.ctl->id()])

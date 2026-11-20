@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The signed cluster bundle, C++ side (membership plan decisions 2, 3, 6; MB2).
+// The signed cluster bundle, C++ side.
 //
 // Envelope `mira-bundle-v1`, byte for byte (any deviation is Reject::EnvelopeFormat):
 //   mira-bundle-v1\n
@@ -76,7 +76,7 @@ struct PreviousNodeView {
 
 struct PrincipalView {
   std::string name;
-  std::uint32_t id = 0;  // computed from the name (decision 6)
+  std::uint32_t id = 0;  // computed from the name
   std::vector<std::string> identities;
   std::uint64_t quota_bytes = 0;
   std::uint64_t max_scopes = 0;
@@ -107,7 +107,7 @@ struct BodyView {
   bool replicas_present = false;
   std::uint32_t replicas = 1;  // config.cluster.placement.replicas
   // The `config` table re-serialised as TOML (rooted at `config`; sub-tables such as
-  // [cluster.placement], [cluster.memnode], [cluster.client], [node."<admin>".memnode]) for HR1/HR2.
+  // [cluster.placement], [cluster.memnode], [cluster.client], [node."<admin>".memnode]) for the hot-reload class A keys.
   std::string config_toml;
   // Keys ignored under config.* (everything else is strict) (miracache_bundle_unknown_keys_total).
   std::uint32_t unknown_keys = 0;
@@ -122,7 +122,7 @@ struct BundleView {
   Sha256Digest sec_hash{};   // SHA-256 of the sec bytes
 };
 
-// principal_id = u32be(SHA-256("mira-principal-v1" || name)[0..4]); 0 maps to 1 (decision 6).
+// principal_id = u32be(SHA-256("mira-principal-v1" || name)[0..4]); 0 maps to 1.
 std::uint32_t principal_id(std::string_view name);
 
 // Parses and validates `sec` (strict: unknown keys are errors) / `body` (membership strict,
@@ -137,12 +137,12 @@ Expected<BundleView, BundleError> parse_bundle(const Envelope& env);
 // before both signatures verify.
 Expected<BundleView, BundleError> open_bundle(std::string_view bytes, const TrustKeys& trust);
 
-// U2-02: a principal drop_before later than now + 300 s is refused (Reject::Schema). A future cutoff is stored max-only
+// A principal drop_before later than now + 300 s is refused (Reject::Schema). A future cutoff is stored max-only
 // by every node but converted once (clamped to now), so a later real cutoff below it would be a silent no-op. Parsing is
 // pure (no clock), so this runs where a clock exists: the memory node at apply time (BundleStore::push, before the
 // floor is touched) and the Go controller at publish time (bundle.CheckDropBeforeNotFuture, same rule and skew).
 inline constexpr std::int64_t kDropBeforeSkewSeconds = 300;
-// J03/H09: stored_max (principal -> highest drop_before in the floor, may be null) exempts a drop_before that is not above
+// Stored_max (principal -> highest drop_before in the floor, may be null) exempts a drop_before that is not above
 // that stored maximum: it is already stored, so a clock step back must not make it unpublishable. A value above the
 // stored maximum is still refused (fail-closed for real rewinds).
 std::optional<BundleError> check_drop_before_not_future(const BundleView& v, std::int64_t now_unix_s,

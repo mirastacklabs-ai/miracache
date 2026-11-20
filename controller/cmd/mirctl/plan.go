@@ -20,7 +20,7 @@ import (
 	"miracache/controller/store"
 )
 
-// authorPrefix marks bundles written by mirctl. One writer per cluster (decision 12): mirctl only
+// authorPrefix marks bundles written by mirctl. One writer per cluster: mirctl only
 // continues a bundle whose author starts with it, unless --force-writer is given.
 const authorPrefix = "mirctl "
 
@@ -76,8 +76,8 @@ type plan struct {
 	cleanup func()
 }
 
-// prepare runs steps 1-3 of decision 14: identities of every node, the node with the highest
-// sec_generation, and the current sec taken from it (Q06).
+// prepare runs steps 1-3: identities of every node, the node with the highest
+// sec_generation, and the current sec taken from it.
 func (a *app) prepare(ctx context.Context, pf *publishFlags, needSigning bool) (*plan, error) {
 	if pf.source == "" {
 		return nil, errors.New("--source is required")
@@ -135,7 +135,7 @@ func (a *app) prepare(ctx context.Context, pf *publishFlags, needSigning bool) (
 		return nil, fmt.Errorf("node %s is unreachable (%v); fix it or pass --allow-unreachable", firstKey(p.down), p.down[firstKey(p.down)])
 	}
 
-	// 3. The current sec comes from the node with the highest sec_generation (Q06).
+	// 3. The current sec comes from the node with the highest sec_generation.
 	var bestGen, bestApplied uint64
 	for _, adm := range sortedAdmins(p.ids) {
 		id := p.ids[adm]
@@ -225,7 +225,7 @@ func sortedAdmins(m map[string]*publish.Identity) []string {
 }
 
 // secDiff names the differences between the cluster's current principals and rbac and the source's
-// (Q12); an empty result means they are equal. Both sides are compared in the emitted form.
+// An empty result means they are equal. Both sides are compared in the emitted form.
 func secDiff(cur *bundle.Sec, src *Source) []string {
 	var out []string
 	curP, srcP := map[string]bundle.Principal{}, map[string]bundle.Principal{}
@@ -296,7 +296,7 @@ func sortedNames[V any](a, b map[string]V) []string {
 func isMirctlAuthor(a string) bool { return a == "mirctl" || strings.HasPrefix(a, authorPrefix) }
 
 // removeOnSignal deletes dir (the throw-away store) when SIGINT or SIGTERM arrives, then exits with
-// 128+signal (U2-35). The returned function stops the watcher.
+// 128+signal. The returned function stops the watcher.
 func removeOnSignal(dir string, exit func(int)) (stop func()) {
 	ch := make(chan os.Signal, 1)
 	done := make(chan struct{})

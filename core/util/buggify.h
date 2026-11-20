@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Fault hooks for the simulator (A1.4 S6).
+// Fault hooks for the simulator.
 //
 // 1. fire(): seeded fault coin for sim code (never called from core/ production paths).
 // 2. Teeth: deliberate store bugs the simulator MUST detect. Each is a one-line hook in the

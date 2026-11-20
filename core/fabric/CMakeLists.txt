@@ -1,6 +1,6 @@
 # toml++ (NIC profile registry) is declared once, in the top-level CMakeLists.txt.
 
-# profiles/nic-profiles.toml is compiled into the binaries (A3.3); a profiles_file overrides it.
+# profiles/nic-profiles.toml is compiled into the binaries; a profiles_file overrides it.
 file(READ ${PROJECT_SOURCE_DIR}/profiles/nic-profiles.toml MIRA_PROFILES_TOML)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/profiles/nic-profiles.toml)
 configure_file(profile/nic_profiles_embedded.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/nic_profiles_embedded.cpp @ONLY)
@@ -15,7 +15,7 @@ if(MIRACACHE_WITH_VERBS)
     profile/nic_profile_verbs.cpp)
   target_link_libraries(miracache_fabric PRIVATE PkgConfig::IBVERBS PkgConfig::RDMACM)
   target_compile_definitions(miracache_fabric PUBLIC MIRACACHE_WITH_VERBS=1)
-  # mira-nicprobe [--json] [device...]: NIC facts, capability trials, usable verdict, matched profile (A1.3, A3.3).
+  # mira-nicprobe [--json] [device...]: NIC facts, capability trials, usable verdict, matched profile.
   add_executable(mira-nicprobe probe/nicprobe_main.cpp)
   target_link_libraries(mira-nicprobe PRIVATE miracache_fabric)
 endif()

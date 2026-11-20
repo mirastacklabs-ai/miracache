@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RL4 host-side fault agent for the multi-rail rxe0 end-to-end test (tests/e2e/multirail_rdma_test.cpp).
+# Host-side fault agent for the multi-rail rxe0 end-to-end test (tests/e2e/multirail_rdma_test.cpp).
 # The dev container has no NET_ADMIN, so it cannot `ip addr del`; the test asks this agent (on the macOS host, which only
 # runs `colima ssh`, or the Linux host itself) through a directory shared by the bind mount:
 #   <dir>/req   "del" or "add" (written by the test, removed by the agent)

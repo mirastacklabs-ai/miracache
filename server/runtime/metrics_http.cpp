@@ -22,7 +22,7 @@
 namespace miracache::server {
 namespace {
 
-// Sends under a 2 s total budget (M02): the socket is non-blocking and poll()s in 50 ms slices, so a
+// Sends under a 2 s total budget: the socket is non-blocking and poll()s in 50 ms slices, so a
 // scraper that never reads can neither pin a worker for long nor delay stop().
 void send_all(int fd, const std::string& s, const std::atomic<bool>& stop) {
   RealClock clock;
@@ -59,7 +59,7 @@ Expected<std::unique_ptr<MetricsHttp>> MetricsHttp::start(const std::string& lis
   const auto colon = listen.rfind(':');
   if (colon == std::string::npos) return Error{ErrorCode::InvalidArgument, "telemetry: listen wants host:port"};
   const std::string host = listen.substr(0, colon);
-  auto parsed = parse_port(std::string_view(listen).substr(colon + 1), /*allow_zero=*/true);  // M03: no atoi
+  auto parsed = parse_port(std::string_view(listen).substr(colon + 1), /*allow_zero=*/true);  // no atoi
   if (!parsed) return Error{ErrorCode::InvalidArgument, "telemetry: bad port"};
   const int port = *parsed;
   addrinfo hints{};

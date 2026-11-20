@@ -1,4 +1,4 @@
-# miracache client config for the vLLM MiraTier (A2.9 agentbench "on" run).
+# miracache client config for the vLLM MiraTier (agentbench "on" run).
 # Copy to /etc/miracache/client.toml. Same format as deploy/two-host/client.toml (see its README
 # for certs and ports); tests/deploy loads this file through the real parser, so it cannot go stale.
 #
@@ -8,7 +8,7 @@
 
 [scope]
 provider    = "static"
-secret_file = "/run/miracache/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600, tmpfs
+secret_file = "/etc/miracache/keys/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600
 
 # More nodes: repeat [[nodes]] (each with its own admin + identity); optional `weight` (default 1)
 # sets the placement share. See deploy/two-host/client-3nodes.toml.example.

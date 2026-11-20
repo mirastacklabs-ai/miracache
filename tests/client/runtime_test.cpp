@@ -212,7 +212,7 @@ TEST(Runtime, ShortSpanReturnsRestLaterInOrder) {
   EXPECT_FALSE(readable(rt.eventfd(), 0));
 }
 
-// ---- s12 (tpu-sync cross-check C1): lanes ----
+// ---- lanes ----
 // Jobs of lane 0 block (a memory node that stopped answering) until the gate opens or they are cancelled; every
 // other job runs at once. Counts how many lane-0 jobs ran at the same time.
 class LaneBackend final : public Backend {
@@ -276,7 +276,7 @@ TEST(RuntimeLanes, AStuckLaneHoldsOnlyItsCapAndOtherLanesRunAtOnce) {
   EXPECT_EQ(be.max_lane0, 2) << "lane 0 ran more than its cap at once";
 }
 
-// The pre-s12 runtime (2 workers, no lanes): two stuck jobs take every worker and the healthy job waits. This is the
+// The runtime without lanes (2 workers, no lanes): two stuck jobs take every worker and the healthy job waits. This is the
 // stall the lanes remove; if it no longer shows here, the test above has lost its teeth.
 TEST(RuntimeLanes, WithoutLanesTwoStuckJobsStarveEveryoneElse) {
   LaneBackend be;

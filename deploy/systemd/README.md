@@ -70,7 +70,7 @@ and its URI SAN needs an `[[rbac]]` binding (`operator`) in the bundle.
 - `LimitMEMLOCK=infinity` + `AmbientCapabilities=CAP_IPC_LOCK`: the store is registered with the NIC by a non-root process.
 - Hardening is light on purpose: no `PrivateDevices`, `ProtectKernel*`, `RestrictAddressFamilies`; they would hide `/dev/infiniband`, sysfs or netlink from RDMA.
 - `systemctl reload mira-memnode` sends `SIGHUP` (certs and identities reload).
-- For fault-injection tests (C7) set `Restart=no` first, so a killed node stays down until the test restarts it.
+- For fault-injection tests set `Restart=no` first, so a killed node stays down until the test restarts it.
 
 ## NUMA pinning
 

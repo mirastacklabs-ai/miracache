@@ -16,7 +16,7 @@
 namespace miracache::server::net {
 
 // Blocks every signal in the calling thread, so SIGHUP/SIGINT/SIGTERM are only ever delivered to
-// the main thread and never interrupt a connection thread's poll() (A06). Call first in a thread body.
+// the main thread and never interrupt a connection thread's poll(). Call first in a thread body.
 inline void block_all_signals() {
   sigset_t all;
   sigfillset(&all);

@@ -88,7 +88,7 @@ struct Decoded {
 Expected<Decoded> decode_private(std::span<const std::byte> raw);
 
 // rdma_reject private_data (one byte) so the active side can say why it was refused.
-// r8 N01: kRejectNone is also what the active side reads when no miracache node answered: a RoCE kernel
+// KRejectNone is also what the active side reads when no miracache node answered: a RoCE kernel
 // REJ (no listener on the port) carries zeroed private_data, an iWARP ECONNREFUSED carries none. The
 // host is up but the memory node is gone, so it reads as LinkDown (one ticket, then the backoff).
 inline constexpr std::uint8_t kRejectNone = 0;
@@ -97,7 +97,7 @@ inline constexpr std::uint8_t kRejectAdmit = 2;
 inline constexpr std::uint8_t kRejectBadPrivateData = 3;
 inline constexpr std::uint8_t kRejectResources = 4;  // passive side out of CQ budget / accept slots
 inline constexpr std::uint8_t kRejectVersion = 5;    // private_data version not understood
-// r7 R01: the admit hook refused for now (the node is draining): retry later. The ticket was not
+// The admit hook refused for now (the node is draining): retry later. The ticket was not
 // redeemed, so the client must not burn its other tickets on this attempt (Busy, not AccessDenied).
 inline constexpr std::uint8_t kRejectBusy = 6;
 
@@ -106,7 +106,7 @@ inline constexpr std::uint8_t kRejectBusy = 6;
 // drift from verbs: Busy -> kRejectBusy -> Busy; ResourceExhausted (connection cap) ->
 // kRejectResources -> ResourceExhausted; any other refusal (unknown, used, expired or wrong-rail
 // ticket) -> kRejectAdmit -> AccessDenied (the client tries its next ticket). Only kRejectAdmit is
-// AccessDenied: kRejectNone and an unknown byte (a newer peer) are LinkDown (r8 N01).
+// AccessDenied: kRejectNone and an unknown byte (a newer peer) are LinkDown.
 inline std::uint8_t admit_reject_code(ErrorCode c) {
   switch (c) {
     case ErrorCode::Busy: return kRejectBusy;

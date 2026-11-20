@@ -154,7 +154,7 @@ fn nightly_simulation_smoke() {
     assert!(out.failed.is_empty(), "counterexamples: {:?}", out.failed);
 }
 
-/// MB0: three nodes, one scope, R = 2.  The correct protocol holds over the
+/// three nodes, one scope, R = 2.  The correct protocol holds over the
 /// whole space (owner sets, modes), and the two owner-set/mode teeth give
 /// their counterexamples.  At two nodes with R = 2 every node is in the owner
 /// set, so only this bound makes `RootPutAtReplica` non-vacuous.
@@ -175,7 +175,7 @@ fn replica3_owner_set_and_modes() {
     }
 }
 
-/// W11: the real drain path.  Two nodes, one scope, one epoch change, two mode
+/// the real drain path.  Two nodes, one scope, one epoch change, two mode
 /// changes (Draining, then ReadOnly) and three adverse events, so a mode change
 /// combines with an epoch change and a crash.  Every passing variant holds over
 /// the whole space.  Trimmed to one operation per client (two operations per

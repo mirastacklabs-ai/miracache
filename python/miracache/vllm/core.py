@@ -120,7 +120,7 @@ class _Inflight:
     job: Job
     kind: str
     group: int
-    scope: Any  # _ScopeRef: strong reference until the op completes (R18)
+    scope: Any  # _ScopeRef: strong reference until the op completes
     reported: bool = False  # a JobResult with deferred_release=True was already emitted
 
 
@@ -131,7 +131,7 @@ class TierCore:
         self._layout = layout
         self._clock = clock
         self.counters: dict = {}
-        self.adapter = AdapterMetrics()  # miracache_adapter_* / miracache_recompute_* (A3.5 M2)
+        self.adapter = AdapterMetrics()  # miracache_adapter_* / miracache_recompute_*
         self._logged: set = set()
         self._reqs: dict = {}  # req_id -> {group: (root_key|None, _ScopeRef|None)}
         self._finished: dict = {}  # req_id -> None, insertion-ordered, capped
@@ -174,7 +174,7 @@ class TierCore:
                 best, root = p, k
         if root is not None and best != self._layout.tpc(group):
             root = None  # not chunk 0: the chain root is unknown
-        if req_id in self._finished:  # late op of a finished request: never recreate state (R17)
+        if req_id in self._finished:  # late op of a finished request: never recreate state
             if root is None:
                 self._bump("scope_missing.no_root")
                 return None
@@ -192,7 +192,7 @@ class TierCore:
         return ref
 
     def _reject(self, job: Job) -> Optional[str]:
-        """Why the job cannot be addressed safely, or None (R19)."""
+        """Why the job cannot be addressed safely, or None."""
         if len(job.chunk_ids) != len(job.keys):
             return "chunk_ids_len"
         group = group_of(job.keys[0])
@@ -337,7 +337,7 @@ class TierCore:
         for j, n in due:
             try:
                 self._submit(j, "store", n)
-            except Exception as exc:  # noqa: BLE001 - fail this job, keep going (R17)
+            except Exception as exc:  # noqa: BLE001 - fail this job, keep going
                 self._error("retry", exc)
                 self._fail(j)
         self._pump()
@@ -369,7 +369,7 @@ class TierCore:
     @never_raise(lambda self, exc, timeout_s=10.0: None)
     def drain(self, timeout_s: float = 10.0) -> None:
         """Stop intake; wait until every ticket is complete and released. On timeout every open
-        job still gets a (failed) JobResult and the client is closed first (R09)."""
+        job still gets a (failed) JobResult and the client is closed first."""
         self._closed = True
         for _, j, _ in self._retries:
             self._fail(j)

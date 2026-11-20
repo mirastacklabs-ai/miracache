@@ -20,9 +20,9 @@ namespace miracache {
 //   nodes[].id            (removed)     any value is the error "node id was removed; node IDs are assigned automatically"
 //                                       (the memory node draws a random ID once; the client learns it from HELLO_ACK;
 //                                       a node not reached yet owns no scopes; two nodes with one ID: the later one is excluded)
-//   nodes[].rails         [string]      1..4 non-empty "host:port"        no  (RL2: one rail = (device, port, IP); rails are
+//   nodes[].rails         [string]      1..4 non-empty "host:port"        no  (one rail = (device, port, IP); rails are
 //                                                                           positional and STATIC: adding one is a restart)
-//   fabric.devices        [{device,     1..4 local devices, STATIC        no  (RL2 decision 5: a device with a subnet pairs
+//   fabric.devices        [{device,     1..4 local devices, STATIC        no  (a device with a subnet pairs
 //                          subnet}]                                             only with node rails of that exact subnet;
 //                                                                           a device without `subnet` is a WILDCARD: it takes
 //                                                                           every rail of the client's protocol (any protocol
@@ -46,9 +46,9 @@ namespace miracache {
 //   fabric.keepalive_ms   integer       10..600000, def 1000 (0 rejected)  no  (PING cadence + reconnect driver of the wire client;
 //                                                                           0 is a config error: it would turn reconnect off)
 //   fabric.mtu            integer       256|512|1024|2048|4096, def 4096  no  (HELLO mtu; the HELLO proto follows fabric.protocol)
-//   fabric.profiles_file  string        path of a nic-profiles.toml       no  (A3.3: replaces the built-in NIC profile registry; a
+//   fabric.profiles_file  string        path of a nic-profiles.toml       no  (replaces the built-in NIC profile registry; a
 //                                                                           file that does not load is an error, never a fallback)
-//   fabric.read_depth     integer       1..255, unset = NIC profile       no  (A3.3 operating point: ORD asked on fetch/ingest QPs;
+//   fabric.read_depth     integer       1..255, unset = NIC profile       no  (NIC profile operating point: ORD asked on fetch/ingest QPs;
 //                                                                           precedence: config > profile > built-in default)
 //   fabric.inline_bytes   integer       0..256, unset = NIC profile       no  (QP max_inline_data; falls back to 0 if refused)
 //   fabric.ack_timeout_exp integer      1..19, unset = NIC profile        no  (RoCE QP ACK timeout 4.096 us * 2^exp; the watchdog
@@ -64,20 +64,20 @@ namespace miracache {
 //                                                                           force-failed; default = QP ACK timeout x (retry + 1) + 2 s)
 //   landing.subpool_bytes integer      multiple of 4096, 1 MiB..64 GiB   yes
 //   crypto.workers        integer       1..64                             yes
-//   placement.replicas    integer       1..3, def 1                       yes (when A2.6 lands; restart until then) (best-effort
+//   placement.replicas    integer       1..3, def 1                       yes (when replication lands; restart until then) (best-effort
 //                                                                           copies per scope on the top R nodes of the placement
 //                                                                           order; R > 1 needs at least R + 1 nodes, so >= 3)
-//   placement.replica_mode string       "async" | "sync", def "async"     yes (when A2.6 lands; restart until then) (async: the
+//   placement.replica_mode string       "async" | "sync", def "async"     yes (when replication lands; restart until then) (async: the
 //                                                                           engine's store runs one leg and a client replicator
 //                                                                           writes the other copies; sync: the job waits for every
 //                                                                           leg or the deadline)
-//   placement.replica_buffer_bytes integer 0..2^40, def 268435456 (256 MiB) yes (when A2.6 lands; restart until then) (async:
+//   placement.replica_buffer_bytes integer 0..2^40, def 268435456 (256 MiB) yes (when replication lands; restart until then) (async:
 //                                                                           bound of the plaintext copies waiting for the
 //                                                                           replicator; full = that copy is skipped; 0 = replicas off)
 //   nodes[].zone          string        1..64 of [A-Za-z0-9._-], optional no  (all nodes or none; replicas go to distinct zones;
 //                                                                           replicas > zones is a config error)
 //   lab.static_membership bool          must be true for now              no  (lab mode, when [control] is absent)
-//   control.endpoints     [string]      1..16 memory-node admin "host:port" no  (bundle mode, MB5: the watcher's bootstrap list;
+//   control.endpoints     [string]      1..16 memory-node admin "host:port" no  (bundle mode: the watcher's bootstrap list;
 //                                                                           the bundle's nodes[].admin takes over once applied.
 //                                                                           [control] together with [[nodes]] or with
 //                                                                           lab.static_membership = true is a config error)
@@ -89,18 +89,18 @@ namespace miracache {
 //                                       Bundle mode also needs [tls] cert/key/ca (the admin mTLS identity) and rejects the local
 //                                       placement.replicas (R comes from the bundle).
 //
-// HR2 live reload (internal only; no C ABI or Python call, a lab-mode client restarts): in bundle mode the signed bundle's
+// Live reload (internal only; no C ABI or Python call, a lab-mode client restarts): in bundle mode the signed bundle's
 // `config.cluster.client` table can change, while the client runs, the keys marked A or C in client/src/dyn_config.h:
 // fabric.keepalive_ms, reconnect_min_ms, reconnect_max_ms, reconnect_connect_ms, watchdog_grace_ms, ticket_batch,
 // slice_bytes (A, new fetches), deadline.put_max_ms (A, store deadlines are clamped to it, default 2500),
 // placement.replica_mode, replica_buffer_bytes, previous_view_ms, hint_entries (A), crypto.workers (C). R has one home,
 // `config.cluster.placement.replicas` of the bundle. landing.subpool_bytes, fabric.mtu, fabric.protocol and
-// fabric.fetch_qps are class B: recorded as pending, applied at the next planned rebuild (HR3). The keys in this file are
+// fabric.fetch_qps are class B: recorded as pending, applied at the next planned rebuild. The keys in this file are
 // the open-time values; a key absent from the bundle takes them. Precedence for slice_bytes: bundle > NIC profile > 1 MiB.
 //
 // Unknown tables or keys are an error (typo safety). Missing optional keys take the
 // defaults below. `scope.secret_file` and at least one node are required.
-// fabric.devices[] (RL2 decision 5): one local RDMA device and the subnet its rails serve ("" = a wildcard device: it
+// fabric.devices[]: one local RDMA device and the subnet its rails serve ("" = a wildcard device: it
 // serves every rail no subnet device claims; client/src/rail_pairing.h).
 struct LocalDevice {
   std::string device;
@@ -115,7 +115,7 @@ struct NodeConfig {
   std::string zone;          // nodes[].zone (empty = none: the node is its own zone); all nodes or none
 };
 
-// [control]: bundle mode (membership plan decision 9). Absent = lab static mode, unchanged.
+// [control]: bundle mode. Absent = lab static mode, unchanged.
 struct ControlConfig {
   std::vector<std::string> endpoints;  // memory-node admin addresses "host:port"
   std::string controller;              // optional; empty = no client reports
@@ -151,10 +151,10 @@ struct ClientConfig {
   ReplicaMode replica_mode = ReplicaMode::Async;
   std::uint64_t replica_buffer_bytes = 256ull << 20;  // async: bounded pool for the replicas' plaintext copies; 0 = replicas off
   // Lab mode: membership is the static [[nodes]] list; no controller. Must be true until
-  // controller-driven membership (A2.1/A2.8) exists.
+  // controller-driven membership exists.
   bool static_membership = false;
-  // Bundle mode (MB5): set when [control] is present; then `nodes` is empty and MB6a takes membership from
-  // the verified bundle. Until MB6a lands Client::open refuses a config with `control` set (ErrorCode::Unsupported).
+  // Bundle mode: set when [control] is present; then `nodes` is empty and the bundle takes membership from
+  // the verified bundle. Until bundle membership lands Client::open refuses a config with `control` set (ErrorCode::Unsupported).
   std::optional<ControlConfig> control;
   // Lab ticket distribution: the file mira-memnode writes ([lab] ticket_file); required by
   // Client::open (lab.ticket_file).
@@ -164,9 +164,9 @@ struct ClientConfig {
   std::uint32_t ticket_batch = 4;  // fabric.ticket_batch
   // verbs device name (fabric.device, e.g. "rxe0"); empty = first device. With fabric.devices it is devices[0].device.
   std::string device;
-  // fabric.devices (RL2): empty = the legacy single device `device` as one wildcard device (subnet "").
+  // fabric.devices: empty = the legacy single device `device` as one wildcard device (subnet "").
   std::vector<LocalDevice> devices;
-  // A3.3 NIC profile operating point. Precedence: explicit config > profile > built-in default. An unset
+  // NIC profile operating point. Precedence: explicit config > profile > built-in default. An unset
   // optional means "take the profile's value". fabric.mtu is explicit only when `mtu_explicit`.
   bool mtu_explicit = false;
   std::string profiles_file;  // fabric.profiles_file; empty = the built-in registry

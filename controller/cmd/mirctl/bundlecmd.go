@@ -33,7 +33,7 @@ func hostPart(admin string) string {
 	return admin
 }
 
-// bundlePublish is `mirctl bundle publish` (decision 14): without a controller, direct to the nodes,
+// bundlePublish is `mirctl bundle publish`: without a controller, direct to the nodes,
 // through the controller's publish pipeline (dry run on every node, new node first on a join).
 func (a *app) bundlePublish(args []string) error {
 	var pf publishFlags
@@ -48,16 +48,16 @@ func (a *app) bundlePublish(args []string) error {
 	}
 	defer p.cleanup()
 
-	// One writer per cluster (decision 12).
+	// One writer per cluster.
 	if p.curB != nil && !isMirctlAuthor(p.curB.Body.Author) && !pf.forceWriter {
 		return fmt.Errorf("the current bundle (generation %d) was written by %q, not by mirctl: one writer per cluster; "+
 			"use the controller, or pass --force-writer if it is retired", p.curB.Body.Generation, p.curB.Body.Author)
 	}
-	// The first publish to a blank cluster needs the security key (Q06).
+	// The first publish to a blank cluster needs the security key.
 	if p.best == "" && p.secKey == nil {
 		return errors.New("first publish: no node has a sec section yet, so --sec-key is required")
 	}
-	// A source whose principals or rbac differ from the cluster's, without --sec-key, is an error (Q12).
+	// A source whose principals or rbac differ from the cluster's, without --sec-key, is an error.
 	var curRBAC []bundle.RBAC
 	if p.curB != nil {
 		curRBAC = p.curB.Sec.RBAC
@@ -370,7 +370,7 @@ func (a *app) bundlePush(args []string) error {
 }
 
 // bundleStatus is `mirctl bundle status`: one line per node, and exit code 2 when a node is below
-// the highest sec_generation seen (Q07).
+// the highest sec_generation seen.
 func (a *app) bundleStatus(args []string) error {
 	var (
 		t    tlsFlags

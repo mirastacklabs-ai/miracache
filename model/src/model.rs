@@ -29,7 +29,7 @@ pub struct Bounds {
     pub scopes: u8,
     /// Principals.  Client c has principal c % principals.
     pub principals: u8,
-    /// Per-principal cap on open scopes on a node (R17).
+    /// Per-principal cap on open scopes on a node.
     pub max_scopes: u8,
     /// Chain length (TLA+ MaxPos).  One chain per scope.
     pub max_pos: u8,
@@ -52,7 +52,7 @@ pub struct Bounds {
     pub rogue_writes: u8,
     /// INVALIDATE requests.
     pub invalidates: u8,
-    /// Rail failures per run (RL0): a fetch half's rail turns suspect and the half is re-issued.
+    /// Rail failures per run: a fetch half's rail turns suspect and the half is re-issued.
     pub rail_faults: u8,
     /// Total adverse events per run (node crash, client crash, rogue write,
     /// drop_scope, scope lapse, INVALIDATE, epoch change), on top of the per-kind caps.
@@ -320,11 +320,11 @@ pub struct Faults {
     /// A delayed PUT_COMMIT of an aborted put applies to a put later begun in
     /// the same slot (no put_id), and is not ordered behind that put's data.
     pub put_id_reuse: bool,
-    /// RL0: a slice is re-issued while its original WR may still land (before its CQE).
+    /// a slice is re-issued while its original WR may still land (before its CQE).
     pub reissue_early: bool,
-    /// RL0: the state_gen READ is posted while a re-issued slice is still pending.
+    /// the state_gen READ is posted while a re-issued slice is still pending.
     pub seq_before_reissue: bool,
-    /// RL0: the buffer is released while a slice WR is still outstanding.
+    /// the buffer is released while a slice WR is still outstanding.
     pub release_outstanding: bool,
 }
 
@@ -338,7 +338,7 @@ pub struct Cfg {
 // ---------------------------------------------------------------------------
 // State
 
-/// Member state of a node in the bundle (plan decision 8): Active serves
+/// Member state of a node in the bundle: Active serves
 /// everything; Draining refuses root PUT_BEGIN (continuations, reads still
 /// served); ReadOnly refuses every PUT_BEGIN.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -414,7 +414,7 @@ const FREE_SLAB: Slab = Slab {
     stale: false,
 };
 
-/// RL0: state of one fetch slice (a half of the payload) over rail failure.
+/// state of one fetch slice (a half of the payload) over rail failure.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Hs {
     /// The original READ is posted (or already completed: see `got`).
@@ -468,9 +468,9 @@ pub struct Client {
     pub sq: Option<(St, u8)>,
     /// Ghost: when the state_gen word was read, the node still knew the scope.
     pub sq_scope_known: bool,
-    /// RL0: state of each half's slice (half 1, half 2).
+    /// state of each half's slice (half 1, half 2).
     pub hs: [Hs; 2],
-    /// RL0: the half's original READ WR may still land (no CQE yet).
+    /// the half's original READ WR may still land (no CQE yet).
     pub live: [bool; 2],
 }
 
@@ -540,13 +540,13 @@ pub enum Action {
     GetRead1(u8),
     GetRead2(u8),
     GetSeqRead(u8),
-    /// RL0: the rail of slice `h` (0 or 1) turns suspect; no CQE yet.
+    /// the rail of slice `h` (0 or 1) turns suspect; no CQE yet.
     RailFail { c: u8, h: u8 },
-    /// RL0: the rail's QPs are moved to ERR and the slice's flush CQE arrives.
+    /// the rail's QPs are moved to ERR and the slice's flush CQE arrives.
     RailFlush { c: u8, h: u8 },
-    /// RL0: the original READ of slice `h` lands (it still could: tooth path).
+    /// the original READ of slice `h` lands (it still could: tooth path).
     OrigLand { c: u8, h: u8 },
-    /// RL0: slice `h` is re-issued.
+    /// slice `h` is re-issued.
     GetReissue { c: u8, h: u8 },
     GetValidate(u8),
     GetCancel(u8),
@@ -765,7 +765,7 @@ impl Mira {
         v
     }
 
-    /// RL0: some slice WR of the client is neither completed nor flushed.
+    /// some slice WR of the client is neither completed nor flushed.
     fn outstanding(cl: &Client) -> bool {
         cl.live[0]
             || cl.live[1]

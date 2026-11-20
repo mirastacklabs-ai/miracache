@@ -4,7 +4,35 @@ Benchmarks use the systemd path on bare metal; Docker is for convenience (`deplo
 Open-source Docker engine and CLI only (colima on a Mac lab, `docker.io` packages on Linux); never Docker
 Desktop. Kubernetes is out of scope for now.
 
-## Images
+## Published images
+
+Every release publishes both images on Docker Hub (linux/amd64), built by the public release workflow and signed
+with Sigstore (keyless, no key to manage):
+
+```
+docker.io/mirastack/miracache-memnode:alpha-X.Y.Z
+docker.io/mirastack/miracache-controller:alpha-X.Y.Z
+```
+
+`:alpha` follows the newest alpha release; pin a release tag in production. Verify the signature before you run an
+image (cosign 3.x):
+
+```
+cosign verify docker.io/mirastack/miracache-memnode:alpha-X.Y.Z \
+  --certificate-identity-regexp '^https://github.com/mirastacklabs-ai/miracache/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The run scripts below take a published image through `MIRA_IMAGE`:
+
+```
+MIRA_IMAGE=docker.io/mirastack/miracache-memnode:alpha-X.Y.Z \
+  MIRA_CONFIG=/etc/miracache/memnode.toml MIRA_PKI_DIR=/etc/miracache/pki deploy/docker/run-memnode.sh
+MIRA_IMAGE=docker.io/mirastack/miracache-controller:alpha-X.Y.Z \
+  MIRA_CONF_DIR=/etc/miracache deploy/docker/run-controller.sh
+```
+
+## Building the images
 
 BuildKit is required (the per-Dockerfile `Dockerfile.*.dockerignore` files are honoured only by it; the legacy
 builder copies `build/` into the context and fails with a CMakeCache mismatch). Ubuntu's `docker.io` package does
@@ -36,7 +64,7 @@ Variables are listed at the top of the script. The flags it passes and why:
 | `--device /dev/infiniband/{rdma_cm,uverbs*}` | one `--device` per node, enumerated at start; no `--privileged` |
 | `--ulimit memlock=-1:-1` (plus `--cap-drop ALL --cap-add IPC_LOCK`) | registering the store with the NIC pins memory. **The memlock limit is what makes this work.** With `--user 10001` the container process has no effective `IPC_LOCK` (Docker adds the cap to the bounding set, not to the effective/ambient sets of a non-root user, and the image sets no file caps), so the cap alone would not lift the limit. The `--cap-add` is harmless and kept for a root or ambient-cap run; do not rely on it |
 | `-v $MIRA_STORE_DIR:$MIRA_STORE_DIR` | hugetlbfs (e.g. `/dev/hugepages`) or `file` backing dir bind-mounted at the same path: no copy layer |
-| `-v <volume>:/var/lib/miracache` | `[node] state_dir`: holds `node-id`. Identity survives container restarts and image upgrades as long as the volume does. One volume per node; it is locked. Never copy it to another host. Replace a node: stop it, `rm node-id` inside the volume (spec 6.1) |
+| `-v <volume>:/var/lib/miracache` | `[node] state_dir`: holds `node-id`. Identity survives container restarts and image upgrades as long as the volume does. One volume per node; it is locked. Never copy it to another host. Replace a node: stop it, `rm node-id` inside the volume |
 | `-v memnode.toml:/etc/miracache/memnode.toml:ro` | config |
 | `-v $MIRA_PKI_DIR:/run/miracache/pki:ro` | certs and keys (mode 0600, readable by the run user); the toml names `/run/miracache/pki/...` |
 | `--stop-timeout` | `drain_ms/1000 + 15` s, derived from the toml (`node.drain_ms`, default 5000): `SIGTERM` starts the drain, Docker's `SIGKILL` must come after it |

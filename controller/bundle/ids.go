@@ -19,7 +19,7 @@ func KeyID(pub ed25519.PublicKey) string {
 	return hex.EncodeToString(h[:8])
 }
 
-// PrincipalID is u32be(SHA-256("mira-principal-v1" || name)[0..4]); 0 maps to 1 (decision 6).
+// PrincipalID is u32be(SHA-256("mira-principal-v1" || name)[0..4]); 0 maps to 1.
 func PrincipalID(name string) uint32 {
 	h := sha256.New()
 	h.Write([]byte("mira-principal-v1"))

@@ -106,7 +106,7 @@ double metric(const std::string& text, const std::string& series) {
 // Node: sim server + real admin endpoint. The test thread is the "store thread": it pumps the
 // admin mailbox while a client call runs on another thread.
 struct Node {
-  // `rails` > 0 (RL2 follow-up): that many listeners on the one sim device, 10.0.<r>.1:7471.
+  // `rails` > 0: that many listeners on the one sim device, 10.0.<r>.1:7471.
   explicit Node(std::size_t rails = 0) : rng(1), net(clock, rng, {}, {}), srv_fab(net.add_node(1)), cli(net.add_node(2)) {
     auto cfg = server_cfg();
     for (std::size_t r = 0; r < rails; ++r) cfg.rails.push_back(fabric::RailAddr{"10.0." + std::to_string(r) + ".1", 7471});
@@ -192,7 +192,7 @@ TEST(AdminTicketsParse, StrictResponse) {
 }
 
 
-// Review r9 S08: the hostname lands in a metric label, so only 1..64 of [A-Za-z0-9._-] is kept; anything else is unknown.
+// The hostname lands in a metric label, so only 1..64 of [A-Za-z0-9._-] is kept; anything else is unknown.
 TEST(AdminTicketsParse, HostnameIsValidatedForMetricLabels) {
   auto parse = [](const std::string& host_json) {
     return AdminTicketSource::parse_response("{\"ttl_s\":300,\"tickets\":[],\"hostname\":" + host_json + "}", 4);
@@ -281,7 +281,7 @@ TEST(AdminTickets, CacheRefillNoReuseAndExpiry) {
   ASSERT_TRUE(n.run([&] { return s.prepare(); }));
   EXPECT_EQ(s.fetches(), 2u);
   EXPECT_EQ(s.cached(fabric::EpClass::Fetch), 5u);
-  EXPECT_EQ(s.cached(fabric::EpClass::Control), 2u);  // A03: only the low class (fetch) was asked for
+  EXPECT_EQ(s.cached(fabric::EpClass::Control), 2u);  // Only the low class (fetch) was asked for
   for (int i = 0; i < 5; ++i) take(fabric::EpClass::Fetch);
   EXPECT_EQ(seen.size(), 2u * 3 + 1 + 5);
   EXPECT_FALSE(s.draw(fabric::EpClass::Fetch));  // empty: NotFound, no network
@@ -304,7 +304,7 @@ TEST(AdminTickets, CacheRefillNoReuseAndExpiry) {
   // The server really accepts what we hold: each id is single-use at HELLO; covered by the server tests.
 }
 
-// RL2 follow-up A: a node with two rails (nodes[].admin, the normal multi-node path). The source keeps tickets per rail
+// A node with two rails (nodes[].admin, the normal multi-node path). The source keeps tickets per rail
 // (one request per rail, "rail": r) and a WirePort draws each rail's own, so both rails come up: the node admits a
 // ticket only on its own rail (reject 2), so rail-0 tickets on rail 1 would leave that rail down forever.
 TEST(AdminTickets, PerRailTicketsBringUpEveryRail) {
@@ -346,7 +346,7 @@ TEST(AdminTickets, PerRailTicketsBringUpEveryRail) {
   port.release_endpoints();
 }
 
-// G01: one build draws fetch_qps fetch tickets per rail. With the default ticket_batch (4) a node of fetch_qps 8 (the
+// One build draws fetch_qps fetch tickets per rail. With the default ticket_batch (4) a node of fetch_qps 8 (the
 // shipped irdma-e810-iwarp profile) or 16 (the bundle maximum) used to find at most 4 in the cache and never connect.
 // The port tells the source its need (ticket_need, from its own fetch_qps) before prepare: the fetch class then asks
 // for and keeps fetch_qps tickets per rail, control and ingest keep the batch. Admin path, 2 rails.
@@ -401,7 +401,7 @@ TEST(AdminTickets, FetchQpsAboveTheBatchConnectsEveryRail) {
   }
 }
 
-// G01 (minor case): for 2 < fetch_qps <= batch a cache left between 2 and fetch_qps - 1 refills (the mark is the need).
+// Minor case: for 2 < fetch_qps <= batch a cache left between 2 and fetch_qps - 1 refills (the mark is the need).
 TEST(AdminTickets, FetchClassRefillsBelowItsNeed) {
   Node n;
   SimClock clk;
@@ -421,7 +421,7 @@ TEST(AdminTickets, FetchClassRefillsBelowItsNeed) {
   EXPECT_EQ(s.fetches(), 2u);
 }
 
-// r7 R03: deterministic. Each block gets a fresh admin endpoint (reset() joins the previous one's
+// Deterministic. Each block gets a fresh admin endpoint (reset() joins the previous one's
 // connection threads, so no stale per-IP count), the client a generous io budget and the server a test
 // handshake budget (a sanitizer build can need more than 300 ms per handshake). No connection may be
 // refused at accept: a per_ip reject here would be the flake, not the behaviour under test.
@@ -480,7 +480,7 @@ TEST(AdminTickets, BadServerCertAndWrongIdentityAreRefused) {
   EXPECT_LE(metric(t, "miracache_admin_conn_rejected_total{reason=\"per_ip\"}"), 0) << "a connection was refused per_ip";
 }
 
-// r7 R01: a draining node answers IssueTicket with 503 (no ticket it would refuse at connect anyway); the
+// A draining node answers IssueTicket with 503 (no ticket it would refuse at connect anyway); the
 // client reads it as Busy and backs off; reset_backoff() (called on session Down) lets the very next
 // prepare() fetch again instead of waiting out the backoff.
 TEST(AdminTickets, DrainingNodeAnswers503AndBackoffResetsOnDown) {
@@ -498,7 +498,7 @@ TEST(AdminTickets, DrainingNodeAnswers503AndBackoffResetsOnDown) {
   EXPECT_EQ(s.fetches(), 1u);
   EXPECT_FALSE(n.run([&] { return s.prepare(); }));  // backing off: no network
   EXPECT_EQ(s.fetches(), 1u);
-  // r8 N03: a 503 does not grow the backoff: every retry is backoff_min_ms (1 s, no jitter here) later.
+  // A 503 does not grow the backoff: every retry is backoff_min_ms (1 s, no jitter here) later.
   for (unsigned k = 2; k <= 4; ++k) {
     clk.advance_by(milliseconds(999));
     EXPECT_FALSE(n.run([&] { return s.prepare(); }));
@@ -509,7 +509,7 @@ TEST(AdminTickets, DrainingNodeAnswers503AndBackoffResetsOnDown) {
   }
 }
 
-// r8 N08: reset_backoff() (session Down) cuts a grown backoff to backoff_min_ms from now, not to zero, so
+// reset_backoff() (session Down) cuts a grown backoff to backoff_min_ms from now, not to zero, so
 // a still-failing admin is never retried in a tight loop.
 TEST(AdminTickets, ResetBackoffKeepsAFloor) {
   SimClock clk;
@@ -536,8 +536,8 @@ TEST(AdminTickets, ResetBackoffKeepsAFloor) {
   EXPECT_EQ(s.fetches(), 4u) << "backoff_min_ms after the reset, not the 4 s the streak had grown to";
 }
 
-// R19 (review s11): ready_at() is the end of the fetch backoff while the cache cannot serve a build (0 otherwise), so
-// the open's settle waits for it. R14: prepare(budget) starts no admin call once the budget is spent.
+// ready_at() is the end of the fetch backoff while the cache cannot serve a build (0 otherwise), so
+// the open's settle waits for it. prepare(budget) starts no admin call once the budget is spent.
 TEST(AdminTickets, ReadyAtIsTheBackoffEndAndASpentBudgetStartsNoFetch) {
   SimClock clk;
   AdminTicketOptions o;
@@ -564,7 +564,7 @@ TEST(AdminTickets, ReadyAtIsTheBackoffEndAndASpentBudgetStartsNoFetch) {
   EXPECT_EQ(s.fetches(), 2u) << "a budget left: the call runs (refused at once here)";
 }
 
-// r8b Q02: away_backoff_max_ms (reconnect_max_ms in wire_open) caps the wait only while the node is away
+// away_backoff_max_ms (reconnect_max_ms in wire_open) caps the wait only while the node is away
 // (here LinkDown: nothing listens); a 403 keeps growing to backoff_max_ms.
 TEST(AdminTickets, AwayCapAppliesToLinkDownOnly) {
   const auto& c = certs();
@@ -612,7 +612,7 @@ TEST(AdminTickets, AwayCapAppliesToLinkDownOnly) {
   }
 }
 
-// r8 N07: the product side of r7 R03 (reap after accept): three calls in a row on ONE admin endpoint,
+// The product side of reaping after accept: three calls in a row on ONE admin endpoint,
 // each from a fresh source, are all served; none is refused per_ip (2 per source address) by a finished
 // connection thread that was not reaped yet.
 TEST(AdminTickets, ThreeSequentialCallsOnOneAdminAreNotRefusedPerIp) {
@@ -683,7 +683,7 @@ TEST(AdminTicketsConfig, KeysAndRules) {
   const std::string node = "[[nodes]]\nrails = [\"h:1\"]\n";
   EXPECT_FALSE(load_config(base + node + "admin = \"h:9465\"\n"));                      // admin without [tls]
   EXPECT_FALSE(load_config(base + tls + node + "admin = \"nohostport\"\n"));
-  EXPECT_FALSE(load_config(base + tls + node + "admin = \"h:9465\"\n"));  // A09: admin needs identity
+  EXPECT_FALSE(load_config(base + tls + node + "admin = \"h:9465\"\n"));  // admin needs identity
   EXPECT_FALSE(load_config(base + tls + node + "identity = \"spiffe://lab/node-1\"\n"));  // identity without admin
   EXPECT_FALSE(load_config(base + tls + node + "admin = \"h:1\"\nidentity = \"node-1\"\n"));
   EXPECT_FALSE(load_config(base + tls + "[fabric]\nticket_batch = 0\n" + node));
@@ -755,8 +755,7 @@ TEST(AdminTickets, AdminUnreachableAtOpenReturnsAnError) {
   EXPECT_FALSE((*src)->draw(fabric::EpClass::Control));
 }
 
-// ---- review r4 -------------------------------------------------------------------------------
-// A01 (client): a peer that resets the connection must not kill the process with SIGPIPE. The
+// Client: a peer that resets the connection must not kill the process with SIGPIPE. The
 // library must not change signal dispositions, so SIGPIPE is deliberately left at its default.
 TEST(AdminTickets, ResetPeerNeverRaisesSigpipe) {
   struct sigaction dfl{}, old{};
@@ -805,7 +804,7 @@ TEST(AdminTickets, ResetPeerNeverRaisesSigpipe) {
   ::sigaction(SIGPIPE, &old, nullptr);
 }
 
-// A03: a failing admin (403) is retried on a growing, jittered schedule, not on every tick.
+// A failing admin (403) is retried on a growing, jittered schedule, not on every tick.
 TEST(AdminTickets, FailedFetchesBackOff) {
   Node n;
   SimClock clk;
@@ -828,7 +827,7 @@ TEST(AdminTickets, FailedFetchesBackOff) {
   EXPECT_EQ(s.fetches(), before + 1);
 }
 
-// A03: only classes below the refill mark are requested, and no class is ever cached past 2 x batch.
+// Only classes below the refill mark are requested, and no class is ever cached past 2 x batch.
 TEST(AdminTickets, RefillAsksOnlyLowClassesAndNeverExceedsTheCap) {
   Node n;
   SimClock clk;
@@ -849,7 +848,7 @@ TEST(AdminTickets, RefillAsksOnlyLowClassesAndNeverExceedsTheCap) {
   EXPECT_EQ(s.fetches(), 7u);  // the first batch + one refill per round
 }
 
-// A09 (client): a server cert with two spiffe:// URI SANs is refused even when one matches.
+// Client: a server cert with two spiffe:// URI SANs is refused even when one matches.
 TEST(AdminTickets, ServerCertWithTwoSpiffeSansIsRefused) {
   Node n;
   const auto& c = certs();
@@ -876,7 +875,7 @@ TEST(AdminTickets, ServerCertWithTwoSpiffeSansIsRefused) {
   ASSERT_FALSE(st);
   EXPECT_EQ(st.error().code, ErrorCode::AccessDenied);
   EXPECT_NE(std::string(st.error().context).find("exactly one"), std::string::npos) << st.error().context;
-  // R18: the build sees the admin failure's text with a fixed transport-class code, never the admin's own code (the
+  // The build sees the admin failure's text with a fixed transport-class code, never the admin's own code (the
   // build path keys node-ID conflicts on InvalidArgument and shutdowns on Aborted).
   auto t = (*src)->draw(fabric::EpClass::Control);
   ASSERT_FALSE(t);
@@ -884,7 +883,7 @@ TEST(AdminTickets, ServerCertWithTwoSpiffeSansIsRefused) {
   EXPECT_STREQ(t.error().context, st.error().context);
 }
 
-// A03: name resolution is bounded by the call's budget (a hung resolver cannot stall the keepalive thread).
+// Name resolution is bounded by the call's budget (a hung resolver cannot stall the keepalive thread).
 TEST(AdminTickets, UnresolvableNameReturnsWithinTheBudget) {
   RealClock clk;
   const auto& c = certs();

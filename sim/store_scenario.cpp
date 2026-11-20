@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A1.4 S6: randomized multi-client scenario over the whole store (Arena, SlabAllocator, Store,
+// Randomized multi-client scenario over the whole store (Arena, SlabAllocator, Store,
 // MrManager, PutPath) with every invariant checked after every step.
 //
 // Clients: 4 clients over 3 principals (scope ids are shared across principals, so a wrong
@@ -118,7 +118,7 @@ class DeferredExecutor final : public Executor {
   std::deque<std::function<void()>> q;
 };
 
-// A3.1: serves a copy of the media (a crash snapshot) as a persistent backing.
+// Serves a copy of the media (a crash snapshot) as a persistent backing.
 class SnapBacking final : public Backing {
  public:
   explicit SnapBacking(std::vector<std::vector<std::byte>>& segs) : segs_(segs) {}
@@ -139,7 +139,7 @@ struct World {
 
   std::uint64_t seed;
   SeededRandom rng, net_rng;
-  SeededRandom crash_rng{0};  // A3.1: when to take a crash snapshot; separate, so the scenario trace is unchanged
+  SeededRandom crash_rng{0};  // when to take a crash snapshot; separate, so the scenario trace is unchanged
   SimClock clock;
   fabric::SimNetwork net;
   fabric::SimFabric& srv;
@@ -152,7 +152,7 @@ struct World {
   std::unique_ptr<PutPath> puts;
   RefModel model;
   bool roomy = false;
-  bool roomy_caps = false;  // r6 B1: production-size limits, so > 4 concurrent puts per endpoint happen
+  bool roomy_caps = false;  // production-size limits, so > 4 concurrent puts per endpoint happen
   std::vector<Client> clients;
   std::vector<PutOp> ops;
   std::vector<Landing> landings;
@@ -182,7 +182,7 @@ struct World {
     cfg.min_block_bytes = 4096;
     cfg.n_segments = 2;
     cfg.gen_chunk = 1000;
-    // A3.1: a scope region (in the alignment gap of segment 0: the geometry, and so every trace, is unchanged) so the
+    // A scope region (in the alignment gap of segment 0: the geometry, and so every trace, is unchanged) so the
     // store keeps scope records and a crash snapshot can be re-opened (crash_check).
     cfg.scope_records = 512;
     crash_rng = SeededRandom(seed ^ 0xc7a5c4ull);
@@ -191,8 +191,8 @@ struct World {
     cfg.principal_default.idle_ttl = roomy ? seconds(400) : seconds(60);
     cfg.principal_default.max_scopes = roomy ? 8 : 2;
     cfg.principal_default.max_bytes = roomy ? (8u << 20) : (40u << 10);
-    // Small caps so the sim reaches them: per-endpoint in-flight puts (Q08) and per-session leases (Q09).
-    // r6 B1: seeds divisible by 6 (half the roomy ones) keep the default caps instead, so many
+    // Small caps so the sim reaches them: per-endpoint in-flight puts and per-session leases.
+    // Seeds divisible by 6 (half the roomy ones) keep the default caps instead, so many
     // concurrent puts per endpoint are simulated too. Both draws always happen: the RNG stream, and
     // so every other seed's trace, is unchanged.
     const auto ep_cap = 2 + static_cast<std::uint32_t>(rng.below(3));
@@ -262,7 +262,7 @@ struct World {
       ++st.ep_cap_hits;
       if (op.ack.put_id != 0) return bad("per-endpoint put cap: PUT_BEGIN accepted with the endpoint at its cap");
     }
-    // r6 B4, the other side: on a roomy seed (no quota or capacity pressure, scopes to spare) a root put
+    // The other side: on a roomy seed (no quota or capacity pressure, scopes to spare) a root put
     // with the endpoint certainly below its cap has no reason to be refused, so an over-strict cap fails.
     if (roomy && possible < cfg.max_puts_per_endpoint && parent_is_root(q.keys[0].parent)) {
       ++st.below_cap_checks;
@@ -335,7 +335,7 @@ struct World {
   int expect_unknown(int c, int owner_op, bool cancel) const {
     if (owner_op < 0) return 1;  // an id the server never issued
     const PutOp& o = ops[static_cast<std::size_t>(owner_op)];
-    if (o.client != c) return 1;  // Q16: another endpoint's put id looks unknown
+    if (o.client != c) return 1;  // another endpoint's put id looks unknown
     switch (o.st) {
       case PSt::Writing: return 0;
       case PSt::Digesting: return cancel ? 0 : 1;  // commit twice is unknown; cancel aborts the digesting put
@@ -374,7 +374,7 @@ struct World {
       puts->put_commit(ep, q, cb);
     }
     mixin(id * 3 + cancel + (got->first ? 7 + static_cast<std::uint64_t>(got->second) : 0));
-    // Distinct messages per case, so each sim tooth can name the oracle that must catch it (r6 B3).
+    // Distinct messages per case, so each sim tooth can name the oracle that must catch it.
     const bool foreign = owner >= 0 && c != ops[static_cast<std::size_t>(owner)].client;
     if (want >= 0 && (!got->first || (got->second == CommitStatus::UnknownPut) != (want == 1)))
       return bad(want != 1 ? "UnknownPut: cancel of a live own put answered UnknownPut"
@@ -491,7 +491,7 @@ struct World {
       q.keys.push_back(kh(ids.back()));
     }
     const SessionId sess = ci < 0 ? 999 : clients[static_cast<std::size_t>(ci)].sess;
-    // Per-session lease cap (Q09): with this many leases certainly alive the ack must be all-MISS, lease 0.
+    // Per-session lease cap: with this many leases certainly alive the ack must be all-MISS, lease 0.
     std::size_t alive = 0;
     for (const auto& l : leases)
       if (l.sess == sess && l.expiry > now()) ++alive;
@@ -678,7 +678,7 @@ struct World {
     mixin(freed);
   }
 
-// ---- A3.1 crash check -------------------------------------------------------------------
+// ---- Crash check -------------------------------------------------------------------
   // A crash at this instant: the media (Anon segments, the scope region in segment 0's slack) are copied, a new
   // Arena / SlabAllocator / Store open over the copy and run the restart scan (unclean: every extent re-verified).
   // Safety: every adopted block was a live COMMITTED block (same slot, generation, key, length, owner) of a scope
@@ -813,7 +813,7 @@ struct World {
     for (int p = 1; p <= 3; ++p) store->drop_principal(static_cast<PrincipalId>(p), Nanos{INT64_MAX / 2});
     clock.advance_by(cfg.lease_max + seconds(1));
     store->tick();
-    for (int i = 0; i < 1000000 && store->sweep_pending(); ++i) store->sweep_step();  // QT1: the drops are incremental
+    for (int i = 0; i < 1000000 && store->sweep_pending(); ++i) store->sweep_step();  // the drops are incremental
     puts->tick();
     check(true);
     if (store->n_leases() != 0) bad("NoLeaseLeak: leases left after lease_max");
@@ -838,7 +838,7 @@ StoreScenarioResult run_store_scenario(std::uint64_t seed, std::uint32_t full_ev
   for (std::uint32_t i = 0; i < steps && w.fail.empty(); ++i) {
     w.step();
     if (w.fail.empty()) w.check(full_every != 0 && i % full_every == 0);
-    if (w.fail.empty() && (w.crash_rng.below(40) == 0 || i + 1 == steps)) w.crash_check();  // A3.1
+    if (w.fail.empty() && (w.crash_rng.below(40) == 0 || i + 1 == steps)) w.crash_check();
     if (!w.fail.empty()) w.fail += " (step " + std::to_string(i) + ")";
   }
   if (w.fail.empty()) w.drain();

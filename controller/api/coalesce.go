@@ -8,8 +8,8 @@ import (
 	"miracache/controller/audit"
 )
 
-// coalescer folds denied calls into one entry per (actor, action, result) per second with a count
-// (RBAC/audit plan decision 6). Beyond maxKeys distinct keys per second the rest fold into actor
+// coalescer folds denied calls into one entry per (actor, action, result) per second with a count.
+// Beyond maxKeys distinct keys per second the rest fold into actor
 // "(other)".
 type coalescer struct {
 	mu    sync.Mutex

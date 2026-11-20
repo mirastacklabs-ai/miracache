@@ -66,8 +66,8 @@ func startAPI(ctx context.Context, f apiFlags, st *store.Store, p *publish.Publi
 	}, nil
 }
 
-// bootstrapRBAC seeds the first security-admin(s) once, while the store holds no rbac bindings
-// (RBAC/audit plan decision 3). Afterwards the flag is ignored. It needs the audit log: a role
+// bootstrapRBAC seeds the first security-admin(s) once, while the store holds no rbac bindings.
+// Afterwards the flag is ignored. It needs the audit log: a role
 // change that cannot be recorded does not happen. The bindings enter the bundle's sec with the
 // next publish.
 func bootstrapRBAC(st *store.Store, aw *audit.Writer, list string, log *slog.Logger) error {

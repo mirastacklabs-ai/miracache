@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Memory-node wire adapter (A1.4 S7): maps wire v0 frames onto the typed store API.
+// Memory-node wire adapter: maps wire v0 frames onto the typed store API.
 //
 //   admit      TicketTable::redeem in the fabric's AdmitFn: no connection without a live,
 //              single-use ticket; the ticket fixes class, rail and principal. The principal
@@ -62,7 +62,7 @@ struct ServerConfig {
   std::uint32_t mtu = 4096;
   std::uint8_t wire_protocol = 1;            // HELLO_ACK proto: 1 RoCE, 2 iWARP
   std::vector<fabric::RailAddr> rails;       // one listener per rail (1..4, STATIC); empty = one default listener
-  // RL1: rail index -> index of the fabric (device) it lives on; empty = every rail on fabric 0. device_names are for
+  // rail index -> index of the fabric (device) it lives on; empty = every rail on fabric 0. device_names are for
   // labels and logs (same indexing as the fabrics).
   std::vector<std::uint32_t> rail_device;
   std::vector<std::string> device_names;
@@ -71,8 +71,8 @@ struct ServerConfig {
   // Longest an idle loop may sleep before it must call run_once() again (timers: put timeouts, fence
   // retries, sweeps, idle reaping all live in tick()). Completions and worker `done`s wake it earlier.
   Nanos idle_tick = std::chrono::milliseconds(10);
-  // Abuse limits (S7 fix round 2; TOML [limits]).
-  // Live tickets one identity may hold. 0 = not set: Server::create computes default_ticket_max(rails, fetch_qps) (H07).
+  // Abuse limits (TOML [limits]).
+  // Live tickets one identity may hold. 0 = not set: Server::create computes default_ticket_max(rails, fetch_qps).
   std::uint32_t ticket_max_per_identity = 0;
   Nanos admit_timeout = std::chrono::seconds(10);    // redeemed ticket whose connect never completes
   Nanos hello_deadline = std::chrono::seconds(5);    // accepted endpoint must say HELLO within this
@@ -84,12 +84,12 @@ struct ServerConfig {
   std::uint32_t max_conns_per_principal = 0;
   std::uint32_t fetch_qps = 1;                       // resolved NIC profile's fetch_qps per rail (feeds the computed default)
   std::uint32_t max_leases_per_principal = 8192;     // live leases across all of a principal's sessions
-  // Controller-less lab bring-up (design/03 R22): binds one identity to one principal.
+  // Controller-less lab bring-up: binds one identity to one principal.
   std::string lab_identity;                  // empty = no lab principal
   std::vector<std::string> lab_identities;   // more identities (SPIFFE ids) bound to lab_principal
   // GOAWAY window (ms) sent when an applied bundle removes this node (reason Epoch); [node] drain_ms.
   std::uint32_t goaway_drain_ms = 5000;
-  // Lab principal: named "lab", its ID computed from the name like every principal ID (goal 10, decision 6).
+  // Lab principal: named "lab", its ID computed from the name like every principal ID (goal 10).
   store::PrincipalId lab_principal = control::principal_id("lab");
   // Unix wall time in ns, for drop_before only (an absolute time from the bundle). Null = miracache::wall_unix_ns.
   std::function<std::int64_t()> wall_unix_ns;
@@ -103,7 +103,7 @@ class Server {
   // One fabric (the usual case): every rail on that device.
   static Expected<std::unique_ptr<Server>> create(const ServerConfig& cfg, fabric::Fabric& fabric, const Clock& clock,
                                                   Random& rng, Executor& exec, Random* ticket_rng = nullptr);
-  // RL1: one fabric per distinct device; cfg.rail_device maps each rail to its fabric. The fabrics' endpoint IDs must
+  // one fabric per distinct device; cfg.rail_device maps each rail to its fabric. The fabrics' endpoint IDs must
   // be disjoint (VerbsOptions::ep_id_base; the sim's IDs are network-wide).
   static Expected<std::unique_ptr<Server>> create(const ServerConfig& cfg, std::vector<fabric::Fabric*> fabrics,
                                                   const Clock& clock, Random& rng, Executor& exec,
@@ -121,21 +121,21 @@ class Server {
   // Admin API (the mTLS front end calls this; tests and the lab bootstrap call it directly).
   Expected<std::vector<proto::Ticket>> issue_ticket(const std::string& identity, fabric::EpClass cls,
                                                     std::uint8_t rail, std::uint32_t count);
-  // Whole-batch pre-check for `total` tickets (A08): AccessDenied / ResourceExhausted without issuing any;
-  // Busy while draining (r7 R01: the admin API answers 503, no ticket the node would refuse anyway).
+  // Whole-batch pre-check for `total` tickets: AccessDenied / ResourceExhausted without issuing any;
+  // Busy while draining (the admin API answers 503, no ticket the node would refuse anyway).
   Status check_issue_capacity(const std::string& identity, std::uint32_t total);
-  // SIGHUP: re-bind the lab identities (A04). Added ones are bound; removed ones (or all, when the
+  // SIGHUP: re-bind the lab identities. Added ones are bound; removed ones (or all, when the
   // principal id changed) go through remove_identity, which revokes their tickets and connections.
   void reload_identities(const std::string& lab_identity, const std::vector<std::string>& lab_identities,
                          store::PrincipalId lab_principal);
-  // Bundle mode (MB3a/MB3b): swaps in a verified, parsed and persisted bundle. Store thread only, between run_once
+  // Bundle mode: swaps in a verified, parsed and persisted bundle. Store thread only, between run_once
   // turns. Applies, in full and from the bundle alone (a node that missed bundles ends in the same state):
   //   principals   identity -> computed principal ID bindings (identities that disappear or change principal go
-  //                through remove_identity: tickets and connections revoked); quota policies (QT3 formula);
-  //   member state this node's state from `nodes` (absent = Removed), kept apart from the SIGTERM latch (P08);
-  //   views, R     stored as given (epoch enforcement is MB4);
+  //                through remove_identity: tickets and connections revoked); quota policies;
+  //   member state this node's state from `nodes` (absent = Removed), kept apart from the SIGTERM latch;
+  //   views, R     stored as given (epoch enforcement is separate);
   //   drop_before  the per-principal maximum ever seen, re-applied on every apply (and by load_drop_before_floor).
-  // The member-state refusal of root puts is wired by MB4 (accepts_root_puts()); lab mode is unaffected.
+  // The member-state refusal of root puts is wired separately (accepts_root_puts()); lab mode is unaffected.
   enum class MemberState : std::uint8_t { Active, Draining, Readonly, Removed };
   struct AppliedBundle {
     std::uint64_t generation = 0, sec_generation = 0;
@@ -146,8 +146,8 @@ class Server {
   };
   void apply_bundle(const control::BundleView& view);
   const AppliedBundle& applied_bundle() const { return applied_bundle_; }
-  // ---- HR1: live configuration (server/dyn_config.h). ----
-  // Store thread, between run_once turns (P13: the parse and validation already ran on the admin or main thread).
+  // ---- Live configuration (server/dyn_config.h). ----
+  // Store thread, between run_once turns (the parse and validation already ran on the admin or main thread).
   // Swaps every class A key at once: store, put path, slab, ticket table, the limits in ServerConfig, and the policies
   // derived for bundle principals. An op uses the values current when it starts. Counts
   // miracache_config_reload_total{result="applied"}. `source` is "bundle" or "sighup" (log only).
@@ -162,9 +162,9 @@ class Server {
   const control::BundleView* bundle_view() const { return view_.get(); }
   // Member state as of the last apply. Never touched by begin_drain(): a removed-then-re-added node serves again.
   MemberState member_state() const { return applied_bundle_.member_state; }
-  // Root PUT_BEGIN gate (MB4): the SIGTERM latch is clear and the bundle says `active`.
+  // Root PUT_BEGIN gate: the SIGTERM latch is clear and the bundle says `active`.
   bool accepts_root_puts() const { return !draining_ && applied_bundle_.member_state == MemberState::Active; }
-  // MB4 (decision 8; bundle mode only, a node with no applied bundle behaves as in lab mode):
+  // Epoch and owner checks (bundle mode only, a node with no applied bundle behaves as in lab mode):
   //   PUT_BEGIN frame epoch != the node's: StaleEpoch (retry 0 below, 50 ms above); then readonly/removed refuse
   //   any PUT_BEGIN (Draining); a root batch also needs accepts_root_puts() (Draining) and this node in the owner
   //   set of the current view (else SKIP for every key). LOOKUP/READ/RENEW/RELEASE are never checked.
@@ -178,9 +178,9 @@ class Server {
   // Start-up (before apply_bundle): the floor file's per-principal drop_before maxima (name -> unix seconds), so a
   // node whose bundle no longer carries a drop_before still honours the highest one it ever saw.
   void load_drop_before_floor(const std::map<std::string, std::int64_t>& maxima);
-  // Y08: GET /v1/identity fields that live in the store. Taken on the store thread (publish_gauges / apply_bundle)
+  // GET /v1/identity fields that live in the store. Taken on the store thread (publish_gauges / apply_bundle)
   // under a mutex; the admin thread only copies it, it never touches the store.
-  // RL1: one rail's health as GET /v1/identity reports it (membership plan decision 11): up = port ACTIVE, listener
+  // one rail's health as GET /v1/identity reports it: up = port ACTIVE, listener
   // alive and no fatal async event in the last 10 s. Refreshed on the store thread about every 500 ms of Clock time.
   struct RailHealth {
     std::uint32_t rail = 0;
@@ -201,10 +201,10 @@ class Server {
     std::lock_guard<std::mutex> g(snap_mu_);
     return snap_;
   }
-  // The cap this node enforces for principal `id` (0 = none configured), by the QT3 formula.
+  // The cap this node enforces for principal `id` (0 = none configured), by the quota formula.
   std::uint64_t principal_cap_bytes(store::PrincipalId id) const;
   TicketTable& tickets() { return tickets_; }
-  // Metrics (A3.5 M1). Counters are live (relaxed atomics, any thread may scrape). The gauges
+  // Metrics. Counters are live (relaxed atomics, any thread may scrape). The gauges
   // are refreshed on the store thread by tick() (about every 250 ms of Clock time) or by
   // publish_gauges().
   telemetry::Registry& metrics() { return registry_; }
@@ -218,27 +218,27 @@ class Server {
   // later) with `drain_ms`, then keep serving lookups/fetches/renews and finishing puts, but refuse root
   // PUT_BEGINs (WireStatus::Draining). The caller decides when to stop: drain_idle() or its own deadline.
   void begin_drain(proto::GoawayReason why, std::uint32_t drain_ms);
-  // RB2, POST /v1/drain: a node-local drain WITHOUT exit (rolling restarts). Store thread. Same effect as the SIGTERM
+  // POST /v1/drain: a node-local drain WITHOUT exit (rolling restarts). Store thread. Same effect as the SIGTERM
   // drain (GOAWAY, no root PUT_BEGIN, no new tickets) but the process keeps running until the operator stops it;
   // the latch lasts for the process. Returns false if the node was already draining (nothing sent again).
   bool admin_drain(std::uint32_t drain_ms);
-  // RB2, POST /v1/drop_principal: raises the principal's drop_before (unix seconds) at once, the same mechanism as a
+  // POST /v1/drop_principal: raises the principal's drop_before (unix seconds) at once, the same mechanism as a
   // bundle's drop_before (monotonic, converted once, incremental sweep: lookups of dead scopes miss at once, memory
   // is freed over the next turns, other principals are untouched). This call only changes the running store; the
   // admin route makes it durable (FloorState::raise_drop_before, loaded again by load_persisted_drop_before at start;
   // the controller route persists it through a new `sec`). Store thread. NotFound if a bundle is applied and has no
-  // such principal; InvalidArgument if drop_before is later than now + 300 s (U2-02).
+  // such principal; InvalidArgument if drop_before is later than now + 300 s.
   Status drop_principal_local(const std::string& name, std::int64_t drop_before_unix_s);
   bool draining() const { return draining_; }
   // No session and no put in flight: nothing is left to wait for.
   bool drain_idle() const { return sessions_.empty() && puts_->n_puts() == 0; }
-  // Exit (r6 A2), the last call on the store thread: drops every connection (Writing puts are fenced
+  // Exit, the last call on the store thread: drops every connection (Writing puts are fenced
   // and freed, write MRs deregistered), then marks the superblock clean. The caller must first stop
   // its executor and run every queued `done` (StoreExecutor: stop(); drain_done()), so a Digesting
   // put has committed or been freed: nothing commits after the clean mark. A put still in flight or
   // a write MR that will not fence leaves the media unclean (an error; the next open recovers).
   Status shutdown_clean();
-  // SC1: the scrubber (null until create()). stop() ends picking; shutdown_clean() calls it.
+  // The scrubber (null until create()). stop() ends picking; shutdown_clean() calls it.
   store::Scrubber& scrubber() { return *scrub_; }
   // How long an idle loop may sleep: until the next tick() is due (zero = now), capped by idle_tick.
   Nanos next_wake_in() const;
@@ -247,7 +247,7 @@ class Server {
   store::PutPath& puts() { return *puts_; }
   store::MrManager& mrs() { return *mrs_; }
   store::Arena& arena() { return *arena_; }
-  // A3.1: what the restart scan of this start adopted and discarded (ran == false on a blank store).
+  // What the restart scan of this start adopted and discarded (ran == false on a blank store).
   const store::RestartReport& restart_report() const { return restart_report_; }
   // The memory node ID: random, persisted in the superblock (plan 2C).
   std::uint32_t node_id() const { return cfg_.store.node_id; }
@@ -256,15 +256,15 @@ class Server {
   std::size_t n_conns() const { return conns_.size(); }
   std::size_t n_admitted() const { return admitted_.size(); }  // redeemed, endpoint not yet accepted
   std::uint32_t table_gen() const { return table_gen_; }
-  // H02: drawn once per process (Random) and sent in every HELLO_ACK (kTlvTagBootNonce); never 0. A client that sees
+  // Drawn once per process (Random) and sent in every HELLO_ACK (kTlvTagBootNonce); never 0. A client that sees
   // another value on a rejoining rail knows the node restarted, whatever table_gen the new process reached.
   std::uint64_t boot_nonce() const { return boot_nonce_; }
   std::uint64_t n_registration_errors() const { return reg_errors_; }
 
  private:
-  // A3.1: the warm-restart scan of a re-opened store (store/restart.h), with its log lines and metrics.
+  // The warm-restart scan of a re-opened store (store/restart.h), with its log lines and metrics.
   Status restart();
-  // A3.1 (UP1): a probe write registration over the first data run, so a backing whose pages cannot be pinned for
+  // A probe write registration over the first data run, so a backing whose pages cannot be pinned for
   // remote write (a disk file on overlayfs, ext4...) refuses to start with a clear error instead of refusing every put.
   Status probe_backing();
   struct Conn {
@@ -337,14 +337,14 @@ class Server {
   void send_put_done(fabric::EndpointId ep, std::uint64_t rid, const store::PutDoneResult& r);
 
   ServerConfig cfg_;
-  std::vector<fabric::Fabric*> fabrics_;          // one per distinct device (RL1)
+  std::vector<fabric::Fabric*> fabrics_;          // one per distinct device
   std::map<fabric::EndpointId, std::uint32_t> ep_dev_;  // accepted endpoint ID -> its fabric index
   std::size_t poll_rr_ = 0;                       // round-robin start of the fabric poll
   Nanos last_rail_poll_{-1};
   const Clock& clock_;
   // Declared before the store and put path, which hold pointers into mx_; destroyed after them.
   telemetry::Registry registry_;
-  store::RestartReport restart_report_;  // A3.1
+  store::RestartReport restart_report_;
   struct Mx;
   std::unique_ptr<Mx> mx_;
   TicketTable tickets_;
@@ -354,7 +354,7 @@ class Server {
   std::vector<fabric::PdId> fetch_pds_, ingest_pds_;  // per device
   std::unique_ptr<store::MrManager> mrs_;
   std::unique_ptr<store::PutPath> puts_;
-  std::unique_ptr<store::Scrubber> scrub_;  // SC1: declared after store_/arena_ so it is destroyed first
+  std::unique_ptr<store::Scrubber> scrub_;  // declared after store_/arena_ so it is destroyed first
 
   std::map<fabric::EndpointId, Conn> conns_;
   std::map<TicketId, Admitted> admitted_;        // redeemed, endpoint not yet accepted
@@ -367,12 +367,12 @@ class Server {
   store::SessionId next_session_ = 1;
   std::uint32_t table_gen_ = 0;
   std::uint64_t boot_nonce_ = 1;
-  LogLimiter too_large_log_{std::chrono::seconds(60)};  // K10: the too-large PUT_BEGIN WARN, per (principal, size class)
+  LogLimiter too_large_log_{std::chrono::seconds(60)};  // the too-large PUT_BEGIN WARN, per (principal, size class)
   std::uint64_t reg_errors_ = 0;
   Nanos last_tick_{-1};
   bool draining_ = false;
   AppliedBundle applied_bundle_;
-  std::atomic<DynPtr> dyn_;      // HR1: the live class A snapshot (readers: admin and metrics threads)
+  std::atomic<DynPtr> dyn_;      // the live class A snapshot (readers: admin and metrics threads)
   DynPtr dyn_base_;              // the start-up snapshot, immutable
   store::PrincipalPolicy policy_of(const control::PrincipalView& p) const;
   void apply_bundle_config(const control::BundleView& v);
@@ -383,16 +383,16 @@ class Server {
   mutable std::mutex snap_mu_;
   NodeSnapshot snap_;
   std::shared_ptr<const control::BundleView> view_;
-  // MB4: the current-view placement of the applied bundle (built once per apply) and this node's ID as placement text.
+  // The current-view placement of the applied bundle (built once per apply) and this node's ID as placement text.
   View place_view_;
   std::string self_id_text_;
   std::uint32_t place_r_ = 1;
-  std::uint64_t epoch_violations_ = 0;  // ghost: a PUT_BEGIN accepted against decision 8 (check_invariants)
+  std::uint64_t epoch_violations_ = 0;  // ghost: a PUT_BEGIN accepted against the epoch and owner checks (check_invariants)
   bool refusing_sessions() const { return draining_ || (view_ && applied_bundle_.member_state == MemberState::Removed); }
   void count_epoch_refusal(const char* reason);
   void send_skip_all(fabric::EndpointId id, const proto::FrameHeader& req, std::size_t n);
   std::map<std::string, store::PrincipalId> bundle_identities_;  // identities bound by the applied bundle
-  std::map<store::PrincipalId, std::uint64_t> caps_;             // principal ID -> cap bytes (QT3)
+  std::map<store::PrincipalId, std::uint64_t> caps_;             // principal ID -> cap bytes
   std::map<std::string, telemetry::Gauge*> cap_gauges_;          // principal name (or "_other") -> cap series
   std::map<std::string, std::int64_t> drop_before_max_;          // principal name -> highest unix seconds ever seen
   // name -> {unix seconds, Clock-domain cutoff}: converted once per rise, so repeated applies do not drift

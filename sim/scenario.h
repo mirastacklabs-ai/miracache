@@ -26,7 +26,7 @@ struct AeadFetchResult {
   std::uint64_t scribbles = 0;
 };
 
-// A1.5 S3: sliced READs of pre-sealed blocks into the landing pool + decrypt pipeline.
+// Sliced READs of pre-sealed blocks into the landing pool + decrypt pipeline.
 // nemesis=false: every block must validate. nemesis=true: a rogue writer scribbles the
 // pool (between slices and during decrypt); every case must be Hit with exact bytes,
 // MissAead or MissSeq (engine buffer zeroed), never Hit with wrong bytes.
@@ -40,7 +40,7 @@ struct ScenarioStats {
   std::uint64_t ep_cap_hits = 0, lease_cap_hits = 0, unknown_probes = 0;  // oracle-checked limit paths
   std::uint64_t below_cap_checks = 0;  // roomy seeds: PUT_BEGINs below the endpoint cap that must not be refused
   std::uint64_t max_ep_puts = 0;       // most puts ever live on one endpoint (a max, not a sum)
-  std::uint64_t crash_checks = 0, crash_adopted = 0;  // A3.1: crash snapshots re-opened and scanned, blocks adopted
+  std::uint64_t crash_checks = 0, crash_adopted = 0;  // crash snapshots re-opened and scanned, blocks adopted
 };
 struct StoreScenarioResult {
   bool ok = true;
@@ -49,14 +49,14 @@ struct StoreScenarioResult {
   ScenarioStats stats;
 };
 
-// A1.4 S6: randomized multi-client scenario over the whole store, every invariant checked
+// Randomized multi-client scenario over the whole store, every invariant checked
 // after every step (the CRC-recomputing CommittedIntact sweep every `full_every` steps and
 // at the end; 0 = only at the end). Teeth variants are selected with buggify::set_teeth.
 StoreScenarioResult run_store_scenario(std::uint64_t seed, std::uint32_t full_every = 1);
 struct MembershipStats {
   std::uint64_t bundles = 0, pushes = 0, goaways = 0, commits = 0, lookups = 0;
   std::uint64_t root_accepted = 0, child_accepted = 0, skipped = 0, stale = 0, draining = 0;
-  std::uint64_t readded_accepts = 0;  // roots accepted by a node that had been removed (P08)
+  std::uint64_t readded_accepts = 0;  // roots accepted by a node that had been removed
 };
 struct MembershipResult {
   bool ok = true;
@@ -64,7 +64,7 @@ struct MembershipResult {
   std::uint64_t trace_hash = 0;
   MembershipStats stats;
 };
-// MB4: three real memory nodes under a controller that joins, drains, removes, fails and re-adds them with random
+// Three real memory nodes under a controller that joins, drains, removes, fails and re-adds them with random
 // bundle lag, and a client sending PUT_BEGIN / LOOKUP with right, behind and ahead frame epochs. An independent
 // oracle (owner_set over view_from_bundle) predicts every reply; see membership_scenario.cpp. `replicas` = R.
 MembershipResult run_membership_scenario(std::uint64_t seed, std::uint32_t replicas);

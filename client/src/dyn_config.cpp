@@ -41,7 +41,7 @@ bool get_u(Ctx& c, const toml::table& t, const char* section, const char* key, s
 
 // STATIC names per section: present in the table = the whole table is an error (restart required).
 bool is_static(std::string_view section, std::string_view key) {
-  // The NIC operating-point keys are set from the local file / profile only (G06): in a bundle they are refused with
+  // The NIC operating-point keys are set from the local file / profile only: in a bundle they are refused with
   // their name (logged, counted as miracache_config_reload_total{result="rejected"}), never ignored.
   if (section == "fabric")
     return key == "device" || key == "devices" || key == "profiles_file" || key == "read_depth" || key == "inline_bytes" ||
@@ -75,7 +75,7 @@ bool parse_fabric(Ctx& c, const toml::table& t) {
   if (!get_u(c, t, "fabric", "watchdog_grace_ms", 1, 600000, o.watchdog_grace_ms)) return false;
   if (!get_u(c, t, "fabric", "ticket_batch", 1, 64, o.ticket_batch)) return false;
   if (!get_u(c, t, "fabric", "slice_bytes", 4096, 4u << 20, o.slice_bytes)) return false;
-  if (t.get("slice_bytes") && (o.slice_bytes & (o.slice_bytes - 1)))  // A3.3: power of two, 4 KiB..4 MiB
+  if (t.get("slice_bytes") && (o.slice_bytes & (o.slice_bytes - 1)))  // Power of two, 4 KiB..4 MiB
     return c.fail("fabric.slice_bytes must be a power of two, 4 KiB..4 MiB");
   // class B (pending until the rebuild)
   if (const toml::node* n = t.get("mtu")) {
@@ -186,7 +186,7 @@ DynParse parse_client_dyn(std::string_view config_toml, const ClientDyn& base, s
     }
   }
   ClientDyn& o = c.out;
-  {  // G06 (decision 7): the memory nodes' lease.put_timeout_s (this bundle's cluster table, default 10 s) >= 4 x put_max_ms
+  {  // The memory nodes' lease.put_timeout_s (this bundle's cluster table, default 10 s) >= 4 x put_max_ms
     std::int64_t put_ms = 10000;
     bool mentioned = false;  // only a bundle that sets put_max_ms is checked (a put_max_ms from the local base is not bundle content)
     if (client)

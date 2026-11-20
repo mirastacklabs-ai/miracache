@@ -1,4 +1,4 @@
-"""miracache.ns: the one ns encoding (design/03 R19). A change to these vectors means every
+"""miracache.ns: the one ns encoding. A change to these vectors means every
 host computes a new ns and the whole cache misses once: change them only on purpose."""
 import hashlib
 import os

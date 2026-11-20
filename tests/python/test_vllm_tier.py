@@ -84,7 +84,7 @@ class TestImport(unittest.TestCase):
         self.assertIn("MiraTier", vllm_tier.__all__)
 
 
-class TestConstructor(Base):  # research/19 1b, 5a, 5h, 5i
+class TestConstructor(Base):
     def test_factory_call_shape_and_super_init(self):
         t = self.make()
         self.assertEqual(t.tier_type, "MiraTier")
@@ -146,7 +146,7 @@ class TestConstructor(Base):  # research/19 1b, 5a, 5h, 5i
         c.raise_on = {"attach_region"}
         with self.assertRaises(compat.CompatError):
             self.make(client=c)
-        self.assertTrue(c.closed)  # V03: the opened client is not leaked
+        self.assertTrue(c.closed)  # The opened client is not leaked
 
     def test_failure_after_attach_also_closes_client(self):
         c = FakeClient()
@@ -154,7 +154,7 @@ class TestConstructor(Base):  # research/19 1b, 5a, 5h, 5i
             self.make(client=c, fetch_deadline_ms="not-a-number")
         self.assertTrue(c.closed)
 
-    def test_deadlines_default_and_configured(self):  # V01
+    def test_deadlines_default_and_configured(self):
         t = self.make()
         t.on_new_request(self.ctx)
         self.seed(self.ctx)
@@ -174,7 +174,7 @@ class TestConstructor(Base):  # research/19 1b, 5a, 5h, 5i
         self.assertEqual(self.client.fetch_deadlines, [120])
         self.assertEqual(self.client.store_deadlines, [900])
 
-    def test_job_carries_configured_deadline(self):  # V01
+    def test_job_carries_configured_deadline(self):
         t = self.make(fetch_deadline_ms=111, store_deadline_ms=2222)
         self.assertEqual(t._job(self.job(5, [key("a2")], [1])).deadline_ms, 111)
         self.assertEqual(t._job(self.job(6, [key("a2")], [1], promo=False)).deadline_ms, 2222)
@@ -456,7 +456,7 @@ class TestDeferredRelease(Base):  # 2d
         self.assertEqual(self.client.detached, [1])
         self.assertTrue(self.client.closed)
 
-    def test_drain_timeout_closes_client_before_setting_events(self):  # R09
+    def test_drain_timeout_closes_client_before_setting_events(self):
         t = self.t = self.make(client=self.never_releasing(), drain_timeout_s=0.05)
         r = self.failing_load()
         self.client.delay_polls = 10 ** 9  # a second load that never completes
@@ -544,7 +544,7 @@ class TestDeferredRelease(Base):  # 2d
             tbase.JobResult = orig
 
 
-class TestNamespace(Base):  # R02
+class TestNamespace(Base):
     def test_ns_is_32_bytes_and_reaches_derive(self):
         self.seed(self.ctx)
         self.assertIs(self.t.lookup(key("a2"), self.ctx), LookupResult.HIT)
@@ -615,7 +615,7 @@ class TestNamespace(Base):  # R02
                     kv_load_failure_policy="recompute")
         self.assertEqual(opened, [])
 
-    def test_refuses_without_the_recompute_promise(self):  # s12 C3
+    def test_refuses_without_the_recompute_promise(self):
         opened = []
         sub = type("T", (vllm_tier.MiraTier,), {"client_factory": staticmethod(lambda p: opened.append(p) or FakeClient())})
         for kw in ({}, {"kv_load_failure_policy": "fail"}):
@@ -625,7 +625,7 @@ class TestNamespace(Base):  # R02
             self.assertIn("kv_load_failure_policy", str(cm.exception))
         self.assertEqual(opened, [])
 
-    def test_real_engine_policy_is_checked_when_visible(self):  # s12 C3
+    def test_real_engine_policy_is_checked_when_visible(self):
         with mock.patch.object(vllm_tier, "_engine_failure_policy", return_value="fail"):
             with self.assertRaises(compat.CompatError):
                 self.make()
@@ -648,7 +648,7 @@ class TestNamespace(Base):  # R02
             self.make(spec=bad)
 
 
-class TestJobBounds(Base):  # R19
+class TestJobBounds(Base):
     def test_chunk_id_beyond_primary_view_fails_job(self):
         self.seed(self.ctx)
         self.t.submit_load(self.job(1, [key("a1")], [NSLOTS]))
@@ -678,7 +678,7 @@ def _real_lib():
 class TestRealClient(unittest.TestCase):
     """MiraTier against the real ctypes client (miracache._core.Client.open_loopback): the
     lookup -> store -> lookup -> load path with real derive (32-byte ns), real PENDING lookups
-    and real bytes in the primary view. The fake hid R02; this test does not."""
+    and real bytes in the primary view. The fake hid a namespace bug; this test does not."""
 
     def setUp(self):
         from miracache._core import Client
@@ -845,7 +845,7 @@ class TestCompat(unittest.TestCase):
         self.assertTrue(compat.check_version("garbage"))
 
 
-class TestBlockSizeCheck(Base):  # review s9 K03
+class TestBlockSizeCheck(Base):
     def setUp(self):
         pass
 
@@ -860,7 +860,7 @@ class TestBlockSizeCheck(Base):  # review s9 K03
             self.assertIn(part, msg)
         self.assertEqual(c.block_checks, [SLOT])
         self.assertEqual(c.attached, [])  # refused before the primary view is registered
-        self.assertTrue(c.closed)  # V03: the open client is closed on a refused start
+        self.assertTrue(c.closed)  # The open client is closed on a refused start
 
     def test_fits_or_unknown_limit_starts(self):
         for limit in (None, SLOT):

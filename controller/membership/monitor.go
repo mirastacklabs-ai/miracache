@@ -1,5 +1,4 @@
-// Package membership is the controller's failure detector and drain engine (membership plan
-// decisions 10 and 11; MB9).
+// Package membership is the controller's failure detector and drain engine.
 //
 // A Monitor polls GET /v1/identity on every desired member once a second (800 ms timeout), takes
 // client reports (attributed to the caller's mTLS identity by controller/api), applies the failure
@@ -15,7 +14,7 @@
 //	(c) at least half of the clients connected to it, and at least 2 distinct mTLS identities,
 //	    report every rail unreachable while they still reach other nodes, for the whole timeout.
 //
-// One identity is one vote however many reports or hosts it claims (P18). Static stability: at most
+// One identity is one vote however many reports or hosts it claims. Static stability: at most
 // max(1, floor(N * max_remove_fraction)) removals per window; beyond that a node is pending_removal
 // until an operator confirms (ConfirmRemove). The last member is never removed.
 package membership
@@ -35,7 +34,7 @@ import (
 	"miracache/controller/store"
 )
 
-// Defaults (decisions 10 and 11).
+// Defaults.
 const (
 	DefaultPollEvery         = 1000 * time.Millisecond
 	DefaultPollTimeout       = 800 * time.Millisecond
@@ -65,10 +64,10 @@ type Config struct {
 	PollTimeout time.Duration
 	FailTimeout time.Duration
 	// RemoveWindow is how long a replacement counts against the removal budget (default 10 min).
-	// Failure removals count until the node rejoins or an operator forgets or confirms it (V01).
+	// Failure removals count until the node rejoins or an operator forgets or confirms it.
 	RemoveWindow time.Duration
 	MaxReporters int // distinct report identities kept (default 1024)
-	// Audit records the Monitor's automatic actions (actor "local"); nil = not audited (V02).
+	// Audit records the Monitor's automatic actions (actor "local"); nil = not audited.
 	Audit             Auditor
 	MaxRemoveFraction float64
 	Rejoin            time.Duration
@@ -196,7 +195,7 @@ func hostOf(admin string) string {
 	return h
 }
 
-// logNode logs with node_id, host and addr (decision 15).
+// logNode logs with node_id, host and addr.
 func (m *Monitor) logNode(level slog.Level, admin, msg string, kv ...any) {
 	m.mu.Lock()
 	var id uint64
@@ -259,11 +258,11 @@ type candidate struct {
 	admin    string
 	rule     string
 	replaced bool
-	// The desired state the decision was made on; the publish Edit re-checks it (V05), so an
+	// The desired state the decision was made on; the publish Edit re-checks it, so an
 	// operator action in between wins.
 	state      string
 	drainSince string
-	hold       bool // never automatic: pending_removal until an operator confirms (rule c, U2-13)
+	hold       bool // never automatic: pending_removal until an operator confirms (rule c)
 }
 
 // Tick polls every member once and acts on what it sees. now comes from Config.Now, so tests drive
@@ -365,7 +364,7 @@ func (m *Monitor) Tick(ctx context.Context) error {
 			rule = "a"
 		case r.pollOK && !r.railsDownSince.IsZero() && now.Sub(r.railsDownSince) >= m.cfg.FailTimeout:
 			// Rule (b): every rail the node reports is down (its own verdict, rails[].up: port ACTIVE, listener alive, no
-			// fatal async event in 10 s; real per-rail health since RL1).
+			// fatal async event in 10 s).
 			rule = "b"
 		case cond && now.Sub(r.cSince) >= m.cfg.FailTimeout:
 			rule = "c"
@@ -380,14 +379,14 @@ func (m *Monitor) Tick(ctx context.Context) error {
 		}
 		if rule != "" {
 			cands = append(cands, candidate{admin: d.Admin, rule: rule, replaced: replaced, state: d.State, drainSince: d.DrainSince,
-				// U2-13: client reports alone (our own poll succeeds) never remove a node automatically.
+				// Client reports alone (our own poll succeeds) never remove a node automatically.
 				hold: rule == "c" && r.pollOK})
 		} else if p, ok := m.pending[d.Admin]; ok {
 			delete(m.pending, d.Admin)
 			defer m.logNode(slog.LevelInfo, d.Admin, "pending_removal cleared: the node meets no failure rule any more", "was", p.rule)
 		}
 
-		// Drain timers (decision 10).
+		// Drain timers.
 		if d.State == "draining" || d.State == "readonly" {
 			since := m.drainStartLocked(d, now)
 			el := now.Sub(since)
@@ -412,7 +411,7 @@ func (m *Monitor) Tick(ctx context.Context) error {
 		leaving = m.leave(ctx, st, toLeave)
 	}
 
-	// Failure removals and replacements under static stability, on the state after the drain steps (U2-11).
+	// Failure removals and replacements under static stability, on the state after the drain steps.
 	if len(toReadonly)+len(toLeave) > 0 {
 		if st2, err := m.cfg.Store.Load(); err == nil {
 			st = st2
@@ -472,7 +471,7 @@ func (m *Monitor) drainStartLocked(d store.DesiredNode, now time.Time) time.Time
 	return t
 }
 
-// allowedRemovals is what static stability still allows now (V01, V18). The base is the desired
+// allowedRemovals is what static stability still allows now. The base is the desired
 // members plus every failed node not yet rejoined, forgotten (POST /v1/members forget) or
 // confirmed, so a lasting partition cannot erode the cluster window after window; failure removals
 // count until one of those happens, replacements (st.Replaced, persisted) count for RemoveWindow.
@@ -556,7 +555,7 @@ func (m *Monitor) removeOrHold(ctx context.Context, st store.State, fresh []cand
 }
 
 // removeMatching removes from next.Nodes the nodes of want whose state and drain stamp are still
-// the ones the decision was made on (V05: an operator action in between wins). It returns the
+// the ones the decision was made on (an operator action in between wins). It returns the
 // admins it removed.
 func removeMatching(next *store.State, want map[string]candidate, on func(store.DesiredNode)) map[string]bool {
 	applied := map[string]bool{}
@@ -574,7 +573,7 @@ func removeMatching(next *store.State, want map[string]candidate, on func(store.
 			activeAfter++
 		}
 	}
-	// Never publish an empty view or an empty member list (U2-11): the count is checked here, on the
+	// Never publish an empty view or an empty member list: the count is checked here, on the
 	// state the publisher just loaded, not on the snapshot the tick took.
 	if kept == 0 || (activeBefore > 0 && activeAfter == 0) {
 		return map[string]bool{}
@@ -653,9 +652,9 @@ func (m *Monitor) refreshIDs(ctx context.Context, cs []candidate, auto bool) {
 	}
 	now := m.cfg.Now()
 	res, err := m.cfg.Pub.Publish(ctx, publish.Change{Reason: "replacement: an address reports a new node ID", TolerateUnreachable: true,
-		AllowIDChange: grant, // U2-10: only a granted replacement takes the reported ID
+		AllowIDChange: grant, // only a granted replacement takes the reported ID
 		Edit: func(next *store.State) {
-			// U2-30: the replacement joins the stability window, persisted with Failed.
+			// The replacement joins the stability window, persisted with Failed.
 			keep := next.Replaced[:0:0]
 			for _, s := range next.Replaced {
 				if t, e := time.Parse(time.RFC3339, s); e == nil && now.Sub(t) < m.cfg.RemoveWindow {

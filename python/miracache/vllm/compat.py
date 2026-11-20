@@ -14,7 +14,7 @@ from typing import Any, Mapping, Optional
 
 from .. import ns as _ns
 
-# Tested range. 0.32.0 = first tag with kv_offload/tiering (research/16); main 65711a1
+# Tested range. 0.32.0 = first tag with kv_offload/tiering; main 65711a1
 # (reports 0.34.x) was the verification pin. Upper bound is exclusive: widen only after
 # L9 passes there. The signature probes below are the real gate; this range is a guard.
 MIN_VERSION = (0, 32, 0)
@@ -22,7 +22,7 @@ MAX_VERSION_EXCLUSIVE = (0, 35, 0)
 
 PRIVATE_FIELD = "_offload_key_positions"
 
-# method -> number of positional parameters after self (research/16, design spec 2.3).
+# method -> number of positional parameters after self (design spec 2.3).
 EXPECTED_METHODS: Mapping[str, int] = {
     "lookup": 2,  # (key, req_context)
     "submit_load": 1,  # (job)
@@ -218,7 +218,7 @@ NS_HASH_ALGO = "sha256_cbor"  # the only algo check_vllm_config accepts (spec 2.
 def namespace_fields(offloading_spec: Any, slot_bytes: int, tokens_per_chunk: tuple,
                      engine_version: Optional[str], model_revision: Optional[str] = None,
                      ns_fields: Optional[Mapping[str, Any]] = None) -> dict:
-    """What ``ns`` covers (design spec 2.6, design/03 R19): engine and version, model id (the
+    """What ``ns`` covers (design spec 2.6): engine and version, model id (the
     weights path, ``model_config.model``) and revision, KV dtype (the cache dtype) and layout,
     slot stride and chunking per group, prefix-hash algo and seed, TP rank/size, plus the
     optional tier key ``ns_fields`` (e.g. ``{"quantization": "fp8"}``: values vLLM does not pass

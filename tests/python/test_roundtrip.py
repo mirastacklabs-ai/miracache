@@ -51,7 +51,7 @@ class RoundTrip(unittest.TestCase):
         self.assertEqual(comp.successful_keys, self.keys)
         self.assertEqual(dst, src)
 
-    def test_check_block_size_loopback_reports_no_limit(self):  # review s9 K03, ABI 1.2
+    def test_check_block_size_loopback_reports_no_limit(self):  # ABI 1.2
         self.assertEqual(self.c.check_block_size(1 << 20), 0)  # the loopback node is not a wire node
 
     def test_miss_and_lookup(self):

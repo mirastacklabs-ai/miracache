@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// QT2: put token buckets in PUT_BEGIN (ops and bytes, byte debt, SKIP with retry_after_ms), and bounded cap eviction
+// Put token buckets in PUT_BEGIN (ops and bytes, byte debt, SKIP with retry_after_ms), and bounded cap eviction
 // (a 25 % cap cut, max_scopes at the cap): no single call removes more than 64 blocks, the rest converges by the sweep.
 #include <array>
 #include <memory>
@@ -187,7 +187,7 @@ TEST(PutBucket, BothBucketsAndMetrics) {
   EXPECT_EQ(PFx::accepted(b), 1);
 }
 
-TEST(PutBucket, ReopenOfALargeExpiredScopeIsRetryableNotFailed) {  // U2-08
+TEST(PutBucket, ReopenOfALargeExpiredScopeIsRetryableNotFailed) {
   PFx f(cfg());
   ASSERT_TRUE(f.store->ensure_scope_for_root_put(1, sid(1), f.clock.now()));
   for (int k = 1; k <= 100; ++k) {
@@ -373,9 +373,9 @@ TEST(MaxScopes, EvictingALargeLruScopeIsBoundedPerCall) {
 }
 
 
-// ---- review w5 fixes (U2-03/04/08/09/16, U2-21) --------------------------------------------------------------------
+// ---- Scope backlog, cap cut, turn budget and latency bound ----------------------------------------
 // Scopes 1 (opened first, then dropped) and the live ones that follow.
-TEST(MaxScopes, DoomedBacklogDoesNotCostLiveScopes) {  // U2-03
+TEST(MaxScopes, DoomedBacklogDoesNotCostLiveScopes) {
   StoreConfig c = cfg();
   c.principal_default.max_scopes = 2;
   SFx f(c);
@@ -398,7 +398,7 @@ TEST(MaxScopes, DoomedBacklogDoesNotCostLiveScopes) {  // U2-03
   f.inv();
 }
 
-TEST(CapCut, DoomedBlocksGoBeforeLiveScopes) {  // U2-04
+TEST(CapCut, DoomedBlocksGoBeforeLiveScopes) {
   StoreConfig c = cfg();
   c.principal_default.max_bytes = 300 * kBlk;
   SFx f(c);
@@ -421,7 +421,7 @@ TEST(CapCut, DoomedBlocksGoBeforeLiveScopes) {  // U2-04
   f.inv();
 }
 
-TEST(Turn, PutPathEvictionsAreChargedToTheTurnBudget) {  // U2-09
+TEST(Turn, PutPathEvictionsAreChargedToTheTurnBudget) {
   StoreConfig c = cfg();
   c.principal_default.max_bytes = 300 * kBlk;
   SFx f(c);
@@ -448,7 +448,7 @@ TEST(Turn, PutPathEvictionsAreChargedToTheTurnBudget) {  // U2-09
   f.inv();
 }
 
-TEST(Turn, ErasedDoomedRecordsCountAgainstTheBudget) {  // U2-16
+TEST(Turn, ErasedDoomedRecordsCountAgainstTheBudget) {
   StoreConfig c = cfg();
   c.principal_default.max_scopes = 300;
   SFx f(c);
@@ -466,7 +466,7 @@ TEST(Turn, ErasedDoomedRecordsCountAgainstTheBudget) {  // U2-16
   EXPECT_EQ(turns, 4);  // 200 records at <= 64 per turn
 }
 
-TEST(Latency, NoCallAndNoTurnDoesMoreThanItsBoundUnderSustainedPressure) {  // U2-21
+TEST(Latency, NoCallAndNoTurnDoesMoreThanItsBoundUnderSustainedPressure) {
   StoreConfig c = cfg();
   c.principal_default.max_bytes = 100000 * kBlk;
   c.principal_default.max_scopes = 64;

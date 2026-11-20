@@ -12,7 +12,7 @@ import (
 	"miracache/controller/publish"
 )
 
-// MB9 wiring: member remove is gated on drained, drain start is stamped, reports reach the failure
+// Wiring: member remove is gated on drained, drain start is stamped, reports reach the failure
 // detector under the caller's identity, confirm_remove and the metrics route exist.
 func TestMembershipGateAndRoutes(t *testing.T) {
 	r := newRig(t, 2, 2)

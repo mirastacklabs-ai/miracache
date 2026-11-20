@@ -29,7 +29,7 @@ set(MIRACACHE_SIM_SHARDS 6 CACHE STRING "Shards per simulation seed sweep (disjo
 # miracache_sim_sweep(<name> <total seeds> <min seeds per shard> <exe> <seeds flag> <first flag>
 #                     [ALL args...] [SHARDED args...] [FIRST_SHARD args...] [TIMEOUT s] [PROCESSORS n]
 #                     [STATS_FLAG flag [UNION_MIN_PER m]])
-# STATS_FLAG (union mode, s11 run #290): each shard also gets `<flag> <build dir>/<test name>.stats` (the shard writes its seed
+# STATS_FLAG (union mode): each shard also gets `<flag> <build dir>/<test name>.stats` (the shard writes its seed
 # range and coverage counters there only when it passed), a `<name>_stats_clean` test removes those files first (fixture
 # <name>_stats_clean), and the shards are the setup of fixture `<name>_shards`; the caller registers the aggregate test that
 # requires it (reading ${<name>_STATS_FILES}). UNION_MIN_PER: when min_per would collapse the sweep to one process (N <
@@ -106,30 +106,30 @@ endfunction()
 miracache_sim_sweep(sim_smoke ${MIRACACHE_SIM_SEEDS} 50 sim_runner --seeds --first
                     FIRST_SHARD --golden ${PROJECT_SOURCE_DIR}/tests/sim/golden_traces.txt)
 
-# A1.5 exit criterion: 2,000 seeds, zero validation failures; nemesis seeds never Hit with wrong bytes.
+# Exit criterion: 2,000 seeds, zero validation failures; nemesis seeds never Hit with wrong bytes.
 miracache_sim_sweep(sim_aead ${MIRACACHE_AEAD_SEEDS} 100 sim_runner --aead-seeds --aead-first)
 
-# A1.4 S6: store scenario, every invariant after every step (CRC sweep included), seeds
+# Store scenario, every invariant after every step (CRC sweep included), seeds
 # 1..MIRACACHE_STORE_SEEDS (sim preset: 2000; the first 100 run twice for determinism), plus the pinned goldens.
 #
 # Coverage-vacuity checks ("the sweep exercised X at least once": commits, rejected writes, fetch hits, seq misses, limits,
 # crash adoption, below-cap checks, peak > 4 puts on one endpoint; sim/main.cpp store_vacuity):
-# - each shard of >= 50 seeds applies them to its own seeds (Q10: stricter than the union, every shard must be non-vacuous),
+# - each shard of >= 50 seeds applies them to its own seeds (stricter than the union, every shard must be non-vacuous),
 #   except the peak, a union property (only roomy-cap seeds, divisible by 6, reach it, and not all do; waived per shard below
 #   200 seeds);
-# - sim_store_vacuity applies them to the UNION of all shards (s11 run #290), exactly as one unsharded process of N seeds
+# - sim_store_vacuity applies them to the UNION of all shards, exactly as one unsharded process of N seeds
 #   would, plus the peak at any N. Each passing shard writes its seed range and counters to <build>/sim/<shard>.stats
 #   (--store-stats); sim_store_stats_clean removes those files before the shards run; sim_store_vacuity
 #   (FIXTURES_REQUIRED sim_store_shards, so ctest runs it after every shard and skips it if one failed) fails if a file is
 #   missing, the ranges do not tile 1..N, a file was written by another sim_runner build (its stamp, so `ctest -FA -R
 #   sim_store_vacuity` after a rebuild cannot pass on stale files), or a check is zero over the union.
-#   Note (s11c review P3-6): the checks other than the peak apply only at N >= 50, as for one process. The tsan preset
+#   Note: the checks other than the peak apply only at N >= 50, as for one process. The tsan preset
 #   (N = 30) therefore gets ONLY the union peak check; asan (60) and dev/release/sim (>= 100) get all of them. Lowering the
 #   threshold for tsan would need its own measured floor per counter, so tsan stays a race-detection lane, not a coverage one.
 # This lets the asan (60 seeds) and tsan (30 seeds) presets shard by UNION_MIN_PER 5 (6 shards of 10 / 5) instead of one
 # 1431 s / 1339 s process: same seeds, same --store-replay 100, same goldens, the checks as one process would decide.
 # dev/release/sim (N >= 100) shard by 50 exactly as before and gain the union peak check. The peak check over the union
-# replaces Q02's sim_store_peak test (seeds 13..24) and run #286's single-seed sim_store_peak_18/_24: the sweep's union
+# replaces the earlier sim_store_peak test (seeds 13..24) and the single-seed sim_store_peak_18/_24 runs: the sweep's union
 # (1..N, N >= 30 in every preset) contains 13..24, so no test pins which seed reaches the peak.
 if(MIRACACHE_STORE_SEEDS LESS 24)
   message(FATAL_ERROR "MIRACACHE_STORE_SEEDS=${MIRACACHE_STORE_SEEDS}: the store sweep needs >= 24 seeds (seeds 18 and 24 are the "
@@ -155,12 +155,12 @@ if(MIRACACHE_TEETH)
   endforeach()
 endif()
 
-# HR6: hot reload under load (sim): random valid reload sequences (class A and B, client and memory-node side) over three
+# Hot reload under load (sim): random valid reload sequences (class A and B, client and memory-node side) over three
 # real memory nodes and a bundle-mode Client, 4-lane traffic, the strict oracle. sim preset: 2000 seeds. The client's own
 # threads do the rebuilds, so a seed is not bit-reproducible; `sim_reload --seed X` replays its plan.
 set(MIRACACHE_RELOAD_SEEDS 200 CACHE STRING "Seeds run by the sim_reload test")
 add_executable(sim_reload reload_scenario.cpp)
 target_include_directories(sim_reload PRIVATE ${PROJECT_SOURCE_DIR}/tests)
 target_link_libraries(sim_reload PRIVATE miracache_sim miracache_client)
-# Q05: PROCESSORS 2 (not 1): a seed runs a Client with its own threads and real-time waits, so it uses more than one CPU.
+# PROCESSORS 2 (not 1): a seed runs a Client with its own threads and real-time waits, so it uses more than one CPU.
 miracache_sim_sweep(sim_reload ${MIRACACHE_RELOAD_SEEDS} 10 sim_reload --seeds --first TIMEOUT 3000 PROCESSORS 2)

@@ -95,7 +95,7 @@ func TestGoEmittedGolden(t *testing.T) {
 	}
 }
 
-// TestMB2Goldens verifies every MB2-generated envelope in proto/golden/bundle_v1 with MB2's
+// TestMB2Goldens verifies every generated envelope in proto/golden/bundle_v1 with the
 // trust file (trust.toml if present, else the Go trust file). Files named valid*.envelope must
 // verify and parse; reject*.envelope must be rejected with the reason and detail of its .reject file. Fails (never skips) below the reject-file floor.
 func TestMB2Goldens(t *testing.T) {
@@ -157,8 +157,8 @@ func TestMB2Goldens(t *testing.T) {
 	}
 }
 
-// checkRejectExpect compares a refusal against the shared reject_*.reject file next to the envelope ("reason: <class>"
-// , "go:" and "cpp:" lines: the exact message fragment of each side); the C++ suite reads the same file. A missing file is a failure.
+// checkRejectExpect compares a refusal against the shared reject_*.reject file next to the envelope ("reason: <class>",
+// "go:" and "cpp:" lines: the exact message fragment of each side); the C++ suite reads the same file. A missing file is a failure.
 func checkRejectExpect(t *testing.T, name string, err error) {
 	t.Helper()
 	txt, rerr := os.ReadFile(filepath.Join(goldenDir, strings.TrimSuffix(name, ".envelope")+".reject"))

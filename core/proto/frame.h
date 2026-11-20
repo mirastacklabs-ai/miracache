@@ -15,7 +15,7 @@ struct FrameHeader {
   std::uint8_t ver_minor = kVerMinor;
   std::uint16_t type = 0;
   std::uint16_t flags = 0;
-  std::uint16_t credits = 0;  // delta of newly posted receives (D10)
+  std::uint16_t credits = 0;  // delta of newly posted receives
   std::uint32_t body_len = 0;
   std::uint64_t request_id = 0;
   std::uint32_t epoch = 0;
@@ -31,7 +31,7 @@ struct Frame {
 //   bad magic, body_len > 8160, body_len != in.size() - 32  -> Corrupt (close_qp)
 //   ver_major != 0                                          -> Unsupported (close_qp)
 //   unknown flag bit                                        -> Malformed
-// ver_minor is accepted whatever its value (D12); the opcode is NOT checked here (see
+// ver_minor is accepted whatever its value; the opcode is NOT checked here (see
 // check_opcode). Frames shorter than 32 B are Corrupt.
 WireResult<Frame> decode_frame(std::span<const std::byte> in);
 
@@ -61,7 +61,7 @@ class TlvReader {
   std::span<const std::byte> rest_;
 };
 
-// Validates a whole tail per section 3: ill-formed -> Malformed; D11 (CRITICAL_EXT set
+// Validates a whole tail per section 3: ill-formed -> Malformed; (CRITICAL_EXT set
 // iff a critical TLV is present) violated -> Malformed; critical TLV present (none is
 // known in v0) -> Unsupported. Unknown non-critical TLVs are skipped.
 WireStatusResult check_tlv_tail(std::uint16_t frame_flags, std::span<const std::byte> tail);

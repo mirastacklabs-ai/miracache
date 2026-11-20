@@ -9,7 +9,7 @@ import (
 
 const goodSeed = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\n"
 
-// K12: the controller refuses a seed that group or others can read, like mirctl does.
+// The controller refuses a seed that group or others can read, like mirctl does.
 func TestReadSeedModeCheck(t *testing.T) {
 	dir := t.TempDir()
 	write := func(name string, mode os.FileMode) string {

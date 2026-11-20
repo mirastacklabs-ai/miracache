@@ -8,7 +8,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 include(GoogleTest)
 
-# Q14: discover tests when ctest starts (PRE_TEST), not as a POST_BUILD step. The Mac<->VM mount sometimes lands a freshly
+# Discover tests when ctest starts (PRE_TEST), not as a POST_BUILD step. The Mac<->VM mount sometimes lands a freshly
 # linked binary without its exec bit; POST_BUILD discovery then fails ("Permission denied") and stops the build before
 # the build script can delete and relink it. Its `ctest -N` runs after that workaround. Nothing here reads the
 # TEST_LIST variables (they only name the discovery calls), so no test list is needed at configure time.
@@ -54,7 +54,7 @@ target_compile_definitions(miracache_client_tests PRIVATE
   MIRACACHE_PROFILES_FILE="${PROJECT_SOURCE_DIR}/profiles/nic-profiles.toml")
 gtest_discover_tests(miracache_client_tests)
 
-# Crypto KATs (A1.5 S1). Registered twice: default (hardware AES where available) and
+# Crypto KATs. Registered twice: default (hardware AES where available) and
 # with hardware AES off so OpenSSL's generic code path runs too. OPENSSL_armcap=0 takes
 # effect on aarch64; OPENSSL_ia32cap masks the AES-NI/PCLMUL bits on x86.
 find_package(Threads REQUIRED)
@@ -81,7 +81,7 @@ if(MIRACACHE_WITH_VERBS)
     DISCOVERY_TIMEOUT 30)
 endif()
 
-# ---- C ABI (A1.6 L4) ----------------------------------------------------------------------
+# ---- C ABI ----------------------------------------------------------------------
 # c_abi_test is plain C against libmiracache.so; abi_symbols_test checks `nm -D` exports only
 # mira_*; python_roundtrip runs tests/python/test_roundtrip.py against the built .so (not under
 # sanitizers: a sanitized .so cannot be dlopen'ed by a plain interpreter).
@@ -144,7 +144,7 @@ target_include_directories(miracache_server_tests PRIVATE ${CMAKE_CURRENT_SOURCE
 target_compile_definitions(miracache_server_tests PRIVATE MIRACACHE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/proto/golden" MIRACACHE_LAB_CERTS_SH="${PROJECT_SOURCE_DIR}/deploy/examples/lab-certs.sh")
 gtest_discover_tests(miracache_server_tests)
 
-# Deploy examples must load through the real parsers (review r4 D01). The two-host and benchmark examples it reads are
+# Deploy examples must load through the real parsers. The two-host and benchmark examples it reads are
 # private, so the public tree omits the test file and skips it here.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deploy/deploy_examples_test.cpp")
   add_executable(miracache_deploy_tests deploy/deploy_examples_test.cpp)
@@ -153,11 +153,11 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deploy/deploy_examples_test.cpp")
   gtest_discover_tests(miracache_deploy_tests)
 endif()
 
-# Client wire port against the real memory-node server over SimFabric (A1.6 L4+).
+# Client wire port against the real memory-node server over SimFabric.
 add_executable(miracache_wire_tests client/wire_port_test.cpp client/admin_tickets_test.cpp)
 target_link_libraries(miracache_wire_tests PRIVATE miracache_client miracache_server miracache_core_client GTest::gtest_main)
 target_compile_definitions(miracache_wire_tests PRIVATE MIRACACHE_LAB_CERTS_SH="${PROJECT_SOURCE_DIR}/deploy/examples/lab-certs.sh")
-# J02: the keepalive-thread tests are timing-sensitive (real-time ping rate): RUN_SERIAL, like the other
+# The keepalive-thread tests are timing-sensitive (real-time ping rate): RUN_SERIAL, like the other
 # timing-sensitive suites (reload_walk_tests, bundle_watcher, cred_watch, WireClient/WireFailure *Keepalive*).
 gtest_discover_tests(miracache_wire_tests TEST_LIST wire_keepalive_tests
   TEST_FILTER "*Keepalive*" PROPERTIES RUN_SERIAL TRUE)
@@ -185,7 +185,7 @@ if(MIRACACHE_WITH_VERBS AND TARGET mira-memnode)
   target_compile_definitions(miracache_e2e_rdma_tests PRIVATE
     MIRACACHE_LAB_CERTS_SH="${PROJECT_SOURCE_DIR}/deploy/examples/lab-certs.sh" MIRA_MEMNODE_BIN="$<TARGET_FILE:mira-memnode>"
     MIRA_RAIL_FAULT_DIR="${CMAKE_BINARY_DIR}/rail-fault")
-  # MB11 (membership_rdma_test.cpp) also runs the real Go binaries mira-controller and mirctl. They are built by the
+  # membership_rdma_test.cpp also runs the real Go binaries mira-controller and mirctl. They are built by the
   # pinned toolchain (deploy/docker/go.sh, inside the container) into <build>/go-bin; the test finds them by these paths.
   add_custom_target(mira_go_tools
     COMMAND ${PROJECT_SOURCE_DIR}/deploy/docker/go.sh -C controller build -o ${CMAKE_BINARY_DIR}/go-bin/mira-controller ./cmd/mira-controller
@@ -197,7 +197,7 @@ if(MIRACACHE_WITH_VERBS AND TARGET mira-memnode)
     MIRA_CONTROLLER_BIN="${CMAKE_BINARY_DIR}/go-bin/mira-controller" MIRCTL_BIN="${CMAKE_BINARY_DIR}/go-bin/mirctl")
   target_include_directories(miracache_e2e_rdma_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   add_dependencies(miracache_e2e_rdma_tests mira-memnode mira_go_tools)
-  # H04: MultiRailE2e has its own TIMEOUT. Worst-case waits in the test body: rails up 30 + fill 60 + 2+8 + del ack 30 +
+  # MultiRailE2e has its own TIMEOUT. Worst-case waits in the test body: rails up 30 + fill 60 + 2+8 + del ack 30 +
   # rail down 30 + 8 + add ack 30 + rail back 60 + 2+8 = 268 s, plus bring-up (3 nodes x 15 s plus controller tool runs) and
   # teardown; 600 s covers it with margin. All of these tests use fixed ports/devices: RUN_SERIAL.
   gtest_discover_tests(miracache_e2e_rdma_tests TEST_LIST e2e_rdma_multirail_tests
@@ -210,50 +210,50 @@ if(MIRACACHE_WITH_VERBS AND TARGET mira-memnode)
     DISCOVERY_TIMEOUT 30)
 endif()
 
-# Signed cluster bundle, C++ side (membership plan MB2): envelope, trust keys, floor.
+# Signed cluster bundle, C++ side: envelope, trust keys, floor.
 add_executable(miracache_control_tests control/bundle_test.cpp control/floor_state_test.cpp control/view_test.cpp control/audit_test.cpp)
 target_link_libraries(miracache_control_tests PRIVATE miracache_control GTest::gtest_main Threads::Threads)
 target_include_directories(miracache_control_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(miracache_control_tests PRIVATE MIRACACHE_GOLDEN_DIR="${PROJECT_SOURCE_DIR}/proto/golden")
 gtest_discover_tests(miracache_control_tests)
 
-# owner_set (MB2p)
+# owner_set
 add_executable(miracache_placement_tests placement/owner_set_test.cpp)
 target_link_libraries(miracache_placement_tests PRIVATE miracache_placement GTest::gtest_main Threads::Threads)
 gtest_discover_tests(miracache_placement_tests)
 
-# MB5: the client bundle watcher against fake HTTPS admin endpoints (also run under the tsan preset).
+# The client bundle watcher against fake HTTPS admin endpoints (also run under the tsan preset).
 add_executable(miracache_bundle_watcher_tests client/bundle_watcher_test.cpp)
 target_link_libraries(miracache_bundle_watcher_tests PRIVATE miracache_client miracache_control GTest::gtest_main Threads::Threads)
 target_include_directories(miracache_bundle_watcher_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(miracache_bundle_watcher_tests PRIVATE MIRACACHE_LAB_CERTS_SH="${PROJECT_SOURCE_DIR}/deploy/examples/lab-certs.sh")
 gtest_discover_tests(miracache_bundle_watcher_tests PROPERTIES RUN_SERIAL TRUE)
 
-# MB6a: client node slots driven by bundles (real memory nodes over SimFabric; also run under the tsan preset).
+# Client node slots driven by bundles (real memory nodes over SimFabric; also run under the tsan preset).
 add_executable(miracache_membership_tests client/membership_test.cpp)
 target_link_libraries(miracache_membership_tests PRIVATE miracache_client miracache_server miracache_core_client miracache_control GTest::gtest_main Threads::Threads)
 target_include_directories(miracache_membership_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 gtest_discover_tests(miracache_membership_tests)
 
-# HR2: client live configuration (ClientDyn): the key table, and class A keys under traffic (also run under tsan).
+# Client live configuration (ClientDyn): the key table, and class A keys under traffic (also run under tsan).
 add_executable(miracache_reload_tests client/reload_test.cpp)
 target_link_libraries(miracache_reload_tests PRIVATE miracache_client miracache_server miracache_core_client miracache_control GTest::gtest_main Threads::Threads)
 target_include_directories(miracache_reload_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-# G11: only the class B rebuild walk waits on sim progress (until_sim, wall backstop 1200 s): its own TIMEOUT above that.
-# Every other test here ran under 12 s in the last gate; a hang costs 10 min, not 25 (H08c).
+# Only the class B rebuild walk waits on sim progress (until_sim, wall backstop 1200 s): its own TIMEOUT above that.
+# Every other test here ran under 12 s in the last gate; a hang costs 10 min, not 25.
 gtest_discover_tests(miracache_reload_tests TEST_LIST reload_walk_tests
   TEST_FILTER "ClientRebuild.ClassBChange*" PROPERTIES TIMEOUT 1500 RUN_SERIAL TRUE)
 gtest_discover_tests(miracache_reload_tests TEST_LIST reload_fast_tests
   TEST_FILTER "-ClientRebuild.ClassBChange*" PROPERTIES TIMEOUT 600)
 
-# HR4: client credential and secret rotation (cert/key/ca stat check, secret kver switch; also run under tsan).
+# Client credential and secret rotation (cert/key/ca stat check, secret kver switch; also run under tsan).
 add_executable(miracache_cred_watch_tests client/cred_watch_test.cpp)
 target_link_libraries(miracache_cred_watch_tests PRIVATE miracache_client GTest::gtest_main Threads::Threads)
 target_include_directories(miracache_cred_watch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(miracache_cred_watch_tests PRIVATE MIRACACHE_LAB_CERTS_SH="${PROJECT_SOURCE_DIR}/deploy/examples/lab-certs.sh")
 gtest_discover_tests(miracache_cred_watch_tests PROPERTIES RUN_SERIAL TRUE)
 
-# RL2: client rails and connections (sim, RL1 multi-rail servers): per-rail endpoint sets, rail loss, suspect, return.
+# Client rails and connections (sim, multi-rail servers): per-rail endpoint sets, rail loss, suspect, return.
 add_executable(miracache_multirail_client_tests client/multirail_test.cpp)
 target_link_libraries(miracache_multirail_client_tests PRIVATE miracache_client miracache_server miracache_core_client GTest::gtest_main)
 target_include_directories(miracache_multirail_client_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

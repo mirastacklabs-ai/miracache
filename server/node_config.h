@@ -14,7 +14,7 @@
 //   [scrub]    enabled, bytes_per_s                                                        class A (live)
 //   [quota]    put_ops_per_s, put_bytes_per_s (0 = unlimited)                              class A (live)
 //   The class A keys reload on SIGHUP (lab mode) or from the bundle's config.cluster.memnode (bundle mode); the full
-//   table is in server/dyn_config.h. The pre-HR1 flat [store] names for retention/evict/quota are stale-key errors.
+//   table is in server/dyn_config.h. The earlier flat [store] names for retention/evict/quota are stale-key errors.
 //   [lease]    ttl_s, max_s, put_timeout_s
 //   [ticket]   ttl_s
 //   [limits]   ticket_max_per_identity, admit_timeout_s, hello_deadline_s, idle_timeout_s,
@@ -26,7 +26,7 @@
 //   [audit]    dir, max_bytes (64 MiB), max_total_bytes (1 GiB)   hash-chained audit log (node-local)
 //   [control]  trust_keys = "/etc/miracache/trust.toml"   bundle mode on (needs [admin]); STATIC path
 //   [executor] workers
-//   [nic]      profiles_file, mtu, inline_bytes, ack_timeout_exp, retry_count, rnr_retry_count   (A3.3; all optional)
+//   [nic]      profiles_file, mtu, inline_bytes, ack_timeout_exp, retry_count, rnr_retry_count   (all optional)
 //   [telemetry] listen ="127.0.0.1:9464"   GET /metrics (Prometheus text); "" = off; SIGHUP rebinds
 #pragma once
 
@@ -45,7 +45,7 @@ namespace miracache::server {
 struct NodeConfig {
   ServerConfig server;
   std::string device;                       // legacy form: the one device; with [[node.rails]], the first rail's
-  // RL1: [[node.rails]] — distinct device names (fabric index = position) and each rail's subnet label (parallel to
+  // [[node.rails]] — distinct device names (fabric index = position) and each rail's subnet label (parallel to
   // server.rails / server.rail_device). Both empty in the legacy form (one device, every rail on it, subnets derived).
   std::vector<std::string> devices;
   std::vector<std::string> rail_subnets;
@@ -56,12 +56,12 @@ struct NodeConfig {
   std::uint32_t drain_ms = 5000;
   std::string lab_ticket_file;   // lab bring-up: tickets for lab.principal are written here
   std::uint32_t lab_tickets = 16;  // per class (control, fetch, ingest), rail 0, refreshed at ttl/2
-  // [telemetry] listen: the /metrics endpoint (A3.5), "host:port"; empty = off. Hot-reloadable (SIGHUP).
+  // [telemetry] listen: the /metrics endpoint, "host:port"; empty = off. Hot-reloadable (SIGHUP).
   std::string telemetry_listen = "127.0.0.1:9464";
-  // [admin] (A2.1): IssueTicket over HTTPS + mTLS. Empty listen = off (default). cert/key/ca are PEM paths;
+  // [admin]: IssueTicket over HTTPS + mTLS. Empty listen = off (default). cert/key/ca are PEM paths;
   // the key must be 0600. SIGHUP re-reads the file: new credentials are picked up, a new listen rebinds.
   std::string admin_listen, admin_cert, admin_key, admin_ca;
-  // [nic] (A3.3): profiles_file replaces the built-in NIC profile registry (empty = built-in); `nic` holds the
+  // [nic]: profiles_file replaces the built-in NIC profile registry (empty = built-in); `nic` holds the
   // explicit operating-point keys (config > profile > built-in default). The server consumes mtu, inline_bytes,
   // ack_timeout_exp, retry_count and rnr_retry_count; the others in Overrides are unused here.
   std::string profiles_file;
@@ -70,13 +70,13 @@ struct NodeConfig {
   // reloads on SIGHUP and every 10 s). Needs [admin] listen. The bundle files live in [node] state_dir.
   std::string trust_keys;
   std::uint32_t admin_max_conns = 8; // [admin] max_conns: concurrent connections (1..1024); per-source-IP limit is 2
-  // [[admin.rbac]] identity, roles (RB2, lab mode; SIGHUP). Bundle mode takes roles from the bundle's [[rbac]] instead.
+  // [[admin.rbac]] identity, roles (lab mode; SIGHUP). Bundle mode takes roles from the bundle's [[rbac]] instead.
   std::vector<std::pair<std::string, std::vector<std::string>>> admin_rbac;
-  // [audit] (RB2): see node_config.cpp. Empty dir = <state_dir>/audit in bundle mode, no audit log otherwise.
+  // [audit]: see node_config.cpp. Empty dir = <state_dir>/audit in bundle mode, no audit log otherwise.
   std::string audit_dir;
   std::uint64_t audit_max_bytes = 64ull << 20;
   std::uint64_t audit_max_total_bytes = 1ull << 30;
-  // HR1: dotted names of the class A keys present in the file ("lease.ttl_s", ...). In bundle mode (trust_keys set)
+  // Dotted names of the class A keys present in the file ("lease.ttl_s", ...). In bundle mode (trust_keys set)
   // any of them is a config error: the bundle's config.cluster.memnode is the one source.
   std::vector<std::string> dyn_keys_present;
 };

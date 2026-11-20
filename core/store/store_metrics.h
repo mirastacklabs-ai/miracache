@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Optional counters the store and put path bump at their real decision points (A3.5 M1).
+// Optional counters the store and put path bump at their real decision points.
 // Every pointer may be null (tests, sim): the hooks are then no-ops. The owner (the server)
 // registers them in a telemetry::Registry. Counting only: no behavior depends on these.
 #pragma once
@@ -30,14 +30,14 @@ struct StoreMetrics {
   telemetry::Counter* put_refused[kRefuseReasons] = {};
   telemetry::Counter* put_digest_mismatch = nullptr;
   telemetry::Histogram* put_commit_seconds = nullptr;  // PUT_BEGIN -> commit done
-  // QT1 gauges, set each Store::tick. occupancy_ratio is (committed + zombie + in-flight) / registered capacity in
+  // Retention gauges, set each Store::tick. occupancy_ratio is (committed + zombie + in-flight) / registered capacity in
   // parts per million (the registry has integer gauges only; the exporter scales it). evict_backlog_blocks is the
   // number of blocks still waiting to be freed in expired or dropped scopes.
   telemetry::Gauge* occupancy_ratio_ppm = nullptr;
   telemetry::Gauge* evict_backlog_blocks = nullptr;
-  // QT2: keys SKIPped by the put token buckets, by kind (0 = ops, 1 = bytes). Also counted in put_ops{skipped}.
+  // Keys SKIPped by the put token buckets, by kind (0 = ops, 1 = bytes). Also counted in put_ops{skipped}.
   telemetry::Counter* put_throttled[2] = {};
-  // SC1 scrubber: blocks checked / failed, bytes checked, and the duration of the last completed cycle (seconds).
+  // Scrubber: blocks checked / failed, bytes checked, and the duration of the last completed cycle (seconds).
   telemetry::Counter* scrub_checked = nullptr;
   telemetry::Counter* scrub_failed = nullptr;
   telemetry::Counter* scrub_bytes = nullptr;

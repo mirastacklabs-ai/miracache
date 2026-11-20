@@ -18,7 +18,7 @@ enum Tag : std::uint64_t { kTagData = 0, kTagSeq = 1, kTagWrite = 2 };
 constexpr std::uint64_t make_tag(std::uint64_t job, std::size_t key, Tag t) {
   return (job << 32) | (static_cast<std::uint64_t>(key) << 2) | t;
 }
-// RL3 fetch tags: job (32) | key (18) | slice (10) | attempt (2) | tag (2). The attempt tells a re-issued slice's
+// Fetch tags: job (32) | key (18) | slice (10) | attempt (2) | tag (2). The attempt tells a re-issued slice's
 // completion from a (duplicated) completion of the WR it replaced.
 constexpr std::size_t kMaxFetchKeys = std::size_t{1} << 18;
 constexpr std::uint32_t kMaxSlices = 1023;  // payload slice indices 0..1022; 1023 = the seq READ
@@ -60,7 +60,7 @@ struct ClientCore::FKey {
   bool has_span = false, has_seq = false;
   BlockId bid = 0;
   int wr = 0;                // WRs posted and not completed (payload slices + the seq READ)
-  // RL3 (decisions 8, 9): the payload is cut into slices of slice_bytes; each is posted on the fetch QP the port picks
+  // The payload is cut into slices of slice_bytes; each is posted on the fetch QP the port picks
   // (weighted least outstanding bytes within the QP windows), waits in waitq_ while every window is full, and is
   // re-issued after its OWN failed or flushed CQE while the lease deadline allows. The seq READ is posted only once
   // every slice is done (landed, or given up), i.e. after the last slice's CQE, re-issues included.
@@ -82,7 +82,7 @@ struct ClientCore::FKey {
 
 struct ClientCore::PKey {
   bool final = false;
-  bool cut = false;  // finalised by fail_all_jobs (session loss), not by a node answer (U2-24)
+  bool cut = false;  // finalised by fail_all_jobs (session loss), not by a node answer
   KeyStatus st = KeyStatus::Aborted;
   store::PutKey pk;
   std::optional<Dek> dek;
@@ -93,7 +93,7 @@ struct ClientCore::PKey {
   bool accepted = false;
   std::uint32_t crc = 0;
   int wr = 0;
-  bool write_wait = false;  // R16: sealed, its WRITE waits for room on the ingest QP's send queue
+  bool write_wait = false;  // Sealed, its WRITE waits for room on the ingest QP's send queue
   std::span<std::byte> pt;
 };
 
@@ -112,11 +112,11 @@ struct ClientCore::Job {
   std::vector<FKey> fk;
   std::vector<store::LeaseId> leases;  // one per LOOKUP part (batches over the port's key cap are split)
   Nanos last_renew{0};
-  // RL3 decision 9: lease_deadline = t_lease_granted + ttl - guard (guard = 2 x RTT, at least 1 ms), computed
+  // lease_deadline = t_lease_granted + ttl - guard (guard = 2 x RTT, at least 1 ms), computed
   // conservatively from the LOOKUP: t_lease_granted is taken as the LOOKUP's send time. rtt = that LOOKUP's round trip.
   Nanos lease_deadline = Nanos::max();
   Nanos rtt{0};
-  // RL3 leftover: per lease (same order as `leases`) a time the node's lease surely outlives: tl + ttl from the LOOKUP,
+  // Per lease (same order as `leases`) a time the node's lease surely outlives: tl + ttl from the LOOKUP,
   // moved to (RENEW send time + granted ttl) by each confirmed RENEW. lease_deadline = min of them - lease_guard.
   std::vector<Nanos> lease_until;
   Nanos lease_guard{0};
@@ -133,7 +133,7 @@ struct ClientCore::Job {
   Nanos retry_at{0};
   bool dropped = false;
   std::uint64_t commit_gen = 0;  // identifies the live PUT_COMMIT callback
-  std::uint64_t sess = 0;        // N02: session (down count) whose endpoints carry every op of this job
+  std::uint64_t sess = 0;        // Session (down count) whose endpoints carry every op of this job
   Nanos t0{0}, t_write{0}, t_commit{0};  // metrics: job start, batch write start, commit start
 };
 
@@ -141,7 +141,7 @@ ClientCore::ClientCore(fabric::Fabric& fab, ServerPort& port, const Clock& clock
                        NonceSource& salts, const ClientCoreOptions& opts)
     : fab_(fab), port_(port), clock_(clock), ex_(ex), salts_(salts), opts_(opts), mx_(opts.registry, opts.node_label) {}
 
-// N01: init() binds &mx_ into the port, which forwards it to the ticket source (WireOptions::on_metrics).
+// init() binds &mx_ into the port, which forwards it to the ticket source (WireOptions::on_metrics).
 // Both outlive this core when a build fails (the port drains its endpoints after create() returned the
 // error; the ticket source serves the next build) and would write into a dead ClientMetrics. Unbind both.
 ClientCore::~ClientCore() { port_.bind_metrics(nullptr); }
@@ -184,7 +184,7 @@ Status ClientCore::init() {
     LandingPool* p = pool_.get();
     telemetry::Labels used{{"state", "used"}}, free_{{"state", "free"}};
     if (!opts_.node_label.empty()) used.emplace_back("node", opts_.node_label), free_.emplace_back("node", opts_.node_label);
-    auto snap = std::make_shared<PoolSeriesSnap>();  // S02: "used" first, "free" from the same read
+    auto snap = std::make_shared<PoolSeriesSnap>();  // "used" first, "free" from the same read
     mx_.reg.callback_gauge("miracache_client_landing_pool_bytes", "Landing pool bytes, by state.", used,
                            [p, total, snap] { return snap->take(static_cast<std::int64_t>(p->bytes_in_use()), total); });
     mx_.reg.callback_gauge("miracache_client_landing_pool_bytes", "Landing pool bytes, by state.", free_,
@@ -213,7 +213,7 @@ void ClientCore::fail_all_jobs() {
         if (!k.final) k.final = true, k.st = KeyStatus::Miss;
     } else {
       for (auto& k : j.pk)
-        if (!k.final) k.final = true, k.st = KeyStatus::Refused, k.cut = true;  // removed node: Skipped (V08)
+        if (!k.final) k.final = true, k.st = KeyStatus::Refused, k.cut = true;  // removed node: Skipped
       j.next = j.pk.size();
     }
     report_done(j);
@@ -225,7 +225,7 @@ void ClientCore::sync_session() {
   if (dc != seen_down_) {
     seen_down_ = dc;
     fetch_ep_ = ingest_ep_ = nullptr;
-    reads_out_ = writes_out_ = 0;  // R16: the next session's endpoints start empty (late flushes saturate at 0)
+    reads_out_ = writes_out_ = 0;  // The next session's endpoints start empty (late flushes saturate at 0)
     bound_ = false;
     mx_.session_up->set(0);
     fail_all_jobs();
@@ -264,7 +264,7 @@ ClientCore::SplitAck ClientCore::lookup_split(const store::LookupReq& q, bool le
     }
     if (a.lease != 0) {
       out.leases.push_back(a.lease);
-      // RL3: an expiry the port did not give (0) means "unknown": no re-issue may count on that lease.
+      // An expiry the port did not give (0) means "unknown": no re-issue may count on that lease.
       out.lease_expiry = std::min(out.lease_expiry, a.lease_expiry);
     }
     if (a.entries.size() != len) continue;
@@ -334,7 +334,7 @@ Ticket ClientCore::submit_fetch(const ScopeKeys& sk, std::uint32_t group, std::s
     const Nanos tr = clock_.now();
     ClientMetrics::observe(mx_.fetch_s[ClientMetrics::kFLeaseWait], tl, tr);
     j.leases = std::move(ack.leases);
-    // RL3 decision 9: the port's expiry is (reply time + ttl); the grant happened after tl, so tl + ttl = expiry - rtt
+    // The port's expiry is (reply time + ttl); the grant happened after tl, so tl + ttl = expiry - rtt
     // is a deadline the lease surely outlives. guard = 2 x RTT, at least 1 ms.
     j.rtt = tr - tl;
     if (!j.leases.empty()) {
@@ -363,7 +363,7 @@ void ClientCore::fetch_start_key(Job& j, std::size_t i) {
   FKey& k = j.fk[i];
   auto fail = [&] { k.final = true, k.st = KeyStatus::Miss; };
   auto lay = layout(k.out.size(), opts_.segment_log2);
-  // stored_len is server-supplied and goes into u32 READ lengths: refuse >= 4 GiB (W05).
+  // stored_len is server-supplied and goes into u32 READ lengths: refuse >= 4 GiB.
   auto bad_hdr = [&] {
     mx_.validate_fail[1]->inc();
     fail();
@@ -391,9 +391,9 @@ void ClientCore::fetch_start_key(Job& j, std::size_t i) {
     fq_.emplace_back(jid, i, oc);
   });
   k.t_read = clock_.now(), k.has_read = true;
-  // HR2 (class A, `fabric.slice_bytes`): the data is read in slices of at most the value the job started with
+  // Class A (`fabric.slice_bytes`): the data is read in slices of at most the value the job started with
   // (opts_.slice_bytes is read once per key here); 0 or a block no larger than a slice = one READ, as before.
-  // RL3: at most kMaxSlices slices per block (a larger block uses larger slices).
+  // At most kMaxSlices slices per block (a larger block uses larger slices).
   std::uint64_t slice = opts_.slice_bytes ? opts_.slice_bytes() : 0;
   const std::uint32_t total = static_cast<std::uint32_t>(k.le.stored_len);
   if (slice != 0 && (total + slice - 1) / slice > kMaxSlices) slice = (total + kMaxSlices - 1) / kMaxSlices;
@@ -435,7 +435,7 @@ void ClientCore::fetch_start_key(Job& j, std::size_t i) {
 ClientCore::Post ClientCore::post_slice(Job& j, std::size_t i, std::uint32_t s) {
   FKey& k = j.fk[i];
   FKey::Slice& sl = k.sl[s];
-  // Q03: a stopped job, or one whose session ended, posts nothing more (fetch_ep_ may be the NEXT session's endpoint).
+  // A stopped job, or one whose session ended, posts nothing more (fetch_ep_ may be the NEXT session's endpoint).
   if (j.stop || seen_down_ != j.sess || !fetch_ep_ || !k.has_span || k.le.seg_id >= info_.segs.size()) return Post::Failed;
   const fabric::MemRegion& seg = info_.segs[k.le.seg_id];
   Status st = fetch_ep_->post_read({seg.rkey, reinterpret_cast<std::uint64_t>(seg.addr) + k.le.offset + sl.off, sl.len},
@@ -449,7 +449,7 @@ ClientCore::Post ClientCore::post_slice(Job& j, std::size_t i, std::uint32_t s) 
   return read_refused(st);
 }
 
-// R16: Busy (every fetch window or send queue full) waits; a full send queue (ResourceExhausted) with READs outstanding
+// Busy (every fetch window or send queue full) waits; a full send queue (ResourceExhausted) with READs outstanding
 // is backpressure too: a completion frees room and post_waiting() posts it. Anything else fails the slice.
 ClientCore::Post ClientCore::read_refused(const Status& st) {
   if (st.error().code == ErrorCode::Busy) return Post::Busy;
@@ -463,8 +463,8 @@ ClientCore::Post ClientCore::read_refused(const Status& st) {
 ClientCore::Post ClientCore::post_seq(Job& j, std::size_t i) {
   FKey& k = j.fk[i];
   // The seq READ goes after the data READs completed (a block only mutates after its word does). info_.array may have
-  // been replaced by a newer SEG_TABLE since fetch_start_key (W02): re-check the slot against the CURRENT array.
-  // Q03: a stopped job, or one whose session ended, posts nothing more: fetch_ep_ may already be the NEXT session's
+  // been replaced by a newer SEG_TABLE since fetch_start_key: re-check the slot against the CURRENT array.
+  // A stopped job, or one whose session ended, posts nothing more: fetch_ep_ may already be the NEXT session's
   // endpoint (null-hooks reconnect), and the quarantine proof (force_fail) needs every op of the job on an endpoint of
   // session j.sess.
   if (j.stop || seen_down_ != j.sess || !k.has_seq || k.le.gen_slot >= info_.array.len / 8 || !fetch_ep_) return Post::Failed;
@@ -506,7 +506,7 @@ void ClientCore::data_complete(Job& j, std::size_t i) {
   }
 }
 
-// RL3 decision 9: a slice whose own CQE reported an error or a flush may be sent again on another rail only while the
+// A slice whose own CQE reported an error or a flush may be sent again on another rail only while the
 // re-sent slice is expected to finish (one RTT) before both the lease deadline and the job deadline; the port must
 // still have a healthy rail (the failed rail is given up before its completions reach the core). A remote access
 // error is not a rail fault: no re-issue.
@@ -694,7 +694,7 @@ void ClientCore::put_begin_batch(Job& j) {
   port_.set_op_deadline(Nanos::max());
   if (j.ack.status == store::BeginStatus::Refused) {
     if (j.ack.skip != store::BeginSkip::None) {
-      // MB6b: StaleEpoch / Draining is a per-key SKIP, not a failure and not an in-job retry (decision 8).
+      // StaleEpoch / Draining is a per-key SKIP, not a failure and not an in-job retry.
       std::size_t n = j.batch.size();
       for (std::size_t i = j.next; i < j.pk.size(); ++i) n += j.pk[i].final ? 0 : 1;
       for (auto bi : j.batch) j.pk[bi].final = true, j.pk[bi].st = KeyStatus::Skipped;
@@ -704,7 +704,7 @@ void ClientCore::put_begin_batch(Job& j) {
       return;
     }
     if (j.ack.retry_after_ms == 0) {
-      // Retry 0 = do not retry: drop the whole store (spec 8.2, D21).
+      // Retry 0 = do not retry: drop the whole store (spec 8.2).
       for (auto bi : j.batch) j.pk[bi].final = true, j.pk[bi].st = KeyStatus::Refused;
       put_drop_rest(j, KeyStatus::Refused);
       j.batch.clear();
@@ -730,7 +730,7 @@ void ClientCore::put_begin_batch(Job& j) {
     }
   }
   if (j.ack.retry_after_ms > 0) {
-    // QT2: an Ok ack that carries retry_after_ms was cut by the put token buckets: the node admits keys in order, so the
+    // An Ok ack that carries retry_after_ms was cut by the put token buckets: the node admits keys in order, so the
     // keys it skipped after the last admitted one are the throttled ones (a skip before it is an idempotent re-put).
     std::size_t last = 0;  // one past the last accepted entry
     for (std::size_t b = 0; b < j.batch.size(); ++b)
@@ -788,7 +788,7 @@ void ClientCore::put_begin_batch(Job& j) {
     ClientMetrics::observe(mx_.put_s[ClientMetrics::kPEncrypt], te, clock_.now());
     mx_.crypto_bytes[0]->inc(k.pt.size());
     k.crc = crc32c(blk);
-    // R16: once one WRITE waits for send-queue room, the rest of the batch waits behind it (in batch order).
+    // Once one WRITE waits for send-queue room, the rest of the batch waits behind it (in batch order).
     if (wait_write || put_post_write(j, b) == Post::Busy) k.write_wait = wait_write = true;
   }
 }
@@ -807,7 +807,7 @@ ClientCore::Post ClientCore::put_post_write(Job& j, std::size_t b) {
     ++writes_out_;
     return Post::Posted;
   }
-  // R16: Busy (the mux's send-queue cap) or a full send queue with WRITEs outstanding: wait for a completion.
+  // Busy (the mux's send-queue cap) or a full send queue with WRITEs outstanding: wait for a completion.
   if (st.error().code == ErrorCode::Busy) return Post::Busy;
   if (st.error().code == ErrorCode::ResourceExhausted && writes_out_ > 0) {
     port_.send_queue_full(fabric::EpClass::Ingest);
@@ -818,7 +818,7 @@ ClientCore::Post ClientCore::put_post_write(Job& j, std::size_t b) {
   return Post::Failed;
 }
 
-// R16: posts the batch's waiting WRITEs in order until one still finds the send queue full. A stopped job, a failed
+// Posts the batch's waiting WRITEs in order until one still finds the send queue full. A stopped job, a failed
 // batch or a session that ended posts none of them (the key is not written; the batch is cancelled as before).
 void ClientCore::put_post_waiting(Job& j) {
   for (std::size_t b = 0; b < j.batch.size(); ++b) {
@@ -964,26 +964,26 @@ std::size_t ClientCore::outstanding_ops(Ticket t) const {
   return n;
 }
 
-// Q05 last resort: the job's RDMA completions never came (a lost CQE, a wedged QP). Fail the job's keys
+// Last resort: the job's RDMA completions never came (a lost CQE, a wedged QP). Fail the job's keys
 // as Timeout, stop waiting for the ops and finish the job. Ops handed to the decrypt pipeline are told
 // their READs failed and finish by themselves (the caller's buffer is zeroed when the job ends).
 //
-// N02 quarantine, and why no DMA can ever land in a reused span. An abandoned op is a WR still posted
+// Quarantine, and why no DMA can ever land in a reused span. An abandoned op is a WR still posted
 // on endpoint E of session S (down count S while E was live; Job::sess). The WR's pool span goes to
 // quarantine_ with reaped_at = S + 1 and is given back only when port_.session_reaped(S + 1):
 //   1. force_fail marks E dead (endpoint_wedged) unless S already ended, so the session goes Down:
 //      go_down lists S + 1 as unreaped, bumps the down count to S + 1 and, in the same call, aborts every
 //      endpoint (E included; a QP in Error state flushes its WRs and starts no new DMA for them), tagging
-//      each with S + 1. Every op of the job is on E (Q03: nothing is posted once the session ended).
+//      each with S + 1. Every op of the job is on E (nothing is posted once the session ended).
 //   2. reap() releases an aborted endpoint only once it is drained (every posted WR has completed or
 //      been flushed: none can DMA any more) and the fabric gave it back (the QP is destroyed).
 //   3. session_reaped(S + 1) becomes true only after a reap() found no endpoint tagged S + 1 left, so E
 //      was released (2) after its abort (1).
 //   4. release_quarantine() runs on this thread after that answer, so the span goes back to the pool,
 //      and can be handed to a new op, strictly after E's last possible DMA. A lost flush keeps E undrained
-//      and S + 1's spans quarantined: a leak (miracache_client_quarantined_bytes), never corruption. Q01:
+//      and S + 1's spans quarantined: a leak (miracache_client_quarantined_bytes), never corruption.
 //      only S + 1's; a later trip (another session end) gets its spans back as usual.
-// Spans of completed WRITEs and of keys with nothing outstanding are released at once (N08).
+// Spans of completed WRITEs and of keys with nothing outstanding are released at once.
 std::size_t ClientCore::force_fail(Ticket t) {
   auto it = jobs_.find(t.id);
   if (it == jobs_.end()) return 0;
@@ -1006,7 +1006,7 @@ std::size_t ClientCore::force_fail(Ticket t) {
     for (auto& k : j.fk)
       if (k.wr != 0) {
         k.wr = 0;  // a late completion is ignored (fetch_on_cqe: no slice is Posted, seq_out is false)
-        for (auto& s : k.sl) s.st = FKey::Slice::St::Done;  // RL3: queued slices are dropped too
+        for (auto& s : k.sl) s.st = FKey::Slice::St::Done;  // Queued slices are dropped too
         k.data_left = 0;
         k.seq_out = k.seq_queued = false;
         if (k.has_span) quarantine(k.span, reaped_at, jid), k.has_span = false;
@@ -1026,13 +1026,13 @@ std::size_t ClientCore::force_fail(Ticket t) {
         if (k.has_span) quarantine(k.span, reaped_at, jid), k.has_span = false;
         ++n;
       } else if (k.has_span) {
-        free_span(k.span), k.has_span = false;  // N08: this WRITE completed; nothing reads the span
+        free_span(k.span), k.has_span = false;  // This WRITE completed; nothing reads the span
       }
     }
-    // N08: the server still holds the put: cancel it, best effort. Q07: with an abandoned WRITE (n > 0)
+    // The server still holds the put: cancel it, best effort. with an abandoned WRITE (n > 0)
     // the ingest endpoint is aborted right below, which usually flushes this SEND before it leaves, so
     // the put TTL is what frees the put then. Committing is not reached here in practice (job_tick
-    // already cancels a stopped Committing job, and Q08 pumps before the watchdog force-fails).
+    // already cancels a stopped Committing job, and the pump runs before the watchdog force-fails).
     if ((j.phase == Job::Phase::Writing || j.phase == Job::Phase::Committing) && j.ack.put_id != 0)
       port_.put_cancel(j.ack.put_id, [](const store::PutDoneResult&) {});
     ++j.commit_gen;  // a PUT_DONE callback that arrives later is stale
@@ -1040,8 +1040,8 @@ std::size_t ClientCore::force_fail(Ticket t) {
     j.phase = Job::Phase::Idle;
   }
   if (n > 0) {
-    mx_.watchdog_trips->inc();  // N04: a trip counts only when something was abandoned
-    // N02: the endpoint lost a completion; while its session is still the live one, take it down.
+    mx_.watchdog_trips->inc();  // A trip counts only when something was abandoned
+    // The endpoint lost a completion; while its session is still the live one, take it down.
     if (port_.session_down_count() == j.sess)
       port_.endpoint_wedged(j.kind == kFetch ? fabric::EpClass::Fetch : fabric::EpClass::Ingest);
   }
@@ -1084,9 +1084,9 @@ void ClientCore::handle_cqe(const fabric::Completion& c) {
     else if (!c.status) mx_.rdma[ClientMetrics::rdma_kind(c.status.error().code)]->inc();
   }
   if (c.is_recv || c.op == fabric::CompletionOp::CqError) return;
-  if (c.op == fabric::CompletionOp::Read && reads_out_ > 0) --reads_out_;  // R16 (flushes too; stale ones saturate)
+  if (c.op == fabric::CompletionOp::Read && reads_out_ > 0) --reads_out_;  // Flushes too; stale ones saturate
   if (c.op == fabric::CompletionOp::Write && writes_out_ > 0) --writes_out_;
-  if (opts_.on_cqe) opts_.on_cqe(c);  // RL3 test hook (sim audit): the core has this completion now
+  if (opts_.on_cqe) opts_.on_cqe(c);  // Test hook (sim audit): the core has this completion now
   const std::uint64_t jid = c.tag >> 32;
   const Tag t = static_cast<Tag>(c.tag & 3);
   auto it = jobs_.find(jid);
@@ -1133,8 +1133,8 @@ void ClientCore::report_done(Job& j) {
     }
     ClientMetrics::observe(mx_.fetch_s[ClientMetrics::kFTotal], j.t0, now);
   } else {
-    // Review w4 V08: the node left the membership (GOAWAY Epoch) while the store was on it (a PUT_BEGIN, write or commit
-    // the session loss cut short): nothing was stored, and that is a skip, not a failure. Review w5 U2-24: only what
+    // The node left the membership (GOAWAY Epoch) while the store was on it (a PUT_BEGIN, write or commit
+    // the session loss cut short): nothing was stored, and that is a skip, not a failure. Only what
     // the session loss caused; a Refused the node ANSWERED (e.g. "parent unknown") stays Refused, so the client can
     // fall through to the previous set.
     if (port_.removed_from_membership()) {
@@ -1206,7 +1206,7 @@ void ClientCore::job_tick(Job& j) {
   } else {
     for (int guard = 0; guard < 1000; ++guard) {
       using P = Job::Phase;
-      if (j.phase == P::Writing) put_post_waiting(j);  // R16
+      if (j.phase == P::Writing) put_post_waiting(j);
       bool writes_out = false;
       for (const auto& k : j.pk) writes_out |= k.wr != 0 || k.write_wait;
       if (j.phase == P::Writing && !writes_out) {
@@ -1276,7 +1276,7 @@ bool ClientCore::pump() {
   bool progress = false;
   sync_session();
   (void)port_.refresh_info(info_);  // wire port: the segment table can grow after hello()
-  // RL3 leftover: a confirmed RENEW moves its job's re-issue deadline forward (never back).
+  // A confirmed RENEW moves its job's re-issue deadline forward (never back).
   port_.take_renewed(renewed_);
   for (const auto& rn : renewed_) {
     for (auto& [id, jp] : jobs_) {
@@ -1300,7 +1300,7 @@ bool ClientCore::pump() {
     progress = true;
     for (std::size_t i = 0; i < n; ++i) handle_cqe(out[i]);
   }
-  if (!waitq_.empty()) {  // RL3: completions freed window room (or settled re-issues): post what waits
+  if (!waitq_.empty()) {  // Completions freed window room (or settled re-issues): post what waits
     const std::size_t before = waitq_.size();
     post_waiting();
     progress |= waitq_.size() != before;
@@ -1321,7 +1321,7 @@ bool ClientCore::pump() {
     auto it = jobs_.find(id);
     if (it != jobs_.end()) job_tick(*it->second);
   }
-  if (!quarantine_.empty()) release_quarantine();  // N02
+  if (!quarantine_.empty()) release_quarantine();
   return progress;
 }
 
@@ -1330,7 +1330,7 @@ Status ClientCore::check_invariants() const {
     if (fetch_ep_->state() != fabric::EpState::Ready || ingest_ep_->state() != fabric::EpState::Ready)
       return Error{ErrorCode::Corrupt, "client: endpoint in error"};
   }  // else: session down / not re-bound yet (see sync_session)
-  // Quarantined spans (N02) are held on purpose until their endpoints are reaped.
+  // Quarantined spans are held on purpose until their endpoints are reaped.
   if (jobs_.empty() && pool_->bytes_in_use() != quarantined_bytes_) return Error{ErrorCode::Corrupt, "client: pool span leaked"};
   return {};
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Lab bring-up ticket file (design/03 R22): one "class rail hex-id" line per ticket.
+// Lab bring-up ticket file: one "class rail hex-id" line per ticket.
 // Tickets are bearer secrets: the file is created 0600.
 #pragma once
 

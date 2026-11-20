@@ -6,7 +6,7 @@
 //   h = (x + 0.5) / 2^64   (double, 0 < h <= 1)
 //   ties: the lexicographically smaller node_id (byte order of the UTF-8 string)
 //
-// Edge (r6 B7): for x >= 2^64 - 1024, x + 0.5 rounds to 2^64 in double, so h == 1.0, ln(h) == +0 and
+// Edge: for x >= 2^64 - 1024, x + 0.5 rounds to 2^64 in double, so h == 1.0, ln(h) == +0 and
 // the score is -inf. Not clamped: such a node loses to any finite score, and all -inf is a tie
 // (smaller node_id). A Go reimplementation must do the same IEEE double arithmetic (spec 7.1).
 //
@@ -25,7 +25,7 @@ namespace miracache {
 struct PlaceNode {
   std::string id;            // node_id text
   std::uint32_t weight = 1;  // > 0
-  // A2.10 zone (nodes[].zone). Empty = the node is its own zone. Either every node has one or none does.
+  // Zone (nodes[].zone). Empty = the node is its own zone. Either every node has one or none does.
   std::string zone;
   PlaceNode() = default;
   PlaceNode(std::string i, std::uint32_t w = 1, std::string z = {}) : id(std::move(i)), weight(w), zone(std::move(z)) {}
@@ -43,7 +43,7 @@ std::size_t place_owner_from_hashes(std::span<const PlaceNode> nodes, std::span<
 // Index into `nodes` of the owner; 0 if `nodes` has one entry. `nodes` must not be empty.
 std::size_t place_owner(std::span<const PlaceNode> nodes, std::span<const std::uint8_t, 32> scope_id);
 
-// A2.10 replicas: indices of the first min(r, nodes.size()) nodes of the placement order, best first:
+// Replicas: indices of the first min(r, nodes.size()) nodes of the placement order, best first:
 // score descending, ties to the smaller node_id (the same rule as place_owner). [0] == place_owner.
 // Not re-ranked when a node is down; the order depends only on the scope and the node list.
 // Zones: when nodes have a zone, a node is taken only if no earlier pick has its zone; the owner ([0]) does not
@@ -54,7 +54,7 @@ std::vector<std::size_t> place_order_from_hashes(std::span<const PlaceNode> node
                                                  std::size_t r);
 
 
-// A membership view: the epoch and the node list placement runs over (MB2p).
+// A membership view: the epoch and the node list placement runs over.
 struct View {
   std::uint64_t epoch = 0;
   std::vector<PlaceNode> nodes;  // id, weight, zone

@@ -1,6 +1,6 @@
 [package]
 name = "miracache-model"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 publish = false
 description = "Stateright model of the miracache correctness protocol (design spec section 8)"

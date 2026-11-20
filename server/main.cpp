@@ -62,10 +62,10 @@ void on_hup(int) {
   if (auto* w = g_wake.load()) w->signal();
   errno = saved;
 }
-// r6 A5: on every way out of main after the handlers are installed, put the default dispositions
+// On every way out of main after the handlers are installed, put the default dispositions
 // back and only then forget the WakeFd, so no handler can touch a destroyed one.
 //
-// r7 R06: main blocks SIGINT/SIGTERM/SIGHUP before it starts any thread (fabric dispatcher, executor
+// Main blocks SIGINT/SIGTERM/SIGHUP before it starts any thread (fabric dispatcher, executor
 // workers, admin/metrics threads inherit the mask), and only the main thread unblocks them here. So a
 // handler only ever runs on main, never on a worker racing ~SignalScope / ~WakeFd on an early return.
 void term_signals(sigset_t* s) {
@@ -98,7 +98,7 @@ struct SignalScope {
   ~SignalScope() {
     std::signal(SIGINT, SIG_DFL);
     std::signal(SIGTERM, SIG_DFL);
-    // r8 N02: SIGHUP is a reload request, never a stop: ignored from here on, so a HUP sent during the exit
+    // SIGHUP is a reload request, never a stop: ignored from here on, so a HUP sent during the exit
     // path (exec.stop(), shutdown_clean()) cannot kill the node before the clean mark. SIGINT/SIGTERM keep
     // SIG_DFL (a further one stops at once, as documented).
     std::signal(SIGHUP, SIG_IGN);
@@ -136,10 +136,10 @@ class OsRandom final : public Random {
 static_assert(!miracache::buggify::kTeethBuilt, "mira-memnode must not be built with MIRACACHE_TEETH");
 
 int main(int argc, char** argv) {
-  // A peer that resets a socket must never kill the node (A01): ignore SIGPIPE before any thread
+  // A peer that resets a socket must never kill the node: ignore SIGPIPE before any thread
   // starts. (The admin TLS path also sends with MSG_NOSIGNAL, so it does not rely on this.)
   std::signal(SIGPIPE, SIG_IGN);
-  {  // r7 R06: before any thread starts; SignalScope unblocks them for main only
+  {  // before any thread starts; SignalScope unblocks them for main only
     sigset_t s;
     term_signals(&s);
     pthread_sigmask(SIG_BLOCK, &s, nullptr);
@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
 #else
   RealClock clock;
   RealRandom rng;
-  // RL1: one fabric per distinct device ([[node.rails]]; the legacy form is one device). Each device gets its own NIC
+  // one fabric per distinct device ([[node.rails]]; the legacy form is one device). Each device gets its own NIC
   // profile selection and an endpoint-ID range, so an EndpointId is unique across the fabrics.
   std::vector<std::string> devices = cfg->devices;
   if (devices.empty()) {
@@ -226,12 +226,12 @@ int main(int argc, char** argv) {
     if (di == 0) sel = std::move(*s);
   }
   cfg->server.mtu = mtu;
-  // G02: limits.max_conns_per_principal not set -> Server::create computes 16 sessions x rails x (2 + fetch_qps).
+  // Limits.max_conns_per_principal not set -> Server::create computes 16 sessions x rails x (2 + fetch_qps).
   cfg->server.fetch_qps = max_fetch_qps;
-  const bool max_bytes_computed = cfg->server.store.principal_default.max_bytes == 0;  // K02: resolved in Server::create
+  const bool max_bytes_computed = cfg->server.store.principal_default.max_bytes == 0;  // resolved in Server::create
   const bool conns_computed =cfg->server.max_conns_per_principal == 0;
   const std::uint32_t conns_default = server::default_max_conns(cfg->server.rails.size(), max_fetch_qps);
-  // H07: limits.ticket_max_per_identity not set -> max(1024, 16 sessions x rails x the per-rail G01 ticket inventory).
+  // Limits.ticket_max_per_identity not set -> max(1024, 16 sessions x rails x the per-rail ticket inventory).
   const bool tickets_computed = cfg->server.ticket_max_per_identity == 0;
   const std::uint32_t tickets_default = server::default_ticket_max(cfg->server.rails.size(), max_fetch_qps);
   std::vector<fabric::Fabric*> fabric_ptrs;
@@ -249,12 +249,12 @@ int main(int argc, char** argv) {
       .set(1);
   (*srv)->metrics().gauge("miracache_nic_unprofiled", "1 when only a generic fallback profile matched this NIC.", {})
       .set(sel->unprofiled ? 1 : 0);
-  // B11: QP attribute readback gauges land in the node registry (node_id is its const label); the fabrics are only
+  // QP attribute readback gauges land in the node registry (node_id is its const label); the fabrics are only
   // polled by the server, which dies first, so no readback can reach a dead registry.
   for (auto& f : fabs) f->set_qp_metrics(&(*srv)->metrics(), {{"hostname", log::hostname()}});
-  // The node ID is known only now (read from the state file; drawn once if there is none; review r9 S04).
+  // The node ID is known only now (read from the state file; drawn once if there is none).
   log::set_identity({(*srv)->node_id(), "", server::listen_addr_string(cfg->server)});
-  // J07: the boot nonce (16 hex digits, the format of the client's restart Warn) so an operator can match that line to
+  // The boot nonce (16 hex digits, the format of the client's restart Warn) so an operator can match that line to
   // this start. The line also carries id + hostname + addr from set_identity above.
   char nonce_hex[24];
   std::snprintf(nonce_hex, sizeof nonce_hex, "%016llx", static_cast<unsigned long long>((*srv)->boot_nonce()));
@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
   // The largest block this node can place: one slab run (store.run_bytes). A client block (payload + 64 B header + 16 B tag
   // per 64 KiB segment) longer than this is refused at PUT_BEGIN; HELLO_ACK tells clients the value (TLV 0x0003) so they
   // refuse locally and the engine adapters refuse at start-up. Size it with the runbook table (memnode store sizing):
-  // a power of two >= 4 x the largest stored block (M1, 1 MiB blocks: 8 MiB).
+  // a power of two >= 4 x the largest stored block (1 MiB blocks: 8 MiB).
   logm(log::Level::Info, "store geometry",
        {{"max_stored_block_bytes", std::to_string(cfg->server.store.run_bytes)},
         {"run_bytes", std::to_string(cfg->server.store.run_bytes)},
@@ -298,16 +298,16 @@ int main(int argc, char** argv) {
     return 1;
   }
   exec.set_wakeup([&wake] { wake.signal(); });
-  // r7 R07: optional so the handlers go back to SIG_DFL right after the loop (a further signal during
+  // Optional so the handlers go back to SIG_DFL right after the loop (a further signal during
   // the exit path then stops at once). Declared after `wake`: destroyed (handlers reset) before it.
   std::optional<SignalScope> signals;
   signals.emplace(wake);
 
-  // /metrics endpoint (A3.5): off the data path, its own threads. A bind failure is logged, not fatal.
+  // /metrics endpoint: off the data path, its own threads. A bind failure is logged, not fatal.
   std::unique_ptr<server::MetricsHttp> http;
   std::string http_listen = cfg->telemetry_listen;
   auto start_http = [&] {
-    MaskTermSignals mask;  // R06: its threads start with the signals blocked
+    MaskTermSignals mask;  // its threads start with the signals blocked
     http.reset();
     auto h = server::MetricsHttp::start(http_listen, (*srv)->metrics());
     if (!h) {
@@ -319,9 +319,9 @@ int main(int argc, char** argv) {
   };
   start_http();
 
-  // Admin API (A2.1): IssueTicket over HTTPS + mTLS. Off unless [admin] listen is set. A bad
+  // Admin API: IssueTicket over HTTPS + mTLS. Off unless [admin] listen is set. A bad
   // admin config at startup is fatal (a node that silently lacks its ticket door is worse).
-  // RB2: the audit log (node-local [audit]; default <state_dir>/audit in bundle mode). Declared before `admin`: it outlives
+  // The audit log (node-local [audit]; default <state_dir>/audit in bundle mode). Declared before `admin`: it outlives
   // the listener. If it cannot be opened the admin API is refused (every route 503) and the data plane keeps serving;
   // a SIGHUP retries. `audit_ptr` is what GET /v1/identity reads (audit_seq / audit_head).
   std::unique_ptr<server::AdminAudit> audit;
@@ -353,7 +353,7 @@ int main(int argc, char** argv) {
   };
   if (!cfg->admin_listen.empty() && !audit_dir.empty()) audit_failed = !open_audit();
   std::unique_ptr<server::AdminHttps> admin;
-  // Bundle mode (MB3a): [control] trust_keys. Loads the trust file, the floor and bundle.current (re-verified; an
+  // Bundle mode: [control] trust_keys. Loads the trust file, the floor and bundle.current (re-verified; an
   // unverifiable one is logged, counted and the node serves without a bundle). A bad trust file or a corrupt floor
   // is fatal at start-up. STATIC: switching modes needs a restart.
   std::unique_ptr<server::BundleStore> bundle;
@@ -365,15 +365,15 @@ int main(int argc, char** argv) {
     bo.hostname = log::hostname();
     bo.addr = server::listen_addr_string(cfg->server);
     bo.admin = cfg->admin_listen;
-    bo.dyn_base = (*srv)->dyn_base();  // HR1: a pushed bundle's config.cluster.memnode is validated against it
+    bo.dyn_base = (*srv)->dyn_base();  // a pushed bundle's config.cluster.memnode is validated against it
     bo.reg = &(*srv)->metrics();
     bo.snapshot = [s = srv->get()] { return s->node_snapshot(); };
     bo.clock = &clock;
     bo.audit_anchor = [&audit_ptr] {
       auto* a = audit_ptr.load();
-      return a ? a->anchor() : std::make_pair(std::uint64_t{0}, std::string(64, '0'));  // last FSYNCED entry (U2-19)
+      return a ? a->anchor() : std::make_pair(std::uint64_t{0}, std::string(64, '0'));  // last FSYNCED entry
     };
-    {  // GET /v1/identity rails (Y12: refuse to start when a rail's subnet or the transport is unusable)
+    {  // GET /v1/identity rails (refuse to start when a rail's subnet or the transport is unusable)
       const auto p = fabs.front()->active_protocol();
       const char* proto = p == fabric::protocol::Protocol::IWarp ? "iwarp"
                           : p == fabric::protocol::Protocol::InfiniBand ? "ib" : "roce";
@@ -393,9 +393,8 @@ int main(int argc, char** argv) {
     bundle = std::move(*b);
     bundle->set_rails_up(true);  // the RDMA listeners started above (a failed start exits)
   }
-  // drop_before maxima live in the floor file (bundle deliveries P15, and POST /v1/drop_principal in both modes); honour
+  // drop_before maxima live in the floor file (bundle deliveries, and POST /v1/drop_principal in both modes); honour
   // them even if the stored bundle no longer carries them. A floor that cannot be read is fatal, never silently skipped
-  // (U2-07).
   if (auto st = server::load_persisted_drop_before(**srv, cfg->server.store.state_dir); !st) {
     logm(log::Level::Error, "bundle-floor unreadable: refusing to start (persisted revocations would be lost)",
          {{"state_dir", cfg->server.store.state_dir}, {"err", st.error().context}});
@@ -405,7 +404,7 @@ int main(int argc, char** argv) {
     if (auto v = bundle->startup_view()) (*srv)->apply_bundle(*v);  // store thread, before the loop runs
   }
   auto admin_opts = [&wake, my_id, &bundle, &audit, &audit_failed](const server::NodeConfig& c, std::uint64_t ttl_s) {
-    // r6 A7: a posted ticket request wakes the store loop (no idle-tick delay).
+    // A posted ticket request wakes the store loop (no idle-tick delay).
     server::AdminOptions o{c.admin_listen, c.admin_cert, c.admin_key, c.admin_ca, ttl_s, c.admin_max_conns,
                            [&wake] { wake.signal(); }};
     o.node_id = my_id;  // plan 2C: the response tells the client who answered
@@ -421,7 +420,7 @@ int main(int argc, char** argv) {
   const std::uint64_t ttl_s = static_cast<std::uint64_t>(
       std::chrono::duration_cast<std::chrono::seconds>(cfg->server.ticket_ttl).count());
   {
-    MaskTermSignals mask;  // R06
+    MaskTermSignals mask;
     auto a = server::AdminHttps::start(admin_opts(*cfg, ttl_s), (*srv)->metrics());
     if (!a) {
       logm(log::Level::Error, "admin start failed", {{"err", a.error().context}});
@@ -450,10 +449,10 @@ int main(int argc, char** argv) {
     }
     if (g_reload.exchange(false)) {  // SIGHUP: re-read [telemetry] listen and rebind if it changed
       if (auto nc = server::load_node_config(config_path)) {
-        // Lab identities: added ones are bound, removed ones are revoked (tickets and connections) (A04).
+        // Lab identities: added ones are bound, removed ones are revoked (tickets and connections).
         (*srv)->reload_identities(nc->server.lab_identity, nc->server.lab_identities, nc->server.lab_principal);
         cfg->server.lab_identity = nc->server.lab_identity;  // the lab ticket writer follows the reload
-        // HR1 (decision 1): lab mode takes every class A key from this file; bundle mode only node.drain_ms (the rest
+        // lab mode takes every class A key from this file; bundle mode only node.drain_ms (the rest
         // comes from the bundle). A STATIC key that changed rejects the whole dynamic reload: the old snapshot stays.
         if (auto plan = server::plan_sighup(boot_file, *nc, *(*srv)->dyn(), bundle != nullptr, conns_default, tickets_default);
             plan.dyn) {
@@ -470,7 +469,7 @@ int main(int argc, char** argv) {
             logm(log::Level::Warn, "admin.ca path change needs a restart (keeping the old path; the file's contents still reload)",
                  {{"admin_ca", cfg->admin_ca}});
         }
-        nc->admin_ca = cfg->admin_ca;  // G05: the path is STATIC; only the file's contents reload
+        nc->admin_ca = cfg->admin_ca;  // the path is STATIC; only the file's contents reload
         logm(log::Level::Info, "reload", {{"lab_identities", std::to_string(nc->server.lab_identities.size() + (nc->server.lab_identity.empty() ? 0 : 1))}});
         if (bundle) (void)bundle->reload_trust();  // keeps the old keys on failure (logged and counted inside)
         if (nc->telemetry_listen != http_listen) {
@@ -492,7 +491,7 @@ int main(int argc, char** argv) {
             logm(log::Level::Warn, "admin reload failed (keeping the old credentials)", {{"err", st.error().context}});
         } else {
           admin.reset();
-          MaskTermSignals mask;  // R06
+          MaskTermSignals mask;
           auto a = server::AdminHttps::start(o, (*srv)->metrics());
           if (!a) logm(log::Level::Error, "admin start failed", {{"err", a.error().context}});
           else admin = std::move(*a);
@@ -502,7 +501,7 @@ int main(int argc, char** argv) {
         logm(log::Level::Error, "reload failed", {{"err", nc.error().context}});
       }
     }
-    // r6 A8: no refresh during the drain (the node admits no new session; clients must not burn them).
+    // No refresh during the drain (the node admits no new session; clients must not burn them).
     if (!draining && !cfg->lab_ticket_file.empty() && clock.now() >= next_lab) {
       if (auto st = server::write_lab_tickets(**srv, cfg->server.lab_identity, cfg->lab_ticket_file, cfg->lab_tickets); !st)
         logm(log::Level::Warn, "lab tickets failed (keeping the old file)", {{"err", st.error().context}});
@@ -517,7 +516,7 @@ int main(int argc, char** argv) {
       // CQ arm/poll race). Then sleep until a completion/connection event (fabric fd) or a worker's
       // queued `done` / a signal (eventfd, level-triggered, so a signal after the clear is never
       // missed), or the next timer: Server::tick() (idle_tick), the lab ticket refresh, the drain end.
-      // With no fabric fd (cannot happen with verbs) the loop still sleeps on the eventfd alone (r6 A6).
+      // With no fabric fd (cannot happen with verbs) the loop still sleeps on the eventfd alone.
       std::vector<int> fds;
       for (auto& fb : fabs) fds.push_back(fb->wait_fd());
       const bool have_fd = std::any_of(fds.begin(), fds.end(), [](int x) { return x >= 0; });
@@ -530,17 +529,17 @@ int main(int argc, char** argv) {
       }
     }
   }
-  // Exit order (r6 A2): no more admin posts; let the workers finish and run every queued `done`, so a
+  // Exit order: no more admin posts; let the workers finish and run every queued `done`, so a
   // Digesting put commits (or is freed) now; then drop the connections and fence the write MRs; mark
   // the superblock clean last. (Before, the clean mark came first and a put could commit after it.)
-  // r7 R07: SIG_DFL from here on: nothing reads the flags any more, so a further SIGTERM/SIGINT must stop
+  // SIG_DFL from here on: nothing reads the flags any more, so a further SIGTERM/SIGINT must stop
   // at once (as documented) instead of being swallowed during exec.stop().
   signals.reset();
   http.reset();
   admin.reset();
   exec.stop();
   exec.drain_done();
-  // r7 R07: a refused clean mark (the next start is a cold one, the cache is lost) is exit status 3, so a
+  // A refused clean mark (the next start is a cold one, the cache is lost) is exit status 3, so a
   // supervisor or rolling-restart script can tell it from a clean stop (0) without parsing stderr.
   if (auto st = (*srv)->shutdown_clean(); !st) {
     logm(log::Level::Error, "not marked clean", {{"err", st.error().context}});

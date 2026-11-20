@@ -65,7 +65,7 @@ var rejectCases = []rejectCase{
 		return replaceOnce(s, "max_scopes = 100000\n", "max_scopes = 100000\ndrop_before = \"\"\n")
 	}},
 	{name: "sec_empty_role", sec: func(s string) string { return replaceOnce(s, `roles = ["security-admin"]`, `roles = [""]`) }},
-	// X19: character rules (shared with C++).
+	// Character rules (shared with C++).
 	{name: "charset_hostname_ctrl", file: "reject_charset_hostname_ctrl", body: func(b string) string { return replaceOnce(b, `"hostA"`, `"host\u0007A"`) }},
 	{name: "charset_hostname_space", file: "reject_charset_hostname_space", body: func(b string) string { return replaceOnce(b, `"hostA"`, `"host A"`) }},
 	{name: "charset_hostname_long", file: "reject_charset_hostname_long", body: func(b string) string {
@@ -80,7 +80,7 @@ var rejectCases = []rejectCase{
 	{name: "charset_protocol", file: "reject_charset_protocol", body: func(b string) string { return replaceOnce(b, `"iwarp"`, `"tcp"`) }},
 	{name: "charset_principal_name", file: "reject_charset_principal_name", sec: func(s string) string { return replaceOnce(s, `"staging"`, `"stag ing"`) }},
 	{name: "charset_role", file: "reject_charset_role", sec: func(s string) string { return replaceOnce(s, `"auditor"`, `"audit\nor"`) }},
-	// X21: TOML 1.1 syntax (a trailing comma in an inline table) is not accepted.
+	// TOML 1.1 syntax (a trailing comma in an inline table) is not accepted.
 	{name: "toml11_inline_trailing_comma", file: "reject_toml11_inline_trailing_comma", body: func(b string) string {
 		return replaceOnce(b, `protocol = "roce" }]`, `protocol = "roce", }]`)
 	}},

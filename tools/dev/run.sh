@@ -18,7 +18,7 @@
 #   --tsan        add seccomp=unconfined so ThreadSanitizer can run (it needs syscalls
 #                 the default profile blocks, e.g. personality()). NOT enabled by default.
 # Optional extra read-only mount (off by default): MIRA_EXTRA_RO_MOUNT=host_path:container_path
-#   e.g. MIRA_EXTRA_RO_MOUNT=$HOME/repos/github/private/agentbench:/agentbench  (used by
+#   e.g. MIRA_EXTRA_RO_MOUNT=/path/to/agentbench:/agentbench  (used by
 #   tools/ci/bench_smoke.sh via AGENTBENCH_SRC=/agentbench). Mounted ":ro"; one mount only.
 # Resources: --cpus 2 --memory 3g by default (MIRA_DEV_CPUS / MIRA_DEV_MEM override).
 # Inside, CMAKE_BUILD_PARALLEL_LEVEL defaults to 2 (MIRA_BUILD_JOBS overrides; tools/ci/full_gate.sh sets it per lane).

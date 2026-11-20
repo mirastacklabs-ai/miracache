@@ -4,11 +4,11 @@
 //   sim_runner --seeds N [--first S]    run seeds S..S+N-1 (N >= 1, S >= 1; S defaults to 1)
 //   sim_runner --seed X                 reproduce one seed (X >= 1), printing its trace hash
 //   sim_runner --aead-seeds N [--aead-first S]
-//                                       A1.5 S3 AEAD fetch scenario over seeds S..S+N-1 (S defaults to 1), each with and
+//                                       AEAD fetch scenario over seeds S..S+N-1 (S defaults to 1), each with and
 //                                       without a nemesis, each run twice (identical trace hash);
 //                                       runs instead of the READ scenario unless --seeds/--seed is given
 //   sim_runner --store-seeds N [--store-first S] [--store-replay M] [--store-full-every K] [--store-golden FILE]
-//                                       A1.4 S6 store scenario over seeds S..S+N-1 (S defaults to 1; the seeds <= M,
+//                                       Store scenario over seeds S..S+N-1 (S defaults to 1; the seeds <= M,
 //                                       default 0, run twice for determinism: M is an absolute seed number, so shards
 //                                       with S > M replay nothing); K = CRC sweep cadence (default every step).
 //                                       The coverage-vacuity checks apply to a run of N >= 50 seeds; --store-shard (a slice
@@ -23,7 +23,7 @@
 //   sim_runner --store-seeds N --teeth NAME --expect-fail
 //                                       NAME in no_fence|skip_seq|commit_before_digest|reuse_generation (needs the
 //                                       teeth build); exits 0 only if some seed FAILS
-//   sim_runner --membership-seeds N     MB4 membership scenario (3 nodes, R = 1 and 2) over seeds 1..N; --membership-seed X reproduces one
+//   sim_runner --membership-seeds N     Membership scenario (3 nodes, R = 1 and 2) over seeds 1..N; --membership-seed X reproduces one
 //   sim_runner --golden FILE           also check pinned trace hashes; FILE has lines
 //                                       "<seed> <16 hex digits>" ('#' starts a comment)
 // Argument errors exit with status 2.
@@ -123,7 +123,7 @@ long check_golden(const char* path) {
   return checked;
 }
 
-// A1.5 S3: no-fault runs must validate every block; nemesis runs must never Hit with
+// No-fault runs must validate every block; nemesis runs must never Hit with
 // wrong bytes. Both must replay with an identical trace hash.
 int run_aead(std::uint64_t first, std::uint64_t n) {
   std::uint64_t hits = 0, seq = 0, aead = 0, scribbles = 0, fails = 0;
@@ -156,7 +156,7 @@ int run_aead(std::uint64_t first, std::uint64_t n) {
   return 0;
 }
 
-// A1.4 S6 store scenario. `golden`: pinned "<seed> <hash>" lines, run in addition to 1..n.
+// Store scenario. `golden`: pinned "<seed> <hash>" lines, run in addition to 1..n.
 struct StoreOpts {
   std::uint64_t n = 0, replay = 0, single = 0, first = 1;
   std::uint32_t full_every = 1;
@@ -187,12 +187,12 @@ constexpr StatField kStatFields[] = {
     {"below_cap_checks", &SS::below_cap_checks, false}, {"max_ep_puts", &SS::max_ep_puts, true},
     {"crash_checks", &SS::crash_checks, false}, {"crash_adopted", &SS::crash_adopted, false},
 };
-// s11c review P3-6 (a): every counter of ScenarioStats is in the table (a new field without a row fails to compile).
+// Every counter of ScenarioStats is in the table (a new field without a row fails to compile).
 static_assert(sizeof(SS) == sizeof(std::uint64_t) * std::size(kStatFields),
               "ScenarioStats gained or lost a counter: update kStatFields");
 constexpr const char* kStatsMagic = "miracache-store-stats 2";
 
-// s11c review P3-6 (b): the identity of this sim_runner binary (device, inode, size, mtime of /proc/self/exe, FNV-1a), so
+// The identity of this sim_runner binary (device, inode, size, mtime of /proc/self/exe, FNV-1a), so
 // sim_store_vacuity rejects a stats file a different (older) build wrote: e.g. `ctest -FA -R sim_store_vacuity` after a
 // rebuild, which skips the shards and their clean step. 0 if the OS cannot say (then any file of a 0-stamp build matches).
 std::uint64_t build_stamp() {
@@ -218,7 +218,7 @@ int store_vacuity(const SS& st, std::uint64_t n, bool peak_required, bool requir
     std::fprintf(stderr, "store scenario never adopted a block from a crash snapshot\n");
     return 1;
   }
-  // r6 B1/B4: the roomy-cap seeds must reach more than 4 concurrent puts on one endpoint, and the
+  // The roomy-cap seeds must reach more than 4 concurrent puts on one endpoint, and the
   // below-cap oracle must have run.
   if (n >= 50 && ((peak_required && st.max_ep_puts <= 4) || st.below_cap_checks == 0)) {
     std::fprintf(stderr, "store scenario never had > 4 puts on one endpoint or never checked below the cap\n");
@@ -368,7 +368,7 @@ bool store_seed(std::uint64_t seed, const StoreOpts& o, bool replay, std::uint64
 
 int run_store_body(const StoreOpts& o, SS& st) {
   using miracache::buggify::Teeth;
-  // r6 B3: each injected bug must be caught by the oracle aimed at it, not by any failure: the run
+  // Each injected bug must be caught by the oracle aimed at it, not by any failure: the run
   // must fail with this substring in its first failure message.
   struct Tooth {
     const char* name;
@@ -441,7 +441,7 @@ int run_store_body(const StoreOpts& o, SS& st) {
               "peak %llu puts on one endpoint\n",
               (unsigned long long)st.ep_cap_hits, (unsigned long long)st.below_cap_checks, (unsigned long long)st.lease_cap_hits,
               (unsigned long long)st.unknown_probes, (unsigned long long)st.max_ep_puts);
-  std::printf("sim store crash snapshots (A3.1): %llu re-opened and scanned, %llu blocks adopted\n",
+  std::printf("sim store crash snapshots: %llu re-opened and scanned, %llu blocks adopted\n",
               (unsigned long long)st.crash_checks, (unsigned long long)st.crash_adopted);
   // Peak > 4 is a union property (only seeds divisible by 6 reach it, and rarely): a --store-shard run of fewer than 200
   // seeds is a slice of the sweep and does not require it; the unsharded sweep and 200+ seed shards do. --store-require-peak
@@ -499,7 +499,7 @@ int run_store(const StoreOpts& o) {
   return rc;
 }
 
-// MB4: membership scenario (3 nodes, R = 1 and 2) over seeds 1..n; the first 100 seeds run twice (same trace hash).
+// Membership scenario (3 nodes, R = 1 and 2) over seeds 1..n; the first 100 seeds run twice (same trace hash).
 int run_membership(std::uint64_t n) {
   miracache::sim::MembershipStats t;
   const int quiet_fd = ::open("/dev/null", O_WRONLY);  // the servers log every member-state change: not 2,000 seeds of it

@@ -54,7 +54,7 @@ bool in(std::string_view k, std::initializer_list<const char*> names) {
   return false;
 }
 
-// Flat pre-HR1 [store] names -> their new home.
+// Flat pre-reload [store] names -> their new home.
 const char* stale_target(std::string_view k) {
   if (k == "scope_idle_ttl_s") return "retention.idle_ttl_s";
   if (k == "max_ttl_s") return "retention.max_ttl_s";
@@ -225,7 +225,7 @@ Status validate_dyn(const DynConfig& d) {
   if (d.admit_timeout <= z || d.admit_timeout >= d.ticket_ttl)
     return bad("config: limits.admit_timeout_s must be > 0 and < ticket.ttl_s");
   if (d.hello_deadline <= z || d.idle_timeout <= z) return bad("config: limits.hello_deadline_s and idle_timeout_s must be > 0");
-  // max_conns_per_principal == 0 and ticket_max_per_identity == 0 mean "computed at Server::create" (G02, H07); an
+  // max_conns_per_principal == 0 and ticket_max_per_identity == 0 mean "computed at Server::create"; an
   // explicit 0 is refused where the key is parsed.
   if (d.max_leases_per_principal < 1)
     return bad("config: limits.* counts must be >= 1");
@@ -312,7 +312,7 @@ DynParse parse_memnode_dyn(std::string_view config_toml, const DynConfig& base, 
     res.error = st.error().context;
     return res;
   }
-  // G06 (decision 7): put_timeout >= 4 x the clients' deadline.put_max_ms (default 2500 ms), both from this bundle.
+  // put_timeout >= 4 x the clients' deadline.put_max_ms (default 2500 ms), both from this bundle.
   {
     std::int64_t put_max_ms = 2500;
     bool mentioned = false;  // only a bundle that sets one of the two keys is checked (a local base value is not bundle content)
@@ -401,11 +401,11 @@ std::vector<std::string> static_changed_keys(const NodeConfig& a, const NodeConf
         break;
       }
   }
-  // G04: rails are restart-class: a changed device (per rail) or subnet label is a STATIC change too.
+  // Rails are restart-class: a changed device (per rail) or subnet label is a STATIC change too.
   MC_DIFF(a.devices, b.devices, "node.rails");
   MC_DIFF(x.rail_device, y.rail_device, "node.rails");
   MC_DIFF(a.rail_subnets, b.rail_subnets, "node.rails");
-  // G05: the admin.ca PATH is STATIC (the file's contents reload, a different path needs a restart).
+  // The admin.ca PATH is STATIC (the file's contents reload, a different path needs a restart).
   MC_DIFF(a.admin_ca, b.admin_ca, "admin.ca");
   MC_DIFF(a.trust_keys, b.trust_keys, "control.trust_keys");
   MC_DIFF(a.workers, b.workers, "executor.workers");
@@ -422,9 +422,9 @@ SighupPlan plan_sighup(const NodeConfig& boot, const NodeConfig& fresh, const Dy
   if (!p.static_changed.empty()) return p;
   DynConfig next = bundle_mode ? current : dyn_from_server_config(fresh.server);
   next.drain_ms = fresh.drain_ms;
-  if (next.max_conns_per_principal == 0)  // key not in the file: the computed default (G02)
+  if (next.max_conns_per_principal == 0)  // key not in the file: the computed default
     next.max_conns_per_principal = conns_default != 0 ? conns_default : current.max_conns_per_principal;
-  if (next.ticket_max_per_identity == 0)  // key not in the file: the computed default (H07)
+  if (next.ticket_max_per_identity == 0)  // key not in the file: the computed default
     next.ticket_max_per_identity = tickets_default != 0 ? tickets_default : current.ticket_max_per_identity;
   if (!bundle_mode) next.generation = 0;
   p.dyn = std::make_shared<const DynConfig>(std::move(next));

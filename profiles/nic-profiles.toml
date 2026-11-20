@@ -1,4 +1,4 @@
-# miracache NIC profile registry (spec 4.3, task A3.3).
+# miracache NIC profile registry (spec 4.3).
 #
 # Built into the binaries (compiled in from this file) and overridable with `profiles_file`
 # ([nic] on the memory node, [fabric] on the client). Unknown tables or keys are an error.

@@ -68,7 +68,7 @@ Error from_errno(int e, const char* ctx) {
   }
 }
 
-// Q6: the local device would not create a resource (CQ, completion channel, PD, MR, QP): recorded for the caller
+// The local device would not create a resource (CQ, completion channel, PD, MR, QP): recorded for the caller
 // (fabric::last_local_failure), which reports the call, errno and device and tells it from a remote/connect failure.
 Error local_fail(int e, const char* call, const std::string& device) {
   last_local_failure() = LocalFailure{call, e, device, -1};
@@ -371,7 +371,7 @@ class AsyncDispatcher {
 // is one ballast per device, refcounted by the fabrics on it and destroyed with the last one (after its rings). It must
 // be first: every fabric acquires it before it creates any CQ or QP. A failed creation is sticky while fabrics hold the
 // slot, so they all keep the deep-ring floor instead.
-// ASSUMPTION (s11c review P3-1): no foreign rings on this context. The verbs API cannot list a context's CQs/QPs, so the
+// ASSUMPTION : no foreign rings on this context. The verbs API cannot list a context's CQs/QPs, so the
 // ballast's place is proven only against what this process knows: when the slot is created while a fabric of this process
 // already holds the context's async dispatcher (it has rings there without a ballast), the ballast is not first, and every
 // holder of that slot keeps the kSoftRingFloor fallback too. Rings created on librdmacm's shared context by code outside
@@ -475,7 +475,7 @@ struct VerbsCmFabric::Impl final : detail::AsyncSink {
     std::uint32_t len = 0;   // bytes moved on success (byte_len is unreliable for READ/WRITE)
     std::uint64_t zid = 0;   // ep == nullptr: the QP is gone; settles zombies_[zid] when this WR flushes
   };
-  // CQE reservation of a destroyed QP, held until its flush completions are drained (N08).
+  // CQE reservation of a destroyed QP, held until its flush completions are drained.
   struct Zombie {
     std::uint32_t reserve = 0;
     std::uint32_t left = 0;        // WRs still to flush
@@ -488,7 +488,7 @@ struct VerbsCmFabric::Impl final : detail::AsyncSink {
     PdId pd;
   };
 
-  struct Lst;  // a listener (RL1), defined below
+  struct Lst;  // a listener, defined below
   // ---- Endpoint ----
   class Ep final : public Endpoint {
    public:
@@ -545,7 +545,7 @@ struct VerbsCmFabric::Impl final : detail::AsyncSink {
     std::uint8_t reject_code_ = 0;
     Phase phase_ = Phase::Connecting;
     bool active_ = false;
-    bool ack_opt_set_ = false;  // active side: rdma_set_option(ACK_TIMEOUT) was accepted (B11: only then is it compared)
+    bool ack_opt_set_ = false;  // active side: rdma_set_option(ACK_TIMEOUT) was accepted (only then is it compared)
     rdma_cm_id* cm_ = nullptr;
     bool has_qp_ = false;
     ibv_pd* pd_ = nullptr;
@@ -586,7 +586,7 @@ struct VerbsCmFabric::Impl final : detail::AsyncSink {
   std::uint32_t proto_epoch_ = 1;
 
   std::vector<std::unique_ptr<Ep>> eps_;
-  // RL1: several listeners per fabric (one per rail address on this device), each with its own accept and admit
+  // several listeners per fabric (one per rail address on this device), each with its own accept and admit
   // callbacks. Connect requests are routed by the CM event's listen_id.
   struct Lst {
     rdma_cm_id* id = nullptr;
@@ -604,7 +604,7 @@ struct VerbsCmFabric::Impl final : detail::AsyncSink {
     return nullptr;
   }
   std::uint16_t listen_port_ = 0;
-  // Health inputs (RL1): applied by drain_async() on the polling thread.
+  // Health inputs: applied by drain_async() on the polling thread.
   bool device_fatal_ = false;           // DeviceFatal seen (the device is gone for good)
   bool port_err_seen_ = false;
   Nanos port_err_at_{0};
@@ -612,7 +612,7 @@ struct VerbsCmFabric::Impl final : detail::AsyncSink {
   std::uint32_t max_pending_ = 64;
   Nanos accept_timeout_ = std::chrono::seconds(5);
 
-  // Async events (N01): the dispatcher thread pushes, poll() applies.
+  // Async events: the dispatcher thread pushes, poll() applies.
   detail::AsyncDispatcher* disp_ = nullptr;
   int async_efd_ = -1;
   std::mutex async_mu_;
@@ -653,15 +653,15 @@ struct VerbsCmFabric::Impl final : detail::AsyncSink {
   ibv_pd* pd_ptr(PdId id);
   void reap_unsurfaced();
   void log(const char* msg) const { log::write(log::Level::Warn, "verbs_cm", msg, {{"device", caps_.device}}); }
-  std::atomic<bool> ack_timeout_warned_{false};  // r7 R11: rdma_set_option(ACK_TIMEOUT) refusal, logged once
-  QpReadback qp_readback_;  // B11
+  std::atomic<bool> ack_timeout_warned_{false};  // rdma_set_option(ACK_TIMEOUT) refusal, logged once
+  QpReadback qp_readback_;
   void readback_qp(Ep* ep, rdma_cm_id* id);
-  std::atomic<bool> inline_warned_{false};       // A3.3: the profile max_inline was refused, logged once
+  std::atomic<bool> inline_warned_{false};       // the profile max_inline was refused, logged once
   // Soft-iWARP (libsiw + the siw kernel module) refuses any ring whose mmap starts on page 144 (detail::SiwBallast).
   // On that provider only (vendor ID, never a device name) the fabric holds the per-device ballast CQ that pins the
   // page. Only if the ballast cannot be created, or cannot be proven the context's first ring, do QP rings fall back to
-  // at least kSoftRingFloor entries (run #266's floor, which dodged page 144 by layout luck); the fabric still posts and
-  // budgets by sq_depth / recv_slots (R01).
+  // at least kSoftRingFloor entries (an earlier floor, which dodged a page by layout luck); the fabric still posts and
+  // budgets by sq_depth / recv_slots.
   static constexpr std::uint32_t kSoftIwarpVendorId = 0x626d74;  // libsiw / siw kernel module
   static constexpr std::uint32_t kSoftRingFloor = 1024;
   bool soft_rings_ = false;     // the floor applies (siw without a ballast proven first)
@@ -735,7 +735,7 @@ Status VerbsCmFabric::Impl::init() {
   cm_chan_ = rdma_create_event_channel();
   if (cm_chan_ == nullptr) return from_errno(errno, "rdma_create_event_channel (is /dev/infiniband/rdma_cm present?)");
   set_nonblock(cm_chan_->fd);
-  errno = 0;  // L12: a provider that fails without setting errno must not show a stale one
+  errno = 0;  // a provider that fails without setting errno must not show a stale one
   comp_ = ibv_create_comp_channel(ctx_);
   if (comp_ == nullptr) return local_fail(errno, "ibv_create_comp_channel", caps_.device);
   set_nonblock(comp_->fd);
@@ -768,7 +768,7 @@ ibv_pd* VerbsCmFabric::Impl::pd_ptr(PdId id) {
   auto it = pds_.find(id.v);
   if (it != pds_.end()) return it->second;
   if (id.v != 0) return nullptr;  // unknown handle
-  errno = 0;  // L12
+  errno = 0;
   ibv_pd* pd = ibv_alloc_pd(ctx_);  // the default PD, created on first use
   if (pd != nullptr) pds_[0] = pd;
   return pd;
@@ -1003,7 +1003,7 @@ Status VerbsCmFabric::Impl::setup_qp(Ep& ep) {
   const std::uint32_t need = opt_.sq_depth + ep.recv_slots_;
   if (static_cast<std::uint64_t>(cq_reserved_) + need > opt_.cq_depth && !zombies_.empty()) reclaim_cq();
   if (static_cast<std::uint64_t>(cq_reserved_) + need > opt_.cq_depth) {
-    // Q07: the fabric's own budget, no provider call: no errno is reported.
+    // The fabric's own budget, no provider call: no errno is reported.
     last_local_failure() = LocalFailure{"completion queue budget exhausted (cq_depth)", 0, caps_.device, -1, /*provider_call=*/false};
     return Error{ErrorCode::ResourceExhausted, "completion queue budget exhausted (cq_depth)"};
   }
@@ -1024,7 +1024,7 @@ Status VerbsCmFabric::Impl::setup_qp(Ep& ep) {
   qa.cap.max_recv_wr = ep.recv_slots_;
   qa.cap.max_send_sge = 1;
   qa.cap.max_recv_sge = 1;
-  qa.cap.max_inline_data = opt_.inline_bytes;  // profile inline_bytes (A3.3); the device may round it up
+  qa.cap.max_inline_data = opt_.inline_bytes;  // profile inline_bytes; the device may round it up
   if (soft_rings_) {  // siw without a ballast proven first only (acquire_siw_ballast)
     static std::atomic<bool> logged{false};
     qa.cap.max_send_wr = std::max(qa.cap.max_send_wr, std::min(kSoftRingFloor, caps_.max_qp_wr));
@@ -1202,7 +1202,7 @@ void VerbsCmFabric::Impl::dispatch(rdma_cm_event* ev) {
       ep->reject_code_ = pd != nullptr && ev->param.conn.private_data_len >= 1 ? pd[0] : protocol::kRejectNone;
     }
     if (type == RDMA_CM_EVENT_ESTABLISHED) {
-      readback_qp(ep, ev->id);  // B11: QP is in RTS now (both sides)
+      readback_qp(ep, ev->id);  // QP is in RTS now (both sides)
       ep->established_ = ev->param.conn;
       const auto* raw = static_cast<const std::byte*>(ev->param.conn.private_data);
       auto dec = protocol::decode_private(
@@ -1269,7 +1269,7 @@ void VerbsCmFabric::Impl::on_connect_request(rdma_cm_event* ev) {
   Admission adm{lst->accept_class, lst->accept_pd};
   if (lst->admit) {
     auto r = lst->admit(priv);
-    if (!r) return reject(protocol::admit_reject_code(r.error().code));  // r7 R01: Busy (draining) is not AccessDenied
+    if (!r) return reject(protocol::admit_reject_code(r.error().code));  // Busy (draining) is not AccessDenied
     adm = *r;
   }
   if (pd_ptr(adm.pd) == nullptr) return reject(protocol::kRejectAdmit);  // admit named an unknown PD
@@ -1317,7 +1317,7 @@ void VerbsCmFabric::Impl::on_connect_request(rdma_cm_event* ev) {
   if (rdma_accept(id, &cp) != 0) drop(protocol::kRejectNone);
 }
 
-// ---- Impl: CQE reservation of dead QPs (N08) and endpoint announcement (N05) ----
+// ---- Impl: CQE reservation of dead QPs and endpoint announcement ----
 
 // The QP is destroyed, but its posted receives still flush into the shared CQ. Until those
 // are drained the CQ can hold their entries, so the reservation stays against the budget.
@@ -1402,7 +1402,7 @@ void VerbsCmFabric::Impl::surface(Ep* ep, bool announce) {
   for (auto& c : early) ready_.push_back(std::move(c));
 }
 
-// B11: the one place that reads QP attributes back. Both sides reach RTS inside rdma_cm (rdma_connect /
+// The one place that reads QP attributes back. Both sides reach RTS inside rdma_cm (rdma_connect /
 // rdma_accept) and both see CM ESTABLISHED right after, so this is called from the ESTABLISHED handler for
 // every QP; only the first QP per (role, device, port, addr) is queried (QpReadback::claim). Never fails the
 // connection: a failed query is logged (WARN once) and counted.
@@ -1436,7 +1436,7 @@ void VerbsCmFabric::Impl::readback_qp(Ep* ep, rdma_cm_id* id) {
   QpExpect want;
   if (ep->proto_ != protocol::Protocol::IWarp) {
     want.rnr_retry = opt_.rnr_retry_count;
-    // F3 (K19): the passive QP's retry_cnt comes from the client's REQ, so only the active side can compare it.
+    // The passive QP's retry_cnt comes from the client's REQ, so only the active side can compare it.
     if (ep->active_) want.retry_count = opt_.retry_count;
     if (ep->active_ && ep->ack_opt_set_) want.ack_timeout_exp = opt_.ack_timeout_exp;
   }
@@ -1498,7 +1498,7 @@ Status VerbsCmFabric::Impl::Ep::post_recv(std::uint32_t slot) {
 
 Status VerbsCmFabric::Impl::Ep::post_wr(ibv_send_wr& wr, WrKind kind, WrTag tag, std::uint32_t slot,
                                         std::uint32_t lkey, std::uint32_t len) {
-  // R01: the CQ budget reserves sq_depth CQEs per QP for sends, so the cap is enforced here, whatever ring the provider
+  // The CQ budget reserves sq_depth CQEs per QP for sends, so the cap is enforced here, whatever ring the provider
   // gave (siw without its ballast rounds it up to 1024 WQEs). outstanding_ counts posted-and-not-yet-completed
   // send-queue WRs; every completion, flushed ones included, decrements it in handle_wc.
   if (outstanding_ >= f_.opt_.sq_depth) {
@@ -1865,13 +1865,13 @@ Expected<Endpoint*> VerbsCmFabric::connect(const Peer& peer, const ConnParams& p
   rdma_cm_id* new_id = nullptr;
   if (rdma_create_id(f.cm_chan_, &new_id, ep, RDMA_PS_TCP) != 0) return fail(from_errno(errno, "rdma_create_id"));
   ep->cm_ = new_id;
-  {  // Q05: pin the local ACK timeout the client watchdog grace is derived from (fabric/types.h). Best
+  {  // pin the local ACK timeout the client watchdog grace is derived from (fabric/types.h). Best
      // effort: an older kernel refuses and rdma_cm's default (<= the pinned value on RoCE) applies.
      // iWARP accepts and ignores it (no ACK timeout there).
-    std::uint8_t ack_to = f.opt_.ack_timeout_exp;  // profile (A3.3); default kQpAckTimeoutExpMax
+    std::uint8_t ack_to = f.opt_.ack_timeout_exp;  // profile; default kQpAckTimeoutExpMax
     ep->ack_opt_set_ = rdma_set_option(ep->cm_, RDMA_OPTION_ID, RDMA_OPTION_ID_ACK_TIMEOUT, &ack_to, sizeof ack_to) == 0;
     if (!ep->ack_opt_set_ &&
-        !f.ack_timeout_warned_.exchange(true))  // r7 R11: say so once (watchdog grace then rests on the default)
+        !f.ack_timeout_warned_.exchange(true))  // say so once (watchdog grace then rests on the default)
       f.log("rdma_set_option(ACK_TIMEOUT) refused; the rdma_cm default ACK timeout applies");
   }
   const int tmo_ms = static_cast<int>(std::max<std::int64_t>(

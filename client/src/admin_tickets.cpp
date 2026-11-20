@@ -22,7 +22,7 @@ Error err(ErrorCode c, const char* ctx) { return Error{c, ctx}; }
 
 // ---- strict JSON for the one response shape -------------------------------------------------
 // {"ttl_s":N,"tickets":[{"class":"fetch","rail":0,"id":"<32 hex>"},...],"node_id":N,"hostname":"h"}
-// (whitespace allowed; node_id and hostname are optional, plan 2C). Unknown fields, at the top level and per
+// (whitespace allowed; node_id and hostname are optional). Unknown fields, at the top level and per
 // ticket, are skipped (forward compatibility). Duplicate known keys, escapes in known strings, non-integers and
 // trailing bytes are errors.
 struct Json {
@@ -178,7 +178,7 @@ Expected<AdminTicketSource::Parsed> AdminTicketSource::parse_response(const std:
         out.ttl_s = j.num();
         have_ttl = true;
         if (!j.ok || out.ttl_s < 2 || out.ttl_s > 7 * 86400) return err(ErrorCode::Corrupt, "admin: bad ttl_s");
-      } else if (k == "node_id") {  // plan 2C: the memory node's own ID and hostname (additive fields)
+      } else if (k == "node_id") {  // The memory node's own ID and hostname (additive fields)
         have_nid = true;
         const std::uint64_t v = j.num();
         if (!j.ok || v == 0 || v > 0xFFFFFFFFull) return err(ErrorCode::Corrupt, "admin: bad node_id");
@@ -187,7 +187,7 @@ Expected<AdminTicketSource::Parsed> AdminTicketSource::parse_response(const std:
         have_host = true;
         out.hostname = j.str();
         if (!j.ok) return err(ErrorCode::Corrupt, "admin: bad hostname");
-        // S08: the hostname lands in a metric label; anything but a plain DNS-ish name (1..64 of A-Za-z0-9._-) is unknown.
+        // The hostname lands in a metric label; anything but a plain DNS-ish name (1..64 of A-Za-z0-9._-) is unknown.
         bool plain = !out.hostname.empty() && out.hostname.size() <= 64;
         for (unsigned char ch : out.hostname)
           plain = plain && (std::isalnum(ch) || ch == '.' || ch == '_' || ch == '-');
@@ -291,7 +291,7 @@ Expected<std::shared_ptr<AdminTicketSource>> AdminTicketSource::create(AdminTick
 AdminTicketSource::AdminTicketSource(AdminTicketOptions o, const Clock& clock, std::shared_ptr<HttpsClient> http)
     : o_(std::move(o)), batch_(o_.batch), fetch_need_(std::clamp(o_.fetch_need, 1u, 64u)), clock_(clock), http_(std::move(http)) {}
 void AdminTicketSource::set_batch(unsigned n) {
-  if (n >= 1 && n <= 64) batch_.store(n, std::memory_order_relaxed);  // HR2: class A, new refills only
+  if (n >= 1 && n <= 64) batch_.store(n, std::memory_order_relaxed);  // Class A, new refills only
 }
 void AdminTicketSource::set_fetch_need(unsigned n) { fetch_need_.store(std::clamp(n, 1u, 64u), std::memory_order_relaxed); }
 AdminTicketSource::~AdminTicketSource() = default;
@@ -347,9 +347,9 @@ Expected<proto::Ticket> AdminTicketSource::draw(fabric::EpClass cls, std::uint8_
       out = q.front().t;  // single use: removed from the cache before it leaves
       q.pop_front();
     } else if (last_failed_) {
-      // Q15: the cache is empty because the latest admin call failed: the build fails with that call's error (code and
+      // The cache is empty because the latest admin call failed: the build fails with that call's error (code and
       // text: "admin: connect failed", "admin: 429 ...", a TLS failure), not with a bare "no cached ticket".
-      // R18: the text only. The code is a fixed transport-class one (LinkDown): the build path keys behaviour on codes
+      // The text only. The code is a fixed transport-class one (LinkDown): the build path keys behaviour on codes
       // (InvalidArgument = a node-ID conflict: max backoff, no build-fail count, the bundle mismatch line; Aborted = a
       // shutdown), and an admin failure is neither. last_err_ is the admin endpoint's latest failure, whatever rail or
       // class it was for: the refill backoff is shared by every rail, so it is also why this rail's cache is empty.
@@ -363,7 +363,7 @@ Expected<proto::Ticket> AdminTicketSource::draw(fabric::EpClass cls, std::uint8_
 void AdminTicketSource::reset_backoff() {
   std::lock_guard lk(mu_);
   fail_streak_ = 0;
-  // r8 N08: a floor, not zero: the next fetch is at most backoff_min_ms away (never a tight retry loop
+  // A floor, not zero: the next fetch is at most backoff_min_ms away (never a tight retry loop
   // against an admin that is still failing). A fetch in flight that fails sets it from streak 0 (min).
   const Nanos floor = clock_.now() + std::chrono::milliseconds(std::max(1u, o_.backoff_min_ms));
   next_try_ = std::min(next_try_, floor);
@@ -372,11 +372,11 @@ void AdminTicketSource::reset_backoff() {
 // One request per rail and request size that needs a refill (the node's ticket route takes one rail and one count per
 // call); rail 0 only when AdminTicketOptions::rails is empty. The backoff is the admin endpoint's, shared by every rail:
 // the first failure stops.
-// G01: each class has its own mark and size (want()): the fetch class wants fetch_need tickets for one build, so a node
+// Each class has its own mark and size (want()): the fetch class wants fetch_need tickets for one build, so a node
 // whose fetch_qps is above ticket_batch still connects. Classes that want the same count share one request.
 Status AdminTicketSource::prepare() { return prepare(Nanos::max()); }
 
-// R14 (review s11): the settle retries of Client::open give the refill what is left of the settle. Each admin call gets
+// The settle retries of Client::open give the refill what is left of the settle. Each admin call gets
 // min(io_timeout_ms, the budget left), and none starts once it is spent (Timeout, no fetch, the backoff untouched).
 Status AdminTicketSource::prepare(Nanos budget) {
   const Nanos end = budget == Nanos::max() ? Nanos::max() : clock_.now() + budget;
@@ -390,7 +390,7 @@ Status AdminTicketSource::prepare(Nanos budget) {
       std::lock_guard lk(mu_);
       const Nanos now = clock_.now();
       const Nanos max_age = std::chrono::seconds(ttl_s_) / 2;
-      // A03: ask only for the classes below their refill mark, never past the class cap (2 x its request size): an
+      // Ask only for the classes below their refill mark, never past the class cap (2 x its request size): an
       // uneven drain would otherwise leave unredeemed tickets live on the node and hit its per-identity cap.
       for (int i = 0; i < 3; ++i) {
         auto& q = cache_[rail][i];
@@ -430,7 +430,7 @@ Status AdminTicketSource::prepare(Nanos budget) {
   return {};
 }
 
-// H07: the memory node sizes its default limits.ticket_max_per_identity from these caps (server/dyn_config.h
+// The memory node sizes its default limits.ticket_max_per_identity from these caps (server/dyn_config.h
 // default_ticket_max: 2 x the per-rail caps at ticket_batch 4, for 16 sessions); keep the two in step.
 AdminTicketSource::Want AdminTicketSource::want(int ci) const {
   const std::size_t batch = std::clamp(batch_.load(std::memory_order_relaxed), 1u, 64u);
@@ -444,14 +444,14 @@ AdminTicketSource::Want AdminTicketSource::want(int ci) const {
   return w;
 }
 
-// R19 (review s11): while the source backs off after a failed fetch, a build fails on the cached error unless the cache
+// While the source backs off after a failed fetch, a build fails on the cached error unless the cache
 // still holds what one build draws (per rail: 1 control, fetch_need fetch, 1 ingest). Then: next_try_; else 0.
 Nanos AdminTicketSource::ready_at() const {
   std::vector<std::uint8_t> rails = o_.rails;
   if (rails.empty()) rails.push_back(0);
   const std::size_t need_fetch = std::clamp(fetch_need_.load(std::memory_order_relaxed), 1u, 64u);
   std::lock_guard lk(mu_);
-  const Nanos now = clock_.now();  // B-3: one reading for the whole check
+  const Nanos now = clock_.now();  // one reading for the whole check
   if (!last_failed_ || now >= next_try_) return Nanos{0};
   const Nanos max_age = std::chrono::seconds(ttl_s_) / 2;
   for (const std::uint8_t rail : rails) {
@@ -470,7 +470,7 @@ Nanos AdminTicketSource::ready_at() const {
 Status AdminTicketSource::fetch(std::uint8_t rail, unsigned class_mask, unsigned count, unsigned timeout_ms) {
   std::lock_guard fl(fetch_mu_);
   fetches_.fetch_add(1);
-  bool hold_streak = false;  // r8 N03: set for a 503 (draining): back off, but do not grow the streak
+  bool hold_streak = false;  // Set for a 503 (draining): back off, but do not grow the streak
   auto done = [&](Status s) {
     {
       // The total and the counter move under the same lock bind_metrics replays under, so a fetch
@@ -486,7 +486,7 @@ Status AdminTicketSource::fetch(std::uint8_t rail, unsigned class_mask, unsigned
       last_failed_ = false;
     } else {
       // Jittered exponential backoff (1 s -> 30 s): a 403/429/blackhole is not retried every tick.
-      // r8b Q02: the away cap applies to a node that is away (LinkDown, Timeout, 503), not to a refusal.
+      // The away cap applies to a node that is away (LinkDown, Timeout, 503), not to a refusal.
       const ErrorCode ec = s.error().code;
       const bool away = hold_streak || ec == ErrorCode::LinkDown || ec == ErrorCode::Timeout;
       unsigned cap = o_.backoff_max_ms;
@@ -511,7 +511,7 @@ Status AdminTicketSource::fetch(std::uint8_t rail, unsigned class_mask, unsigned
   const int code = rsp->code;
   if (code == 403) return done(err(ErrorCode::AccessDenied, "admin: 403 identity not allowed"));
   if (code == 429) return done(err(ErrorCode::Busy, "admin: 429 ticket cap reached"));
-  if (code == 503) {  // r7 R01; r8 N03: a drain is not a failing admin: the backoff does not grow
+  if (code == 503) {  // A drain is not a failing admin: the backoff does not grow
     hold_streak = true;
     return done(err(ErrorCode::Busy, "admin: 503 node draining"));
   }
@@ -527,7 +527,7 @@ Status AdminTicketSource::fetch(std::uint8_t rail, unsigned class_mask, unsigned
     if (parsed->node_id != 0) node_id_ = parsed->node_id;
     for (int i = 0; i < 3; ++i) {
       if (!(class_mask & (1u << i))) continue;  // not asked for: not kept
-      const std::size_t cap = want(i).cap;  // A03: the cache never holds more than 2 x the class's request size
+      const std::size_t cap = want(i).cap;  // The cache never holds more than 2 x the class's request size
       for (const auto& t : parsed->by_class[i])
         if (cache_[rail][i].size() < cap) cache_[rail][i].push_back(Entry{t, now});
     }

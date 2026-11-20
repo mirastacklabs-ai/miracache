@@ -1,6 +1,6 @@
 """miracache._core without the real library: a fake C ABI records every call.
 
-V02: no call into C after (or during) mira_client_close. V04: n keys -> one mira_lookup_nb.
+Cases: no call into C after (or during) mira_client_close; n keys -> one mira_lookup_nb.
 """
 import ctypes
 import gc
@@ -88,7 +88,7 @@ class CoreCase(unittest.TestCase):
 
 
 class TestBatchedLookup(CoreCase):
-    def test_n_keys_one_submission_per_key_results(self):  # V04
+    def test_n_keys_one_submission_per_key_results(self):
         self.lib.statuses = [_core.HIT, _core.MISS, _core.HIT]
         keys = [b"a", b"b", b"c"]
         self.assertEqual(self.c.lookup_many(self.scope, keys, None, 40), ["PENDING"] * 3)
@@ -107,7 +107,7 @@ class TestBatchedLookup(CoreCase):
 
 
 class TestCloseRace(CoreCase):
-    def test_no_c_call_after_close_starts(self):  # V02
+    def test_no_c_call_after_close_starts(self):
         self.lib.close_hold = 0.3
         self.lib.poll_gate = threading.Event()
         gate = self.lib.poll_gate

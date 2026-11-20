@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// ScopeProvider interface (spec rev 5.1 §2.6, design/03 R28). v1 surface only: no caps(),
+// ScopeProvider interface (spec rev 5.1 §2.6). v1 surface only: no caps(),
 // controller calls, homes or carrier. Only ScopeId and KeyHash (opaque 32 B values) ever go
 // to a memory node; KeySource and everything behind it stays in the adapter.
 #pragma once

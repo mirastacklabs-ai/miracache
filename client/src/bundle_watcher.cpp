@@ -124,10 +124,10 @@ void BundleWatcher::maybe_reload_trust() {
   note("bundle: trust file reloaded");
 }
 
-// ---- wake rule (P17) --------------------------------------------------------------------------
+// ---- wake rule --------------------------------------------------------------------------
 void BundleWatcher::on_reply_generation(std::uint32_t gen_lo, const std::string& from_admin) {
   // Fast path (data path, every reply frame): two relaxed atomic loads, no lock. A value that is not ahead of
-  // the applied generation, or is the value already chased, returns here (edge trigger, P17).
+  // the applied generation, or is the value already chased, returns here (edge trigger).
   const std::uint64_t ap = applied_fast_.load(std::memory_order_acquire);
   if (ap == 0 || !ahead_lo(gen_lo, static_cast<std::uint32_t>(ap))) {
     coalesced_fast_.fetch_add(1, std::memory_order_relaxed);
@@ -215,7 +215,7 @@ BundleWatcher::Commit BundleWatcher::commit(control::BundleView&& v, std::string
       return Commit::NotNewer;
     }
   }
-  // W06: commit re-runs the floor check under the exclusive lock. Apply = floor written; Replace = nothing to
+  // Commit re-runs the floor check under the exclusive lock. Apply = floor written; Replace = nothing to
   // write (equal generation, body and sec: another process, or an earlier run, applied this exact bundle).
   // Both publish. A reject means another process on this host already committed something at least as new:
   // do not publish ours; the step fails, and the retry (backoff) fetches the newer generation.
@@ -269,7 +269,7 @@ std::vector<std::string> BundleWatcher::targets() {
 }
 
 BundleWatcher::Step BundleWatcher::sweep_all(Status& why) {
-  // P36: no bundle yet. Ask every endpoint without `after`; the highest valid bundle wins, so a stale
+  // No bundle yet. Ask every endpoint without `after`; the highest valid bundle wins, so a stale
   // endpoint cannot pin a process whose state_dir is empty.
   control::BundleView best;
   std::string best_env;
@@ -366,7 +366,7 @@ BundleWatcher::Step BundleWatcher::step(Status& why) {
     }
   }
   if (applied == 0) return sweep_all(why);
-  if (!hint.empty()) return fetch_one(hint, why);  // the node that replied has the newer bundle (Q05)
+  if (!hint.empty()) return fetch_one(hint, why);  // the node that replied has the newer bundle
   const std::vector<std::string> t = targets();
   return fetch_one(t[cursor_++ % t.size()], why);  // round-robin: every step rotates, so a 304 moves on
 }

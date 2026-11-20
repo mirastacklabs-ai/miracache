@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// rbacCmd is `mirctl rbac set|list` (RB3): the controller's role bindings. Every change is a new
+// rbacCmd is `mirctl rbac set|list`: the controller's role bindings. Every change is a new
 // sec signed with the controller's security key; the controller refuses to remove the last
 // security-admin and the bundle carries the same table to every memory node.
 //

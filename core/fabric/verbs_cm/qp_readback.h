@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// B11: QP attribute readback. After a QP reaches RTS the fabric calls ibv_query_qp once per rail (the
+// QP attribute readback. After a QP reaches RTS the fabric calls ibv_query_qp once per rail (the
 // first QP per key, see QpReadback::claim) and hands the values here. This file holds the hardware-free
 // part: compare against what config asked for, format, log once, expose gauges + a mismatch counter.
 //
@@ -79,13 +79,13 @@ class QpReadback {
     std::vector<QpMismatch> mism;
     bool failed = false;
     int err = 0;               // errno of the failed query
-    QpExpect want;             // L06: kept for the second log line
-    bool log_unknown = false;  // L06: logged while the node ID or hostname said "unknown"; logs once more when learned
+    QpExpect want;             // kept for the second log line
+    bool log_unknown = false;  // logged while the node ID or hostname said "unknown"; logs once more when learned
     telemetry::Registry* published_to = nullptr;
-    telemetry::Labels published_labels;  // extra labels the series were published with (F3: rebind hides them)
+    telemetry::Labels published_labels;  // extra labels the series were published with (rebind hides them)
     std::vector<telemetry::Counter*> series_c;
     std::vector<telemetry::Gauge*> series_g;
-    // L07 (review s9b): the counter series this entry already counted. Labels A -> B -> A give back A's series (the
+    // The counter series this entry already counted. Labels A -> B -> A give back A's series (the
     // registry keeps it, hidden): it is shown again but not counted twice.
     std::vector<const telemetry::Counter*> counted;  // a few entries; a vector keeps the order deterministic
   };
@@ -93,7 +93,7 @@ class QpReadback {
   // reads below `by` (a new registry that reused a freed one's address).
   static void count_once(Entry& e, telemetry::Counter& c, std::uint64_t by);
   void publish_locked(const QpSite& s, Entry& e);
-  // `again`: the second line of a site first logged while its identity was "unknown" (L06).
+  // `again`: the second line of a site first logged while its identity was "unknown".
   static void log_entry(const QpSite& site, const Entry& e, const telemetry::Labels& extra, bool again);
   using Key = std::tuple<std::string, std::string, std::string, std::string>;
   std::mutex mu_;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // The failed-operations oracle.
-// Header only; written by MB6a, the first user. Later slices include it and do not edit it.
+// Header only; written for the membership tests, its first user. Later slices include it and do not edit it.
 //
 // Per key the client returns a KeyStatus (Hit, Miss, Committed, Skipped, Refused, Aborted, Timeout).
 //
@@ -8,13 +8,13 @@
 //   allowed: Hit with exact bytes, Miss, Committed, Skipped (StaleEpoch, Draining, throttling, admission SKIP).
 //   failed:  Refused, Aborted, Timeout; a Hit whose bytes differ from the last committed version of that key (payloads
 //            are versioned), except a version still in flight or one whose store ended without Committed and was not
-//            superseded (its outcome is unknown: it may have landed, run #200); a job without a Completion by
+//            superseded (its outcome is unknown: it may have landed); a job without a Completion by
 //            deadline + watchdog grace; a Completion whose engine buffers are never released; any API error return.
 //   exception: a continuation Refused because its parent is nowhere is allowed only if the harness itself saw that
 //            parent evicted or invalidated (note_parent_gone). The harness tracks every parent it committed.
 // FAULT (node kill, rail loss, partition tests): STRICT, except that Refused and Timeout are also allowed for keys whose
 //   whole owner set was not Up at submit, or whose op was in flight on the failed node or rail (the caller passes
-//   `excused = true`). Aborted is excused under the same condition (Q1, option A: an op in flight on the killed or
+//   `excused = true`). Aborted is excused under the same condition (an op in flight on the killed or
 //   restarting node ends Aborted when its connection goes); never for a healthy node. Excused Refused/Timeout/Aborted
 //   are also counted apart (report(): excused{..}, excused_count()) so they stay visible.
 //   For a fetch "in flight" means its lease deadline t_lease_granted + ttl - guard passed during the
@@ -77,7 +77,7 @@ class Oracle {
     std::lock_guard lk(mu_);
     auto& f = inflight_[key];
     f.erase(v);
-    if (!committed) maybe_[key].insert(v);  // run #200: no "Committed" is not "nothing landed" (see on_fetch)
+    if (!committed) maybe_[key].insert(v);  // No "Committed" is not "nothing landed" (see on_fetch)
     if (committed) {
       auto& last = last_[key];
       if (!last || *last < v) last = v;
@@ -100,7 +100,7 @@ class Oracle {
   }
   // A fetch / lookup result. `version` = the version decoded from the Hit's bytes (nullopt = the bytes decode to nothing
   // the harness ever wrote). A Hit is right if it shows the last committed version, one still in flight, or one whose
-  // store ended without Committed and that no committed version superseded. Run #200: a store that ends Timeout or
+  // store ended without Committed and that no committed version superseded. A store that ends Timeout or
   // Aborted (its deadline passed while PUT_COMMIT was out) may still have committed on the node: its outcome is
   // unknown, not "nothing stored", and a later Hit on exactly those bytes is right (the Timeout itself is still counted
   // as a failure in Strict mode). Wrong bytes stay wrong: a version never submitted for the key (unknown), one older than

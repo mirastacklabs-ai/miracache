@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Engine-native ScopeProvider (spec rev 5.1 §2.6; design/03 R2, R4, R14-R19, R26).
+// Engine-native ScopeProvider (spec rev 5.1 §2.6).
 #pragma once
 
 #include <atomic>
@@ -16,7 +16,7 @@
 
 namespace miracache {
 
-// `ns` (R19) is computed by the engine adapters, in ONE place: python/miracache/ns.py (the
+// `ns` is computed by the engine adapters, in ONE place: python/miracache/ns.py (the
 // encoding) with each adapter's field list (vllm/compat.py, sglang/storage.py). The core takes
 // it as 32 opaque bytes (mira_derive). First 8 hex digits of ns, for logs.
 std::string ns_fingerprint(const Hash256& ns);
@@ -33,7 +33,7 @@ struct SecretSet {
 // InvalidArgument: syntax, duplicate, kver 0, S not exactly 32 bytes (64 hex), no `current`.
 Expected<SecretSet> load_secret_file(const std::string& path);
 
-// R26: S_x = HKDF-SHA256(ikm = S, salt = "", info = label), L = 32.
+// S_x = HKDF-SHA256(ikm = S, salt = "", info = label), L = 32.
 struct Subkeys {
   Secret<32> scope;  // "mira-sub-scope"
   Secret<32> key;    // "mira-sub-key"
@@ -63,7 +63,7 @@ class EngineNativeProvider final : public ScopeProvider {
 
   // scope_id = HKDF(S_scope, salt = ns, info = "mira-scope-nat-v1" || root_key).
   Expected<ScopeId> scope_id(const Hash256& ns, std::span<const std::byte> root_key) const;
-  // One scope per group; InvalidArgument if there are no roots or any root is empty (skip L3).
+  // One scope per group; InvalidArgument if there are no roots or any root is empty.
   Expected<ScopeKeys> derive(const RequestMeta& meta) const override;
   std::uint32_t kver() const { return kver_; }
 
@@ -73,7 +73,7 @@ class EngineNativeProvider final : public ScopeProvider {
   std::uint32_t kver_;
 };
 
-// HR4 (P39, spec §2.6 rotation R18): an EngineNativeProvider whose `current` kver can change while jobs run.
+// Spec §2.6 rotation: an EngineNativeProvider whose `current` kver can change while jobs run.
 // reload() swaps the whole {kver -> S} view in one step: a derive() that started before the swap finishes with the
 // old subkeys (its ScopeKeys keeps its own KeySource), every later derive() uses the new `current`. A new kver is
 // therefore usable at once for reads and stores of new scopes; scopes derived under the old kver miss (cold cache,

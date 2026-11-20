@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A3.1 warm restart (spec 6.1 "Restart", steps 3-5): rebuilds the slab, the scope table, the block map, the chain
+// Warm restart (spec 6.1 "Restart", steps 3-5): rebuilds the slab, the scope table, the block map, the chain
 // index and the LRU of a re-opened persistent store from its media, before any session is admitted.
 //
 // What is on media and what it means (the invariants the store keeps at run time):
@@ -52,7 +52,7 @@ namespace miracache::store {
 
 // SharedScopeId: the block's scope_id is held by two or more principals (or by one whose record is torn); headers carry
 // no principal, so the block cannot be attributed and is discarded (logged once per scope_id, see SharedScope).
-// TornRecord (H05): a scope record failed its CRC and its principal or scope_id reads as zero, so no block on media can
+// TornRecord: a scope record failed its CRC and its principal or scope_id reads as zero, so no block on media can
 // be attributed: every block that would otherwise be a resume candidate is discarded under this reason (the node comes
 // back cold; RestartReport::blind_record_slots names the records, and the memory node logs one Warn line per slot).
 enum class DiscardReason : std::uint8_t {
@@ -86,7 +86,7 @@ struct RestartReport {
   std::array<std::uint64_t, kDiscardReasons> discarded{};
   std::uint64_t scopes_resumed = 0, scopes_draining = 0, scope_records_corrupt = 0;
   std::vector<SharedScope> shared_scopes;  // only those that had blocks on media
-  // H05: scope-record slots whose record was torn with a zero principal or scope_id (scan order). Non-empty = the scan
+  // Scope-record slots whose record was torn with a zero principal or scope_id (scan order). Non-empty = the scan
   // ran blind: no scope was resumed and the blocks were discarded as TornRecord.
   std::vector<std::uint32_t> blind_record_slots;
   std::uint64_t discarded_total() const {

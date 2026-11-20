@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A3.1: the persisted scope table (spec 6.1, design/03 R27) over the scope region of segment 0: a 16 B "MIRS" header
+// The persisted scope table (spec 6.1) over the scope region of segment 0: a 16 B "MIRS" header
 // and `records` 72 B ScopeRecords (proto/scope_record.h, frozen storage v0). The Store writes a record when an
 // implicit scope opens, rewrites it (lazily) as last_used moves, and clears it when the scope is doomed or erased, so
 // after a crash a record is OPEN only for a scope that was live. The restart scan (restart.h) reads it back.

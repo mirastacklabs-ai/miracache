@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-// RL4: multi-rail end to end on rxe0 (label `rdma`).
+// Multi-rail end to end on rxe0 (label `rdma`).
 //
 // Real processes: mira-memnode x 3 in BUNDLE mode, each with TWO rails on rxe0 ([[node.rails]]: eth0's address and the lab's
 // second address 10.98.0.1 from the lab RDMA setup script, one port per node) and the real Go mirctl publishing the bundle. One
 // in-process C++ Client in bundle mode with `nodes[].admin` only: it learns the rails from each node's identity and takes one
-// admin ticket per rail (RL2 follow-up A). Four traffic threads (fetch 256 KiB blocks cut into 64 KiB slices, plus puts and
+// admin ticket per rail. Four traffic threads (fetch 256 KiB blocks cut into 64 KiB slices, plus puts and
 // lookups) run under the FAULT oracle (tests/util/oracle.h).
 //
 // Windows (traffic never stops):
@@ -84,7 +84,7 @@ constexpr milliseconds kMargin{1000};
 constexpr std::size_t kPool = 8u << 20;
 constexpr const char* kRail2Ip = "10.98.0.1";  // the lab RDMA setup script
 // Rail 2's real subnet ([[node.rails]].subnet). Rail 1 leaves it to the node, which reports its address's /24. The client
-// has one device (rxe0 carries both addresses) with no subnet: a wildcard, so it pairs both rails (decision 5, run #219).
+// has one device (rxe0 carries both addresses) with no subnet: a wildcard, so it pairs both rails.
 constexpr const char* kRail2Subnet = "10.98.0.0/24";
 
 std::string slurp(const std::string& p) {
@@ -216,7 +216,7 @@ class MultiRailE2e : public ::testing::TestWithParam<std::string> {
 
   // ---- the host-side fault agent ----
   static std::string fault_dir() { return MIRA_RAIL_FAULT_DIR; }
-  // G03: the agent writes a counter it bumps every loop (0.2 s); it is alive when the counter moves within 3 s. No
+  // The agent writes a counter it bumps every loop (0.2 s); it is alive when the counter moves within 3 s. No
   // clock is compared (an mtime against this container's clock failed on host/VM skew).
   static bool agent_fresh() {
     const std::string hb = fault_dir() + "/agent";
@@ -574,7 +574,7 @@ class MultiRailE2e : public ::testing::TestWithParam<std::string> {
   Snap snap() const { return {now_us(), rail_bytes(), reissued()}; }
   void rail_report(const char* label, const Snap& a, const Snap& b) {
     std::ostringstream o;
-    o << "[RL4] " << label << ": per-rail READ bytes";
+    o << "[multirail e2e] " << label << ": per-rail READ bytes";
     for (const auto& [r, v] : b.bytes) {
       const double d = v - (a.bytes.count(r) ? a.bytes.at(r) : 0.0);
       char buf[96];
@@ -599,7 +599,7 @@ class MultiRailE2e : public ::testing::TestWithParam<std::string> {
   WinStat window_report(const std::string& label, std::int64_t from_us, std::int64_t to_us) {
     WinStat w;
     std::ostringstream o;
-    o << "[RL4] " << label << " (" << static_cast<double>(to_us - from_us) / 1e6 << " s):";
+    o << "[multirail e2e] " << label << " (" << static_cast<double>(to_us - from_us) / 1e6 << " s):";
     std::map<std::string, std::size_t> by_status;
     for (int op = 0; op < 3; ++op) {
       std::vector<std::int64_t> lat;
@@ -638,7 +638,7 @@ class MultiRailE2e : public ::testing::TestWithParam<std::string> {
     std::lock_guard lk(smu_);
     static const char* nm[] = {"down", "suspect", "up"};
     for (const auto& t : transitions_)
-      std::fprintf(stderr, "[RL4] +%.2fs %s: %s -> %s\n", static_cast<double>(t.t_us) / 1e6, t.key.c_str(),
+      std::fprintf(stderr, "[multirail e2e] +%.2fs %s: %s -> %s\n", static_cast<double>(t.t_us) / 1e6, t.key.c_str(),
                    t.from < 0 ? "(new)" : nm[t.from], nm[t.to]);
   }
 
@@ -706,7 +706,7 @@ TEST_P(MultiRailE2e, TwoRailsLoseOneAndGetItBack) {
   const Snap sd1 = snap();
   rail_report("window 2 rail 1 down (from the first moment no rail-1 series was Up)", sd0, sd1);
   window_report("window 2 rail down", t_del, sd1.t_us);
-  std::fprintf(stderr, "[RL4] window 2: address deleted at +%.2fs, client showed rail 1 not Up after %.2fs (seen=%d)\n",
+  std::fprintf(stderr, "[multirail e2e] window 2: address deleted at +%.2fs, client showed rail 1 not Up after %.2fs (seen=%d)\n",
                static_cast<double>(t_del) / 1e6, static_cast<double>(t_seen - t_del) / 1e6, seen_down);
   EXPECT_TRUE(seen_down) << "the client never marked rail 1 down after its address was deleted";
   EXPECT_GT(delta(sd0, sd1, 0), 0.0) << "rail 0 carried nothing while rail 1 was down";
@@ -719,7 +719,7 @@ TEST_P(MultiRailE2e, TwoRailsLoseOneAndGetItBack) {
   const std::int64_t t_back = now_us();
   fault_on_ = false;
   ++fault_gen_;
-  std::fprintf(stderr, "[RL4] window 3: address restored at +%.2fs, every rail 1 Up again after %.2fs (back=%d)\n",
+  std::fprintf(stderr, "[multirail e2e] window 3: address restored at +%.2fs, every rail 1 Up again after %.2fs (back=%d)\n",
                static_cast<double>(t_add) / 1e6, static_cast<double>(t_back - t_add) / 1e6, back);
   EXPECT_TRUE(back) << "rail 1 did not come back Up within 60 s";
   const Snap sr0 = snap();
@@ -742,9 +742,9 @@ TEST_P(MultiRailE2e, TwoRailsLoseOneAndGetItBack) {
   const std::int64_t t_end = now_us();
   const WinStat steady = window_report("misses outside the fault window", sr1.t_us, t_end);
   const std::string rep = oracle_->report();
-  std::fprintf(stderr, "[RL4] %s\n", rep.c_str());
+  std::fprintf(stderr, "[multirail e2e] %s\n", rep.c_str());
   print_transitions();
-  std::fprintf(stderr, "[RL4] slices re-issued over the whole run: %.0f\n", reissued());
+  std::fprintf(stderr, "[multirail e2e] slices re-issued over the whole run: %.0f\n", reissued());
   EXPECT_EQ(oracle_->failed(), 0u) << rep;
   std::uint64_t hangs = 0;
   for (int t = 0; t < kThreads; ++t)

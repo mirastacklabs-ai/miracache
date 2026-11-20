@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// One HTTPS request to a memory node's admin listener (membership plan decisions 1, 9), shared by
+// One HTTPS request to a memory node's admin listener, shared by
 // the ticket source (POST /v1/tickets) and the bundle watcher (GET/POST /v1/bundle).
 //
 //   * TLS 1.3 only; mTLS with the client cert/key (key file mode 0600); the server chain is verified
@@ -33,7 +33,7 @@ struct HttpsOptions {
   std::size_t max_response = 64 * 1024;
   // Test hook: called with the connected TCP fd before the TLS handshake starts.
   std::function<void(int)> test_after_connect;
-  // Optional (review w5 U2-27): once it reads true, a request in flight gives up within ~50 ms (Timeout). Must outlive
+  // Optional: once it reads true, a request in flight gives up within ~50 ms (Timeout). Must outlive
   // the client.
   const std::atomic<bool>* cancel = nullptr;
 };
@@ -43,7 +43,7 @@ struct HttpResponse {
   std::string body;
 };
 
-// HR4 (P39): the client's TLS material, shared by every HttpsClient with the same cert/key/ca paths (ticket sources,
+// The client's TLS material, shared by every HttpsClient with the same cert/key/ca paths (ticket sources,
 // the bundle watcher, client reports). A new connection takes the SSL_CTX in force at that moment; a connection in
 // flight keeps the one it started with. reload_if_changed() is the stat check (inode, mtime, size of the three files):
 // a changed set is loaded as a whole, and if it does not parse or the key does not match the certificate (a
@@ -91,12 +91,12 @@ class HttpsClient {
   Expected<HttpResponse> request(const std::string& hostport, const std::string& method, const std::string& target,
                                  const std::string& content_type, const std::string& body,
                                  const std::string& server_identity = {},
-                                 unsigned timeout_ms = 0) const;  // R14: 0 = io_timeout_ms, else min(it, io_timeout_ms)
+                                 unsigned timeout_ms = 0) const;  // 0 = io_timeout_ms, else min(it, io_timeout_ms)
 
  private:
   HttpsClient(HttpsOptions o, std::shared_ptr<ClientTlsCtx> tls, std::shared_ptr<SSL_CTX> ctx);
   const HttpsOptions o_;
-  std::shared_ptr<ClientTlsCtx> tls_;  // HR4: shared signature/generation; the SSL_CTX below is this client's own
+  std::shared_ptr<ClientTlsCtx> tls_;  // Shared signature/generation; the SSL_CTX below is this client's own
   mutable std::mutex ctx_mu_;
   mutable std::shared_ptr<SSL_CTX> ctx_;
   mutable std::uint64_t ctx_gen_ = 0;

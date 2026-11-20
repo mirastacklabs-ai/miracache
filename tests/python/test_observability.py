@@ -1,4 +1,4 @@
-"""Guards deploy/observability/ against drifting from the code (A3.5).
+"""Guards deploy/observability/ against drifting from the code.
 
 Every `miracache_*` metric name used in a dashboard or alert expression must be a metric the C++
 code registers. Run: python3 -m unittest discover -s tests/python.

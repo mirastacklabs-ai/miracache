@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// /metrics HTTP endpoint (A3.5 M1). Threads allowed here only (lint marker `// lint:server-runtime`).
+// /metrics HTTP endpoint. Threads allowed here only (lint marker `// lint:server-runtime`).
 //
 // GET /metrics only (404 for any other path, 405 for other methods), plain HTTP/1.1 with
 // `Connection: close`. One accept thread plus at most 4 scrape threads; the data path never
@@ -25,7 +25,7 @@ class MetricsHttp {
  public:
   static constexpr std::size_t kMaxRequestBytes = 8 * 1024;
   static constexpr int kReadTimeoutMs = 2000;
-  static constexpr int kSendTimeoutMs = 2000;  // SO_SNDTIMEO and the send budget (M02)
+  static constexpr int kSendTimeoutMs = 2000;  // SO_SNDTIMEO and the send budget
   static constexpr std::size_t kMaxConcurrent = 4;
 
   // `listen` is "host:port" (IPv4; port 0 picks a free port). Empty = disabled: returns nullptr.

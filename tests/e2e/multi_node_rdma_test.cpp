@@ -139,17 +139,17 @@ Completion wait_for(Client& c, Ticket t, seconds cap = seconds(30)) {
   return Completion{};
 }
 
-// R15 (review s11): open() retries a failed first build only inside its 2 s settle, so on a loaded tsan lane two slow
+// open() retries a failed first build only inside its 2 s settle, so on a loaded tsan lane two slow
 // admin handshakes in a row can leave a node pending at return with nothing wrong (its keepalive thread connects it
 // shortly after). The open contract itself is tested strictly and deterministically in sim (WireOpen.*: every node up
 // at return after one transient failure; the settle a bound). Here: wait up to `cap` for `want` nodes, with a WARN
 // when open() returned with fewer, so a slow lane shows in the log instead of failing the test.
-// B-2 (review s11): ctest hides a passing test's stderr, so every call also appends one line to $MIRA_R15_LOG when set
+// Ctest hides a passing test's stderr, so every call also appends one line to $MIRA_R15_LOG when set
 // (set per device by the RDMA test driver):  "R15 <test> late=<0|1> at_open=<n> want=<w> wait_ms=<ms> final=<n>".
 // rdma_test.sh prints "R15 <dev>: late opens k/N, max wait X ms" and FAILS the device when (a) the max wait_ms is
 // >= 5000 (half the default cap), or (b) more than half of the pass's opens were late (k > N/2, N >= 3): regressions
-// where nodes connect slowly or routinely late (s11c review P2-2; nightly baseline 0/7 late, max 0 ms on rxe0 and siw0).
-// One or two short late opens on a loaded tsan/siw lane stay green (the R15 case); no records at all fails (the
+// where nodes connect slowly or routinely late (nightly baseline 0/7 late, max 0 ms on rxe0 and siw0).
+// One or two short late opens on a loaded tsan/siw lane stay green (the late-open case); no records at all fails (the
 // accounting broke); a node still pending after `cap` fails the ASSERT at the call site, as before.
 void r15_record(const char* late, std::size_t at_open, std::size_t want, long long wait_ms, std::size_t final_n) {
   const char* path = std::getenv("MIRA_R15_LOG");
@@ -286,8 +286,8 @@ TEST_P(MultiNodeE2e, ThreeNodesPlaceKillOneAndRestartIt) {
   ASSERT_TRUE(cl) << cl.error().context;
   Client& c = **cl;
   ASSERT_EQ(c.node_count(), 3u);
-  // Q15: every node is up, so open() returns with all three connected (a first build that fails is retried inside the
-  // open). R15: a loaded lane may still return with one pending (WARN); one still pending 10 s later is a regression.
+  // Every node is up, so open() returns with all three connected (a first build that fails is retried inside the
+  // open). A loaded lane may still return with one pending (WARN); one still pending 10 s later is a regression.
   ASSERT_EQ(nodes_connected_within(c, 3), 3u) << "a memory node is still pending 10 s after open()";
 
   // Memory-node IDs are random (plan 2C): read the ones the client learned, as the client's placement uses them.
@@ -376,7 +376,7 @@ TEST_P(MultiNodeE2e, ThreeNodesPlaceKillOneAndRestartIt) {
     else EXPECT_TRUE(sc.status[0] == KeyStatus::Committed || sc.status[0] == KeyStatus::Skipped) << s;  // already stored
   }
 
-  // ---- r9b T04: restart node 2 WITHOUT deleting its state file (the anon store comes back empty, as hugetlbfs does
+  // ---- Restart node 2 WITHOUT deleting its state file (the anon store comes back empty, as hugetlbfs does
   // after a reboot): same ID, placement unchanged, its old keys miss, new puts land, no scope of a healthy node moves ----
   {
     ASSERT_TRUE(start(1));
@@ -398,7 +398,7 @@ TEST_P(MultiNodeE2e, ThreeNodesPlaceKillOneAndRestartIt) {
     for (int s = 1; s <= kScopes; ++s) EXPECT_EQ(look(s), KeyStatus::Hit) << s;
     EXPECT_EQ(metric(http_metrics(metrics_port_[1]), "miracache_scope_open "), expect[1]);
     for (int i : {0, 2}) EXPECT_EQ(metric(http_metrics(metrics_port_[i]), "miracache_scope_open "), expect[i]) << "node " << i + 1;
-    std::fprintf(stderr, "[T04] restart without delete: id %s kept, %d of %d scopes moved\n", same[1].id.c_str(), moved, kScopes);
+    std::fprintf(stderr, "restart without delete: id %s kept, %d of %d scopes moved\n", same[1].id.c_str(), moved, kScopes);
     stop(1, SIGKILL);
     const auto down2 = std::chrono::steady_clock::now() + seconds(30);
     while (c.wire_port(1)->session() == WirePort::Session::Up && std::chrono::steady_clock::now() < down2)
@@ -440,7 +440,7 @@ INSTANTIATE_TEST_SUITE_P(Device, MultiNodeE2e, ::testing::ValuesIn(devices()),
                          [](const ::testing::TestParamInfo<std::string>& i) { return i.param; });
 
 
-// ---- A2.10: best-effort replicas end to end (rxe0 / siw0) ----
+// ---- best-effort replicas end to end (rxe0 / siw0) ----
 double pct(std::vector<double> v, double p) {
   if (v.empty()) return 0;
   std::sort(v.begin(), v.end());
@@ -663,7 +663,7 @@ TEST_P(ReplicaE2e, SecondReplicaKeepsTheCacheWhenThePrimaryIsKilled) {
                pct(st2, .99), pct(st3, .5), pct(st3, .99), kN, drain_ms);
 }
 
-// Review r9 S03: store latency of large blocks. Every engine store of a replicated scope used to copy the block into
+// Store latency of large blocks. Every engine store of a replicated scope used to copy the block into
 // a fresh zero-filled std::vector on the engine worker; the copy now comes from recycled, non-zeroed buffers. This
 // measures the engine-visible store latency (submit -> Completion) at 1 MiB blocks for R=1, async R=2 and sync R=2 on
 // the same three nodes, and prints the table (the numbers go to the run report; the test only checks that every store

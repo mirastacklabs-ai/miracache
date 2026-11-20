@@ -709,7 +709,7 @@ TEST_P(RdmaTest, ReapplyingSameProtocolKeepsEpochAndEndpointsCurrent) {
 
 // ---- endpoint lifecycle, PDs, CQ budget ----
 
-// Q01: frames that arrive before the passive side has seen ESTABLISHED must not eat
+// Frames that arrive before the passive side has seen ESTABLISHED must not eat
 // receive slots. The hook holds ESTABLISHED back while the client sends 3x the depth.
 TEST_P(RdmaTest, FramesBeforeEstablishedDoNotLoseRecvSlots) {
   hold = true;
@@ -746,13 +746,13 @@ TEST_P(RdmaTest, FramesBeforeEstablishedDoNotLoseRecvSlots) {
     }
   }
   EXPECT_EQ(send_done, total);
-  // 3x the slots taken in while held: every slot came back (Q01).
+  // 3x the slots taken in while held: every slot came back.
   while (taken < total && Clk::now() < end) {
     taken = held();
     if (taken < total) std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
   EXPECT_EQ(taken, total);
-  EXPECT_EQ(server->recvs.load(), 0u) << "N05: no Recv may surface before the endpoint is announced";
+  EXPECT_EQ(server->recvs.load(), 0u) << "no Recv may surface before the endpoint is announced";
   EXPECT_EQ(server->wait_accepted(1, std::chrono::milliseconds(100)), nullptr) << "hold should keep it unannounced";
   hold = false;
   EXPECT_NE(server->wait_accepted(), nullptr);
@@ -762,7 +762,7 @@ TEST_P(RdmaTest, FramesBeforeEstablishedDoNotLoseRecvSlots) {
   EXPECT_EQ(server->call([&] { return server->fab->held_recvs(); }), 0u);  // handed over at the announcement
 }
 
-// Q02: failed connects and released endpoints must not accumulate.
+// Failed connects and released endpoints must not accumulate.
 TEST_P(RdmaTest, FailedConnectsAndReleasesDoNotLeakEndpoints) {
   auto ip = client->device_ipv4();
   ASSERT_TRUE(ip);
@@ -810,7 +810,7 @@ TEST_P(RdmaTest, ReleaseRefusedWhileWorkOutstanding) {
   EXPECT_TRUE(server->call([&] { return server->fab->dereg(*remote); }));
 }
 
-// Q03/Q07: a region in PD A is unusable through an endpoint in PD B, locally and remotely.
+// A region in PD A is unusable through an endpoint in PD B, locally and remotely.
 TEST_P(RdmaTest, RegionInOtherPdIsNotUsable) {
   make_server();
   auto sa = server->fab->alloc_pd();
@@ -874,7 +874,7 @@ TEST_P(RdmaTest, RegionInOtherPdIsNotUsable) {
   EXPECT_FALSE(client->free_pd(PdId{}));
 }
 
-// Q06: the CQ budget refuses endpoints that could overflow the shared CQ.
+// The CQ budget refuses endpoints that could overflow the shared CQ.
 TEST_P(RdmaTest, CqBudgetRefusesTooManyEndpoints) {
   start_server();
   VerbsOptions o;
@@ -896,7 +896,7 @@ TEST_P(RdmaTest, CqBudgetRefusesTooManyEndpoints) {
   EXPECT_TRUE((*f)->connect(server->peer()));  // budget returned
 }
 
-// Q15: fetch endpoints use the spec 3.5 layout (2 receives of 8 KiB, HELLO only).
+// Fetch endpoints use the spec 3.5 layout (2 receives of 8 KiB, HELLO only).
 TEST_P(RdmaTest, FetchClassUsesSmallFrameLayout) {
   ListenParams lp;
   lp.accept_class = EpClass::Fetch;
@@ -927,7 +927,7 @@ bool wait_until(F cond, std::chrono::seconds limit = std::chrono::seconds(5)) {
   return cond();
 }
 
-// R01: post_wr refuses the (sq_depth+1)-th outstanding send-queue WR with ResourceExhausted, for every provider (the CQ
+// post_wr refuses the (sq_depth+1)-th outstanding send-queue WR with ResourceExhausted, for every provider (the CQ
 // budget is enforced by code, not by the provider's ring size), and posting resumes once completions are polled.
 TEST_P(RdmaTest, SendQueueDepthIsEnforcedAndRecovers) {
   start_server();
@@ -962,7 +962,7 @@ TEST_P(RdmaTest, SendQueueDepthIsEnforcedAndRecovers) {
   ASSERT_TRUE((*f)->release(e));
 }
 
-// N01: three fabrics (client, client2, server) sit on one ibv_context. An event for a QP or
+// Three fabrics (client, client2, server) sit on one ibv_context. An event for a QP or
 // CQ of one fabric must only reach that fabric; port/device errors reach every fabric on
 // the context. The events go into the real per-device dispatcher routing table (rxe/siw
 // raise none on demand). On iWARP a failed QP also drops its TCP peer, so only endpoints
@@ -1033,7 +1033,7 @@ TEST_P(RdmaTest, AsyncEventsRouteToTheOwningFabricOnly) {
       << "the port error reaches the server fabric through the shared dispatcher";
 }
 
-// N03: one listener places connections by ticket: different class and PD per connection.
+// One listener places connections by ticket: different class and PD per connection.
 TEST_P(RdmaTest, AdmitChoosesClassAndPdPerConnection) {
   make_server();
   auto pa = server->fab->alloc_pd();
@@ -1075,7 +1075,7 @@ TEST_P(RdmaTest, AdmitChoosesClassAndPdPerConnection) {
   // Layouts match per connection: 2 receives for fetch, the full depth for control.
   EXPECT_EQ(server->call([&] { return server->fab->endpoint_recv_slots(sf); }), 2u);
   EXPECT_EQ(server->call([&] { return server->fab->endpoint_recv_slots(sc); }), server_options.recv_slots);
-  EXPECT_EQ(client->endpoint_recv_slots(cf), 2u);  // N09: fetch posts exactly two receives
+  EXPECT_EQ(client->endpoint_recv_slots(cf), 2u);  // Fetch posts exactly two receives
   EXPECT_EQ(client->endpoint_recv_slots(cc), server_options.recv_slots);
   // The fetch connection lives in PD A, the control connection in PD B.
   RemoteRef good{rb->rkey, reinterpret_cast<std::uint64_t>(rb->addr), 4096};
@@ -1095,7 +1095,7 @@ TEST_P(RdmaTest, AdmitChoosesClassAndPdPerConnection) {
   EXPECT_FALSE(denied.status) << "the control endpoint is in PD B and must not reach PD A memory";
 }
 
-// N04: no AdmitFn and no explicit opt-out means no listener.
+// No AdmitFn and no explicit opt-out means no listener.
 TEST_P(RdmaTest, ListenRequiresAdmitUnlessOptedOut) {
   auto ip = client->device_ipv4();
   ASSERT_TRUE(ip);
@@ -1108,7 +1108,7 @@ TEST_P(RdmaTest, ListenRequiresAdmitUnlessOptedOut) {
   EXPECT_TRUE(client->listen([](Endpoint*) {}, lp));
 }
 
-// N04: cq_depth beyond the device limit is refused at open.
+// cq_depth beyond the device limit is refused at open.
 TEST_P(RdmaTest, CqDepthAboveDeviceMaxIsRefused) {
   VerbsOptions o;
   o.device = device_;
@@ -1118,7 +1118,7 @@ TEST_P(RdmaTest, CqDepthAboveDeviceMaxIsRefused) {
   EXPECT_EQ(f.error().code, ErrorCode::InvalidArgument);
 }
 
-// N09/Q13: a forged protocol tag in the accept is refused by the active side at ESTABLISHED.
+// A forged protocol tag in the accept is refused by the active side at ESTABLISHED.
 TEST_P(RdmaTest, ForgedAcceptTagIsRefusedByActiveSide) {
   server_options.advertise_accept_protocol_for_test =
       iwarp() ? NicProtocol::RoCE : NicProtocol::IWarp;
@@ -1129,7 +1129,7 @@ TEST_P(RdmaTest, ForgedAcceptTagIsRefusedByActiveSide) {
   EXPECT_EQ(client->endpoint_count(), 0u);
 }
 
-// N06/N09: the passive side's CQ budget refuses with a code the client maps to
+// The passive side's CQ budget refuses with a code the client maps to
 // ResourceExhausted, and the half-built passive endpoint is reaped.
 TEST_P(RdmaTest, PassiveBudgetRefusalIsResourceExhaustedAndReaped) {
   server_options.cq_depth = 200;  // one QP of sq 128 + 16 recvs fits, two do not
@@ -1145,7 +1145,7 @@ TEST_P(RdmaTest, PassiveBudgetRefusalIsResourceExhaustedAndReaped) {
   EXPECT_EQ(first->state(), EpState::Ready);
 }
 
-// N04: the pending-accept cap refuses further requests while earlier ones are mid-handshake.
+// The pending-accept cap refuses further requests while earlier ones are mid-handshake.
 TEST_P(RdmaTest, PendingAcceptCapRefuses) {
   hold = true;
   server_options.hold_established_for_test = &hold;
@@ -1179,7 +1179,7 @@ TEST_P(RdmaTest, DeviceFatalBroadcastsToEveryFabric) {
       << "DeviceFatal reaches the server fabric through the shared dispatcher";
 }
 
-// R02/R07: the dispatcher thread exiting on a fatal async-fd condition (here the test hook,
+// The dispatcher thread exiting on a fatal async-fd condition (here the test hook,
 // the same exit path as POLLERR/POLLHUP) broadcasts DeviceFatal to every fabric on the device.
 TEST_P(RdmaTest, DispatcherFatalExitFailsEveryFabric) {
   start_server();
@@ -1196,7 +1196,7 @@ TEST_P(RdmaTest, DispatcherFatalExitFailsEveryFabric) {
   EXPECT_TRUE(wait_until([&] { return server->call([s] { return s->state(); }) == EpState::Error; }));
 }
 
-// R03: a second thread injects events while a fabric on the same device is destroyed. The
+// A second thread injects events while a fabric on the same device is destroyed. The
 // dispatcher's routing table must never reach the dying fabric (clean under asan and tsan).
 TEST_P(RdmaTest, DestroyWhileInjecting) {
   start_server();
@@ -1223,7 +1223,7 @@ TEST_P(RdmaTest, DestroyWhileInjecting) {
   EXPECT_EQ(client->endpoint_count(), 1u);
 }
 
-// R02: a destroyed QP's CQE reservation is returned on the Clock grace period, not after a
+// A destroyed QP's CQE reservation is returned on the Clock grace period, not after a
 // number of polls, and reclaim_cq (inside connect) never expires it early.
 TEST_P(RdmaTest, ZombieReservationExpiresOnClockGrace) {
   start_server();
@@ -1275,7 +1275,7 @@ TEST_P(RdmaTest, AcceptTimeoutFollowsClock) {
   EXPECT_EQ(server->wait_accepted(1, std::chrono::milliseconds(200)), nullptr) << "never announced";
 }
 
-// R06: private_data decoding refuses every malformed or foreign layout.
+// private_data decoding refuses every malformed or foreign layout.
 TEST_P(RdmaTest, DecodePrivateRejectsMalformed) {
   using namespace protocol;
   auto bytes = [](std::initializer_list<unsigned> l) {
@@ -1316,7 +1316,7 @@ TEST_P(RdmaTest, DecodePrivateRejectsMalformed) {
   EXPECT_EQ(reject_error(kRejectVersion).code, ErrorCode::Unsupported);
 }
 
-// ---- RL1: several listeners on one device (one per rail address) and fabric health --------------------------------
+// ---- Several listeners on one device (one per rail address) and fabric health --------------------------------
 
 namespace {
 // Every IPv4 address on the netdev the device is bound to (sysfs gid_attrs -> getifaddrs).
@@ -1406,7 +1406,7 @@ TEST_P(RdmaTest, TwoListenersOnOneDeviceRouteByAddress) {
 // Soft-iWARP mmap-key sentinel: siw hands out ring mmap keys first-fit from
 // page 0 of the context, and libsiw refuses any ring whose key is 0x90000 (page 144). 400 one-page (16-entry) CQs on
 // the fabric's own librdmacm context fill every hole up past page 144, so without the fabric's ballast CQ pinning pages
-// 0-256 one of them starts on page 144 and is refused (measured: #144 on an empty context; with run #266's QP floor
+// 0-256 one of them starts on page 144 and is refused (measured: #144 on an empty context; with the QP floor
 // and no ballast, ~#112 after the fabric's 4096-entry CQ). Then the device's last fabric goes and comes back (the
 // ballast is destroyed and re-created first), and a loopback connect with the configured (small, unfloored) rings works.
 // Provider-independent: small rings next to an open fabric must always work.

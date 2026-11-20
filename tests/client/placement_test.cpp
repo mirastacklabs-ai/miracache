@@ -130,7 +130,7 @@ TEST(Placement, AddingANodeMovesScopesOnlyToIt) {
 bool find_equal_hash(std::uint32_t w2, double target, std::uint64_t* out) {
   const double h = std::exp(-static_cast<double>(w2) / target);
   const long double x0 = static_cast<long double>(h) * 18446744073709551616.0L;
-  // Clamp before the cast (r6 B6): a long double outside [0, 2^64) cast to u64 is UB.
+  // Clamp before the cast: a long double outside [0, 2^64) cast to u64 is UB.
   const long double kMaxX = static_cast<long double>(std::numeric_limits<std::uint64_t>::max() - 4096);
   for (std::int64_t d = -(1 << 16); d <= (1 << 16); d += 256) {
     const long double xd = std::clamp(x0 + d, 0.0L, kMaxX);
@@ -229,7 +229,7 @@ TEST(PlacementTie, HigherScoreStillBeatsSmallerId) {
   EXPECT_EQ(n[owner_of(n, {hi, lo})].id, "a");
 }
 
-// r6 B7: x >= 2^64 - 1024 makes h exactly 1.0 and the score -inf (documented in placement.h and spec
+// X >= 2^64 - 1024 makes h exactly 1.0 and the score -inf (documented in placement.h and spec
 // 7.1; a Go reimplementation must match). Such a node loses to any finite score; all -inf is a tie.
 TEST(PlacementTie, TopHashesScoreMinusInfinity) {
   const std::uint64_t edge = std::numeric_limits<std::uint64_t>::max() - 1023;  // 2^64 - 1024
@@ -242,7 +242,7 @@ TEST(PlacementTie, TopHashesScoreMinusInfinity) {
 }
 
 
-// ---- A2.10 replica order ----
+// ---- replica order ----
 TEST(PlacementOrder, GoldenVectors) {
   std::ifstream f(std::string(MIRACACHE_GOLDEN_DIR) + "/placement_order_v1.txt");
   ASSERT_TRUE(f.good());
@@ -298,7 +298,7 @@ TEST(PlacementOrder, TiesGoToSmallerIdAtEveryRank) {
 
 TEST(PlacementOrder, DownNodeDoesNotReRank) {
   // The order of the survivors is the same list minus the dead node: no third node is promoted into a rank
-  // that is already taken (decision 2).
+  // that is already taken.
   std::mt19937_64 rng(3);
   const auto nodes = parse_nodes("1:1,2:1,3:1,4:1");
   for (int i = 0; i < 500; ++i) {
@@ -308,7 +308,7 @@ TEST(PlacementOrder, DownNodeDoesNotReRank) {
   }
 }
 
-// ---- A2.10 zones ----
+// ---- zones ----
 std::vector<PlaceNode> parse_zoned(const std::string& spec) {  // "id:weight:zone,..."
   std::vector<PlaceNode> out;
   std::stringstream ss(spec);

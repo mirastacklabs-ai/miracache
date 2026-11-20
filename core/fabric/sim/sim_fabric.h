@@ -18,7 +18,7 @@ namespace miracache::fabric {
 
 class SimFabric;
 
-// RL3 (multi-rail plan decisions 8, 9; P24): checks a client's fetch rules on every simulated device it is attached to
+// checks a client's fetch rules on every simulated device it is attached to
 // (SimFabric::set_audit; one audit spans all of a client's devices, so a slice re-issued on another device is seen).
 // Local buffers are host addresses, the same on every device. A READ or WRITE counts as outstanding from its post until
 // its completion reaches the client: by default when SimFabric::poll delivers it; with `client_view`, only when the
@@ -27,9 +27,9 @@ class SimFabric;
 // Violations are recorded, not fatal, so a test (or a mutator run) can show them.
 //   kSeqEarly          a block's state_gen READ posted while one of its payload READs is outstanding, or while a payload
 //                      READ of it failed and was not yet read again successfully (seq before the last slice CQE, or
-//                      before a pending re-issue: RL0 `seq-before-reissue`).
+//                      before a pending re-issue: `seq-before-reissue`).
 //   kReissueEarly      a READ posted into bytes an outstanding READ may still write (a re-issue before the original's
-//                      CQE: RL0 `reissue-before-flush`; also a reuse of a span whose READ is still in flight).
+//                      CQE: `reissue-before-flush`; also a reuse of a span whose READ is still in flight).
 //   kReleaseOutstanding a buffer given back (on_release, the client's hook) while a READ or WRITE on it is outstanding.
 // `classify` (set by the test) names a READ's block and whether it is the state_gen READ; null = the buffer rules only.
 class SimWrAudit {
@@ -86,7 +86,7 @@ class SimEndpoint final : public Endpoint {
   Status post_send(Frame frame, WrTag tag) override;
   Status post_read(RemoteRef remote, LocalRef local, WrTag tag) override;
   Status post_write(LocalRef local, RemoteRef remote, WrTag tag) override;
-  // HR3b: an abort of an endpoint with work still outstanding is counted on its fabric (aborts_with_work).
+  // An abort of an endpoint with work still outstanding is counted on its fabric (aborts_with_work).
   void abort() override;
   bool drained() const override { return pending_.empty(); }
   EpState state() const override { return aborted_ ? EpState::Error : EpState::Ready; }
@@ -95,7 +95,7 @@ class SimEndpoint final : public Endpoint {
   void set_private_data(std::span<const std::byte> d) { private_data_.assign(d.begin(), d.end()); }
 
   void connect_to(SimEndpoint* peer) { peer_ = peer; }
-  // Passive side (RL1): the listener address this endpoint was accepted on.
+  // Passive side: the listener address this endpoint was accepted on.
   void set_rail(const RailAddr& a) {
     rail_ = a;
     has_rail_ = true;
@@ -187,7 +187,7 @@ class SimFabric final : public Fabric {
   std::size_t poll(std::span<Completion> out, PollBudget budget = {}) override;
   int wait_fd() override { return -1; }
 
-  // RL1: several listeners per node, keyed by their RailAddr (a connect picks the listener with the same address;
+  // several listeners per node, keyed by their RailAddr (a connect picks the listener with the same address;
   // an empty address picks the first, and a node with a single listener accepts any address, as before).
   // Fake port events for health tests: port state, fatal latch, and failing one listener (rail).
   FabricHealth health() override;
@@ -216,14 +216,14 @@ class SimFabric final : public Fabric {
   void unpin(std::uint32_t lkey) { --pins_[lkey]; }
   void push_completion(Completion c);
   bool cq_overflowed() const { return overflowed_; }
-  // HR3b (hot-reload plan): endpoints aborted while a WR was still outstanding on them (a session end, a drain, a
+  // Endpoints aborted while a WR was still outstanding on them (a session end, a drain, a
   // release that had to flush). A planned rebuild closes its old connection only when it is quiet: tests assert 0.
   std::uint64_t aborts_with_work() const { return aborts_with_work_.load(std::memory_order_relaxed); }
   void note_abort_with_work() { aborts_with_work_.fetch_add(1, std::memory_order_relaxed); }
-  // RL3: READ/WRITE posts and completions of this device's endpoints are reported to `a` (null = off). Must outlive it.
+  // READ/WRITE posts and completions of this device's endpoints are reported to `a` (null = off). Must outlive it.
   void set_audit(SimWrAudit* a) { audit_ = a; }
   SimWrAudit* audit() const { return audit_; }
-  // Q6 fault hook: while `call` is set, connect() fails before any remote contact, as a local device at its resource
+  // Fault hook: while `call` is set, connect() fails before any remote contact, as a local device at its resource
   // limit does (soft-iWARP's ibv_create_cq / rdma_create_qp with ENOMEM): ResourceExhausted, and the failure is
   // recorded in fabric::last_local_failure (`call`, `os_errno`, device "sim"). nullptr clears it. `call` must be static.
   void inject_local_failure(const char* call, int os_errno = 12 /* ENOMEM */) {
@@ -268,7 +268,7 @@ class SimFabric final : public Fabric {
   std::deque<Completion> cq_;
   std::atomic<std::uint64_t> aborts_with_work_{0};
   SimWrAudit* audit_ = nullptr;
-  std::atomic<const char*> local_call_{nullptr};  // Q6 fault hook (inject_local_failure)
+  std::atomic<const char*> local_call_{nullptr};  // fault hook (inject_local_failure)
   std::atomic<int> local_errno_{0};
   std::atomic<std::uint64_t> local_failures_{0};
   Nanos connect_delay_{0};  // set_connect_delay_for_test

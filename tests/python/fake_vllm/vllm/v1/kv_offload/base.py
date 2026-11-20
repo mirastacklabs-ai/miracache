@@ -8,7 +8,7 @@ from typing import Any, Dict, NewType, Optional, TypeVar
 
 from vllm.v1.kv_offload.config import OffloadingConfig
 
-OffloadKey = NewType("OffloadKey", bytes)  # base.py:36; last 4 bytes = group index (research/16)
+OffloadKey = NewType("OffloadKey", bytes)  # base.py:36; last 4 bytes = group index
 _T = TypeVar("_T")  # base.py:54
 
 

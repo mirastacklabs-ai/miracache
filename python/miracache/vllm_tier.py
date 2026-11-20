@@ -137,7 +137,7 @@ def _build() -> type:
             client = factory(str(cfg_path))
             num_slots = int(primary_kv_view.shape[0]) if primary_kv_view.shape else 0
             try:
-                # K03: one chunk slot (all layers, all TP ranks' shards) is one stored block; refuse to start when a
+                # One chunk slot (all layers, all TP ranks' shards) is one stored block; refuse to start when a
                 # memory node's store.run_bytes cannot hold it (every store would be refused).
                 why = block_size_refusal(client, bsb, "vLLM chunk slot (primary_kv_view.strides[0])", log)
                 if why:
@@ -157,7 +157,7 @@ def _build() -> type:
                 self._metrics_srv = start_metrics_server(
                     tier_kwargs, rank_from_env() if rank is None else int(rank),
                     lambda: combined_text(client, core.adapter))
-            except BaseException:  # V03: never leak the open client when start-up fails
+            except BaseException:  # never leak the open client when start-up fails
                 self._core = None
                 try:
                     client.close()
@@ -178,7 +178,7 @@ def _build() -> type:
             errs = []
             if not isinstance(cfg_path, str) or not cfg_path:
                 errs.append("tier entry needs 'config': path to client.toml (string)")
-            # s12 (tpu-sync cross-check C3): a lookup HIT takes no lease, so a block can be evicted before its load: the
+            # A lookup HIT takes no lease, so a block can be evicted before its load: the
             # load then fails and only kv_load_failure_policy="recompute" turns that into a recompute (vLLM's default
             # "fail" fails the user's request). vLLM does not pass that setting to a tier, so the operator repeats it in
             # the MiraTier entry (the same promise pattern as SGLang's miracache_expect_prefix_keys); preflight checks

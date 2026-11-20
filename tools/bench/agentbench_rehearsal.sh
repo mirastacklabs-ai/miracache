@@ -87,7 +87,7 @@ print("\n".join(d["project"]["dependencies"] + ["pytest>=8.3.0", "pytest-asyncio
 fi
 echo "python: $PY; results: $RESULTS_DIR"
 
-# --- sizing from the config's block size (K05) ---
+# --- sizing from the config's block size ---
 block=$(grep -oE '^[[:space:]]*(-[[:space:]]*)?block_size:[[:space:]]*[0-9]+|[{,][[:space:]]*block_size:[[:space:]]*[0-9]+' "$CONFIG" | grep -oE '[0-9]+$' | sort -n | tail -1 || true)
 block=${block:-0}
 # Stored size of a block = 64 B extent header + payload + 16 B GCM tag per segment (core/proto/extent_header.h,
@@ -107,7 +107,7 @@ NSEG=${NSEG:-16}
 (( SEGMENT_BYTES >= 2 * RUN_BYTES )) || say_fail "segment_bytes $SEGMENT_BYTES < 2 x run_bytes $RUN_BYTES"
 echo "sizing: block_size=$block run_bytes=$RUN_BYTES segment_bytes=$SEGMENT_BYTES n_segments=$NSEG"
 
-# optional: offline tests first (PRE_TEST="tests/test_kvtier*.py"); a failure stops the run (K11)
+# optional: offline tests first (PRE_TEST="tests/test_kvtier*.py"); a failure stops the run
 if [[ -n ${PRE_TEST:-} ]]; then
   if ! "$PY" -m pytest -q -p no:cacheprovider $PRE_TEST 2>&1 | tail -n 3; then
     say_fail "pre-tests"

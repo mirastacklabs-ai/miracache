@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR1: the memory node's live configuration. The key table (server/dyn_config.h): class A keys parse from the bundle's
+// The memory node's live configuration. The key table (server/dyn_config.h): class A keys parse from the bundle's
 // config.cluster.memnode (+ the node override) and from the local TOML on SIGHUP into the SAME snapshot; STATIC and stale
 // keys reject the whole table and the old snapshot stays; unknown keys are ignored and counted; node-local keys are
 // recorded as pending. Server::apply_dyn swaps every key at once on the store thread, and an op after the swap sees it.
@@ -62,7 +62,7 @@ put_ops_per_s = 500
 put_bytes_per_s = 1000000
 )";
 
-DynConfig base() {  // like Server's start-up snapshot: max_bytes is already resolved (K02)
+DynConfig base() {  // like Server's start-up snapshot: max_bytes is already resolved
   DynConfig d;
   d.max_bytes = std::uint64_t{1} << 30;
   return d;
@@ -132,7 +132,7 @@ TEST(DynConfig, BundleAndSighupGiveTheSameSnapshot) {
   EXPECT_TRUE(dyn_changed_keys(*bplan.dyn, base()).empty());
 }
 
-// F10: push validation (BundleStore::push) and apply (Server::apply_bundle_config) both take the admin from
+// Push validation (BundleStore::push) and apply (Server::apply_bundle_config) both take the admin from
 // bundle_node_admin, so an override validated at push is the one applied.
 TEST(DynConfig, BundleNodeAdminSharedByPushAndApply) {
   control::BodyView body;
@@ -180,7 +180,7 @@ TEST(DynConfig, AbsentKeysTakeTheBase) {
   EXPECT_EQ(none.dyn->generation, 3u);
 }
 
-// One rule (K02): an absent store.max_bytes is 0 in the loaded config and resolves to n_segments x segment_bytes of this
+// One rule: an absent store.max_bytes is 0 in the loaded config and resolves to n_segments x segment_bytes of this
 // node (dyn_from_server_config, Server::create); an explicit value wins. (max_scopes keeps its code default.)
 TEST(DynConfig, MaxBytesDefaultsToTheBackingSize) {
   auto def = parse_node_config(kBase + std::string("n_segments = 8\n"));
@@ -450,7 +450,7 @@ TEST(DynServer, SighupPathAppliesTheSameSnapshotAndOpsSeeItNext) {
   EXPECT_EQ(f.metric("miracache_config_reload_total", "applied"), 1.0);
 }
 
-// K02: a ServerConfig with max_bytes == 0 is resolved by Server::create to this node's n_segments x segment_bytes, in the
+// A ServerConfig with max_bytes == 0 is resolved by Server::create to this node's n_segments x segment_bytes, in the
 // snapshot, the store's default policy and the principal cap (never 0).
 TEST(DynServer, UnsetMaxBytesResolvesToTheBackingSize) {
   Fx f([](ServerConfig& c) { c.store.principal_default.max_bytes = 0; });
@@ -490,7 +490,7 @@ TEST(DynServer, ClassBNodeLocalKeysArePendingNotApplied) {
   EXPECT_EQ(f.metric("miracache_config_reload_total", "rejected"), 0.0);
 }
 
-// G02: limits.max_conns_per_principal not set -> 16 sessions x rails x (2 + fetch_qps), computed by the node.
+// Limits.max_conns_per_principal not set -> 16 sessions x rails x (2 + fetch_qps), computed by the node.
 TEST(DynConfig, DefaultMaxConnsIsComputedFromRailsAndProfile) {
   EXPECT_EQ(default_max_conns(1, 4), 96u);   // mlx5, one rail: 16 x 1 x 6
   EXPECT_EQ(default_max_conns(2, 4), 192u);  // two rails
@@ -510,7 +510,7 @@ TEST(DynServer, UnsetMaxConnsResolvesAtCreateAndAnExplicitValueWins) {
   EXPECT_EQ(fixed.server->dyn()->max_conns_per_principal, 7u);
 }
 
-// H07: limits.ticket_max_per_identity not set -> max(1024, 16 sessions x rails x (32 + 4 x max(4, fetch_qps))), the G01
+// Limits.ticket_max_per_identity not set -> max(1024, 16 sessions x rails x (32 + 4 x max(4, fetch_qps))), the
 // per-rail ticket inventory (2 x the cache caps of control, ingest and fetch at ticket_batch 4) for 16 sessions.
 TEST(DynConfig, DefaultTicketMaxIsComputedFromRailsAndProfile) {
   EXPECT_EQ(default_ticket_max(1, 4), 1024u);   // 16 x 1 x 48 = 768: the floor
@@ -551,7 +551,7 @@ TEST(DynServer, UnsetTicketMaxResolvesAtCreateAndAnExplicitValueWins) {
   EXPECT_EQ(keep.dyn->ticket_max_per_identity, cur.ticket_max_per_identity);
 }
 
-// G04 + G05 + G06: rails, the admin.ca path and store.scope_records are STATIC; a SIGHUP that changes them keeps the snapshot.
+// Rails, the admin.ca path and store.scope_records are STATIC; a SIGHUP that changes them keeps the snapshot.
 TEST(DynConfig, SighupRefusesRailsAdminCaPathAndScopeRecordsChanges) {
   const std::string rails = std::string(kBase) + "[[node.rails]]\ndevice = \"d0\"\nlisten = \"10.0.0.1:7471\"\nsubnet = \"a\"\n";
   const std::string rails_dev = std::string(kBase) + "[[node.rails]]\ndevice = \"d1\"\nlisten = \"10.0.0.1:7471\"\nsubnet = \"a\"\n";
@@ -589,7 +589,7 @@ TEST(DynConfig, SighupRefusesRailsAdminCaPathAndScopeRecordsChanges) {
   EXPECT_EQ(sr.static_changed[0], "store.scope_records");
 }
 
-// G02: a SIGHUP whose file does not set the key keeps the node's computed default, not 0.
+// A SIGHUP whose file does not set the key keeps the node's computed default, not 0.
 TEST(DynConfig, SighupWithoutMaxConnsKeepsTheComputedDefault) {
   auto boot = parse_node_config(kBase);
   ASSERT_TRUE(boot);
@@ -602,7 +602,7 @@ TEST(DynConfig, SighupWithoutMaxConnsKeepsTheComputedDefault) {
   EXPECT_EQ(plan_sighup(*boot, *set, cur, false, 192).dyn->max_conns_per_principal, 5u);
 }
 
-// G06 (decision 7): put_timeout >= 4 x deadline.put_max_ms, from the same bundle (client default 2500 ms).
+// put_timeout >= 4 x deadline.put_max_ms, from the same bundle (client default 2500 ms).
 TEST(DynConfig, PutTimeoutMustCoverFourPutMaxMs) {
   auto ok = parse_memnode_dyn("[cluster.memnode.lease]\nput_timeout_s = 10\n", base(), "", 1);
   EXPECT_TRUE(ok.dyn) << ok.error;

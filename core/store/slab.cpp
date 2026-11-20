@@ -17,7 +17,7 @@ SlabAllocator::SlabAllocator(Arena& arena)
       max_exact_per_owner_(arena.config().max_exact_classes_per_owner) {
   const auto n = static_cast<std::uint32_t>(arena.layout().n_segments * runs_per_seg_);
   runs_.resize(n);
-  const std::uint32_t reserved = arena.layout().scope.reserved_runs;  // A3.1: the tail of segment 0
+  const std::uint32_t reserved = arena.layout().scope.reserved_runs;  // the tail of segment 0
   for (std::uint32_t i = 0; i < n; ++i) {
     runs_[i].seg = i / runs_per_seg_;
     runs_[i].idx = i % runs_per_seg_;
@@ -273,7 +273,7 @@ void SlabAllocator::free(const Extent& e) {
   const auto block = static_cast<std::uint32_t>((rel % run_bytes_) / e.len);
   MIRACACHE_CHECK(block < r.used.size() && r.used[block]);
   MIRACACHE_CHECK(arena_.state_gen().generation(e.gen_slot) == e.gen);
-  clear_header(e);  // A3.1: before the slot can be reused, and before a crash could resurrect it
+  clear_header(e);  // before the slot can be reused, and before a crash could resurrect it
   arena_.state_gen().store(e.gen_slot, proto::BlockState::Free, e.gen);
   give(rid, block);
 }

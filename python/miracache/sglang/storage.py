@@ -13,12 +13,12 @@ pool, so the page-size refusal lives in ``register_mem_pool_host`` (startup).
 Page layout (v1): one miracache block per SGLang page = all of that page's host
 buffers, as returned by ``pool.get_page_buffer_meta(indices)`` (absolute
 ``(ptr, size)`` pairs). Upstream returns them PAGE-MAJOR for every layout
-(research/19 "R10 verification"): page 0's buffers, then page 1's, ... The adapter
+("page-layout verification"): page 0's buffers, then page 1's, ... The adapter
 checks that at registration (2-page probe) and refuses a pool that is not.
 Store = gather into a staging region, load = fetch into the staging region then
 scatter back. Staging always (absolute addresses give no attachable base buffer).
 
-Staging safety (review R04): every fetch/put carries a client deadline shorter than
+Staging safety: every fetch/put carries a client deadline shorter than
 the adapter's wait. If the wait still times out, the op may be live and may still
 read/write its staging region, so that region is never reused: the op is cancelled
 when the client supports it (and reused only if the cancel completes promptly);
@@ -27,7 +27,7 @@ region is attached. The rest of the batch is failed. Any other exception while a
 flight is treated the same way. If more than MAX_QUARANTINE regions are quarantined L3 is
 switched off, but each later call keeps pumping and re-enables L3 once the quarantine drains.
 
-Metrics (A3.5 M2): the adapter counts ``miracache_adapter_hit_tokens_total``,
+Metrics: the adapter counts ``miracache_adapter_hit_tokens_total``,
 ``miracache_adapter_lookup_tokens_total``, ``miracache_adapter_load_fail_total`` (pages) and
 ``miracache_recompute_avoided_tokens_total``. Extra-config ``miracache_metrics_port`` (alias
 ``metrics_port``; 0 = off, default) serves ``GET /metrics`` (client + adapter series) on
@@ -150,7 +150,7 @@ def _opt_bool(v: Any) -> Optional[bool]:
 
 def namespace_fields(storage_config: Any, mem_pool_host: Any, *, page_size: int, block_bytes: int,
                      buffers_per_page: int, extra: Dict[str, Any], version: str) -> Dict[str, Any]:
-    """What ``ns`` covers for SGLang (design/03 R19, R14): engine and version, model, KV dtype
+    """What ``ns`` covers for SGLang: engine and version, model, KV dtype
     and layout, page geometry, key scheme, every rank/split field of HiCacheStorageConfig that
     changes which KV bytes a rank holds (TP, attention CP, DCP, head split, replication), plus the
     operator's ``ns_fields`` (values SGLang does not pass to a storage backend: weights path when
@@ -238,8 +238,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
 
         # pp_size is always set on the real config (hicache_storage.py:31)
         if int(_get(storage_config, "pp_size", 1) or 1) > 1:
-            raise MiraRefusal("miracache: SGLang pipeline parallelism (PP>1) is unsupported in v1 "
-                              "(design/03 R29); L3 disabled")
+            raise MiraRefusal("miracache: SGLang pipeline parallelism (PP>1) is unsupported in v1; L3 disabled")
         # SGLang pops hicache_storage_pass_prefix_keys before we are built
         # (hybrid_cache_controller.py:553-560), so we cannot see it. Our own flag
         # is the operator's promise that SGLang's flag is on too.
@@ -253,8 +252,8 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
         self._stage_pages = max(1, int(extra.get("miracache_stage_pages", DEFAULT_STAGE_PAGES)))
         self._lookup_deadline_ms = max(1, int(extra.get("miracache_lookup_deadline_ms",
                                                          LOOKUP_DEADLINE_MS)))
-        self._orphans: Dict[int, Tuple[Any, List[bytes]]] = {}  # lookups given up on (G01)
-        self._degraded = False  # L3 off because of quarantine/attach failure; revivable (G03)
+        self._orphans: Dict[int, Tuple[Any, List[bytes]]] = {}  # lookups given up on
+        self._degraded = False  # L3 off because of quarantine/attach failure; revivable
         self._lock = threading.Lock()  # one staging region: serialize all client use
         self._scopes: Dict[bytes, Any] = {}  # root key -> scope
         self._presence: Dict[Any, float] = {}  # (root, key) -> expiry
@@ -266,11 +265,11 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
         self._stage: Any = None
         self._stage_addr = 0
         self._region: Optional[int] = None
-        # Completions buffered across polls (R20): ticket -> completion; tickets released.
+        # Completions buffered across polls: ticket -> completion; tickets released.
         self._done: Dict[int, Any] = {}
         self._released: set = set()
-        self._awaiting: set = set()  # tickets an op is waiting on right now (C5: never dropped as stray)
-        # Abandoned ops (R04): ticket -> (staging buffer, region id) kept alive, never reused.
+        self._awaiting: set = set()  # tickets an op is waiting on right now (never dropped as stray)
+        # Abandoned ops: ticket -> (staging buffer, region id) kept alive, never reused.
         self._quarantine: Dict[int, Tuple[Any, Optional[int]]] = {}
         self._batches = 0
         self._root_batches = 0
@@ -288,7 +287,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
         except ValueError as exc:
             raise MiraRefusal("miracache: %s" % exc) from None
         try:
-            from miracache import Client  # type: ignore  # ctypes client (A1.6)
+            from miracache import Client  # type: ignore  # ctypes client
             return Client.open(**kw)
         except Exception as exc:  # noqa: BLE001
             raise MiraRefusal("miracache: cannot open client from %r: %r" % (kw["config"], exc)) from exc
@@ -319,7 +318,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
         return root, scope, prefix
 
     def _count_batch(self, prefix: List[Any]) -> None:
-        """R11: a 100% root-batch rate means SGLang is not passing prefix_keys."""
+        """A 100% root-batch rate means SGLang is not passing prefix_keys."""
         self._batches += 1
         self._bump("batches")
         if not prefix:
@@ -335,7 +334,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
 
     def _page_buffers(self, host_indices: Any, n: int) -> List[List[Any]]:
         """Per page, its (ptr, size) buffers. get_page_buffer_meta is page-major for every
-        upstream layout (research/19 R10), verified at registration."""
+        upstream layout, verified at registration."""
         if host_indices is None or len(host_indices) != n * self.page_size:
             raise ValueError("host_indices length %r != %d pages * page_size %d"
                              % (None if host_indices is None else len(host_indices), n, self.page_size))
@@ -370,7 +369,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
                 ctypes.memmove(ptr, off, size)
                 off += size
 
-    # ---- completions + staging lifetime (R04, R20) ---------------------
+    # ---- completions + staging lifetime ---------------------
     def _pump(self) -> None:
         """Poll once; buffer every completion and release event (none is dropped)."""
         for c in self._client.poll():
@@ -382,7 +381,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
             if t in self._quarantine and self._is_free(t):
                 self._retire(t)
         if len(self._done) + len(self._released) > STRAY_CAP:  # completions nobody waits for
-            # s12 (tpu-sync cross-check C5): drop only those. The op in flight and every quarantined op are still
+            # Drop only those. The op in flight and every quarantined op are still
             # waited for: dropping their completion would time the op out, and a quarantined region whose release
             # event was dropped would never retire.
             keep = self._awaiting | set(self._quarantine)
@@ -460,7 +459,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
             self._err("attach_region", exc)
 
     def _revive(self) -> None:
-        """G03: L3 was disabled by _abandon. Keep pumping; once the quarantine has drained,
+        """L3 was disabled by _abandon. Keep pumping; once the quarantine has drained,
         attach a fresh stage and turn L3 back on. Called with the lock held."""
         if self.ready or not self._degraded or self.mem_pool_host is None:
             return
@@ -508,7 +507,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
         if len(p2) != 2 * bpp or p2[:bpp] != p1 or s2 != s1 + s1:
             raise MiraRefusal("miracache: host pool get_page_buffer_meta is not page-major "
                               "(page 0's buffers first); unsupported layout")
-        # K03: one page (page_size tokens x every layer of this TP rank) is one stored block; refuse when a memory
+        # One page (page_size tokens x every layer of this TP rank) is one stored block; refuse when a memory
         # node's store.run_bytes cannot hold it (every put would be refused). Runbook: memnode store sizing.
         why = block_size_refusal(self._client, block, "SGLang page (%d tokens, %d buffers, this TP rank)"
                                  % (ps, bpp), log)
@@ -563,7 +562,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
             return 0
 
     def _lookup(self, scope: Any, bkeys: List[bytes]) -> List[str]:
-        """One batched submission for all keys (V04); per-key fallback for clients without it."""
+        """One batched submission for all keys; per-key fallback for clients without it."""
         dl = self._lookup_deadline_ms
         many = getattr(self._client, "lookup_many", None)
         if many is not None:
@@ -603,7 +602,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
                 res[i] = "HIT"
             else:
                 pend.append(i)
-        if pend:  # one batched lookup, one deadline for the whole call (G01)
+        if pend:  # one batched lookup, one deadline for the whole call
             end = self._clock() + self._lookup_deadline_ms / 1000.0 + LOOKUP_GRACE_S
             while True:
                 ans = self._lookup(scope, [bk[i] for i in pend])
@@ -669,7 +668,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
                         out[lo:hi] = self._chunk(kind, scope, bkeys[lo:hi], parents[lo:hi],
                                                  pos[lo:hi], pages[lo:hi])
                     except _Abandoned:
-                        break  # R20: the first timeout fails the rest of the batch
+                        break  # the first timeout fails the rest of the batch
                     except Exception as exc:  # noqa: BLE001
                         self._err(where, exc)
             return out
@@ -707,7 +706,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
             return ok
         except _Abandoned:
             raise
-        except BaseException as exc:  # G02: the op may be live: never reuse its staging region
+        except BaseException as exc:  # the op may be live: never reuse its staging region
             if free:
                 raise
             self._err("chunk_wait", exc)
@@ -770,7 +769,7 @@ class MiraHiCacheStorage(_Base):  # type: ignore[misc,valid-type]
         srv, self._metrics_srv = getattr(self, "_metrics_srv", None), None
         if srv is not None:
             srv.stop()
-        with self._lock:  # V02: no data-path call may be inside the client while it closes
+        with self._lock:  # no data-path call may be inside the client while it closes
             try:
                 c = getattr(self._client, "close", None)
                 if c:

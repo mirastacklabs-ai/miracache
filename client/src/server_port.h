@@ -8,9 +8,9 @@
 #include "store/store.h"
 #include "util/clock.h"
 
-// Typed in-process "server port" between ClientCore and a memory node (A1.6 L3). The control
+// Typed in-process "server port" between ClientCore and a memory node. The control
 // plane goes through these calls (the store's typed request structs); the DATA always moves
-// over the fabric (RDMA READ/WRITE). The wire adapter (store S7) will implement this over
+// over the fabric (RDMA READ/WRITE). The wire adapter will implement this over
 // frames; LoopbackPort implements it by calling core/store directly. The port owns the
 // principal and session identity: whatever the request structs carry in those fields is
 // overwritten by the port.
@@ -32,7 +32,7 @@ class ServerPort {
   virtual void connected(fabric::EpClass cls, fabric::Endpoint* client_side) = 0;
   virtual store::LookupAck lookup(const store::LookupReq& q) = 0;
   virtual Status renew(store::LeaseId lease) = 0;
-  // RL3: renewals the node confirmed (RENEW_ACK OK) since the last call, each with a time its lease surely outlives: the
+  // Renewals the node confirmed (RENEW_ACK OK) since the last call, each with a time its lease surely outlives: the
   // RENEW's send time + the ttl the node granted (the node renewed after the send). Default: none reported.
   struct Renewed {
     store::LeaseId lease = 0;
@@ -64,7 +64,7 @@ class ServerPort {
   // Grows by one on every Up -> Down transition. ClientCore compares it with the value it last
   // saw: a change means "fail every in-flight job now and drop leases / commit / endpoint state".
   virtual std::uint64_t session_down_count() const { return 0; }
-  // Review w4 V08: the node left the membership (GOAWAY reason Epoch): stores the session loss cuts short are skips.
+  // The node left the membership (GOAWAY reason Epoch): stores the session loss cuts short are skips.
   virtual bool removed_from_membership() const { return false; }
   // The current client-side endpoint of class `cls` (Fetch / Ingest), valid while session_up();
   // ClientCore re-binds to these after a reconnect. nullptr = the port has no replacement.
@@ -72,20 +72,20 @@ class ServerPort {
   // Largest key count of one LOOKUP; ClientCore splits larger batches into several.
   virtual std::size_t max_lookup_keys() const { return static_cast<std::size_t>(-1); }
   // Lets the port count its own events (reconnects, control-endpoint errors) in the client registry.
-  // nullptr unbinds (N01: ClientCore unbinds in its destructor, so no holder keeps a dead pointer).
+  // nullptr unbinds (ClientCore unbinds in its destructor, so no holder keeps a dead pointer).
   virtual void bind_metrics(ClientMetrics*) {}
-  // N02 (watchdog): the live endpoint of `cls` lost a completion. The port marks it dead, so the
+  // Watchdog: the live endpoint of `cls` lost a completion. The port marks it dead, so the
   // session goes Down: every endpoint is aborted, drained and then reaped.
   virtual void endpoint_wedged(fabric::EpClass) {}
-  // N02/Q01: true once the session end that made the down count `down` has happened and every endpoint
+  // True once the session end that made the down count `down` has happened and every endpoint
   // it aborted has been released by the fabric (drained, QP destroyed). Per session end: an endpoint that
-  // never drains holds back only its own. Q04: false for an in-process port. It has no session and never
+  // never drains holds back only its own. False for an in-process port. It has no session and never
   // aborts the endpoint an abandoned op sits on (endpoint_wedged is a no-op), so that op may still DMA
   // into its span: the span stays quarantined (a leak in tests only, never a reuse under DMA).
   virtual bool session_reaped(std::uint64_t /*down*/) const { return false; }
-  // RL3: ClientCore queued a fetch slice for re-issue after its own failed or flushed completion (telemetry only).
+  // ClientCore queued a fetch slice for re-issue after its own failed or flushed completion (telemetry only).
   virtual void slice_reissued() {}
-  // R16: a READ or WRITE found its endpoint's send queue full (sq_depth) while it had work outstanding, so ClientCore
+  // A READ or WRITE found its endpoint's send queue full (sq_depth) while it had work outstanding, so ClientCore
   // treats it as backpressure (it waits) instead of failing the key (telemetry only).
   virtual void send_queue_full(fabric::EpClass) {}
   // INVALIDATE(key, gen) (AEAD miss, spec 8.3). Best effort.

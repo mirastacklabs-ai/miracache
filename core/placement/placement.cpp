@@ -11,7 +11,7 @@
 namespace miracache {
 
 namespace {
-// One EVP_MD_CTX per thread, reused for every hash (MB2p); freed at thread exit.
+// One EVP_MD_CTX per thread, reused for every hash; freed at thread exit.
 struct ThreadCtx {
   EVP_MD_CTX* c = EVP_MD_CTX_new();
   ~ThreadCtx() { EVP_MD_CTX_free(c); }
@@ -28,7 +28,7 @@ std::uint64_t place_hash(std::span<const std::uint8_t, 32> scope_id, const std::
   const bool ok = EVP_DigestInit_ex(c, EVP_sha256(), nullptr) == 1 &&
                   EVP_DigestUpdate(c, kTag, sizeof kTag - 1) == 1 && EVP_DigestUpdate(c, scope_id.data(), 32) == 1 &&
                   EVP_DigestUpdate(c, node_id.data(), node_id.size()) == 1 && EVP_DigestFinal_ex(c, md, &len) == 1;
-  MIRACACHE_CHECK(ok);  // a silent 0 would make owners disagree for the thread's life (W13)
+  MIRACACHE_CHECK(ok);  // a silent 0 would make owners disagree for the thread's life
   std::uint64_t x = 0;
   for (int i = 0; i < 8; ++i) x = (x << 8) | md[i];
   return x;
@@ -41,7 +41,7 @@ double place_score(std::uint32_t weight, std::uint64_t x) {
 
 namespace {
 // The argmax of the formula; hash_of(i) is node i's x. Shared by both entry points, so place_owner
-// is exactly place_owner_from_hashes with place_hash, without building a hash vector per call (r6 B5).
+// is exactly place_owner_from_hashes with place_hash, without building a hash vector per call.
 template <class HashOf>
 std::size_t argmax_owner(std::span<const PlaceNode> nodes, HashOf hash_of) {
   std::size_t best = 0;
@@ -85,7 +85,7 @@ std::vector<std::size_t> order_by_score(std::span<const PlaceNode> nodes, std::s
     for (std::size_t i = 0; i < r; ++i) out[i] = sc[i].second;
     return out;
   }
-  // A2.10 zones: walk the score order and take a node only if its zone is not used yet. Index 0 is always taken,
+  // Zones: walk the score order and take a node only if its zone is not used yet. Index 0 is always taken,
   // so the owner is the same with or without zones. Fewer than r come back if there are fewer than r zones.
   std::sort(sc.begin(), sc.end(), better);
   std::vector<std::size_t> out;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Slab allocator (A1.4 S2). Runs (run_bytes, from the arena layout) are formatted on demand
+// Slab allocator. Runs (run_bytes, from the arena layout) are formatted on demand
 // for one block size class; a class is the exact block length round4K(stored_len), created
 // on first use. At most kMaxClasses exact classes are live, and one owner (principal) may create
 // at most max_exact_classes_per_owner; beyond either limit a request is served from its fixed
@@ -9,7 +9,7 @@
 // alloc_batch is all-or-nothing. Blocks of one class in a batch are adjacent when a run
 // can hold them side by side (a batch has at most kMaxBatch extents). Each block gets a
 // fresh generation, and (WRITING, gen) is stored in the state_gen array before alloc_batch
-// returns, hence before any header is written. A3.1: the header is written only at commit and
+// returns, hence before any header is written. The header is written only at commit and
 // cleared at free (and when a block turns ZOMBIE), so a valid header on media means "committed
 // and live"; the restart scan (restart.h) relies on it. The on-media run table is not written:
 // RunEntry.block_log2 cannot express round4K classes, so the scan infers each run's class from
@@ -54,7 +54,7 @@ class SlabAllocator {
   static constexpr std::size_t kMaxBatch = 4;
 
   explicit SlabAllocator(Arena& arena);
-  // HR1: live StoreConfig::max_exact_classes_per_owner (store thread; existing classes stay, new exact ones obey it).
+  // Live StoreConfig::max_exact_classes_per_owner (store thread; existing classes stay, new exact ones obey it).
   void set_max_exact_classes_per_owner(std::uint32_t n) { max_exact_per_owner_ = n; }
 
   // `stored_lens` (1..kMaxBatch entries): the client extent bytes of each block. Result is
@@ -70,12 +70,12 @@ class SlabAllocator {
   // Writes the 128 B server header for e at its header slot via proto::encode, forcing
   // generation = e.gen. Call after alloc_batch, before committing.
   void write_header(const Extent& e, proto::ServerHeader h);
-  // A3.1: zeroes the 128 B header slot of e (magic first). free() calls it; so does the store when a block turns ZOMBIE.
+  // Zeroes the 128 B header slot of e (magic first). free() calls it; so does the store when a block turns ZOMBIE.
   void clear_header(const Extent& e);
   // The 128 B header slot of global slot `gen_slot` (in segment `seg`).
   std::span<std::byte> header_slot(std::uint32_t seg, std::uint64_t gen_slot) const;
 
-  // ---- A3.1 restart scan (restart.h). Run ids are global (seg * runs_per_seg + run). ----
+  // ---- Restart scan (restart.h). Run ids are global (seg * runs_per_seg + run). ----
   // Formats an unformatted run for class `cls` (created if absent: a ladder value is a rung class, else an exact class
   // charged to `owner`). False if the run is reserved or formatted for another class, or the exact-class cap is hit.
   bool adopt_run(std::uint32_t run, std::uint64_t cls, std::uint64_t owner);
@@ -111,7 +111,7 @@ class SlabAllocator {
     std::uint64_t cls = 0;  // 0 = unformatted
     std::vector<std::uint8_t> used;
     std::uint32_t n_free = 0;
-    bool reserved = false;  // A3.1: holds the scope region
+    bool reserved = false;  // holds the scope region
   };
   struct Class {
     std::uint32_t per_run = 0;

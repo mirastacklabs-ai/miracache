@@ -13,7 +13,7 @@ except Exception as exc:  # noqa: BLE001
     hs = None
     _why = repr(exc)
 
-# upstream parameter names after self (hicache_storage.py line refs from research/19)
+# upstream parameter names after self (from hicache_storage.py upstream)
 EXPECTED = {
     "register_mem_pool_host": ["mem_pool_host"],  # 7a/8f :381
     "batch_exists": ["keys", "extra_info"],  # 8c :543

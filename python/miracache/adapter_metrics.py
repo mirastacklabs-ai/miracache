@@ -1,4 +1,4 @@
-"""Adapter-side metrics (A3.5 M2): four Python counters plus an optional ``/metrics`` HTTP server.
+"""Adapter-side metrics: four Python counters plus an optional ``/metrics`` HTTP server.
 
 Counters (Prometheus text exposition 0.0.4, same format as the client library's)::
 
@@ -25,8 +25,8 @@ from typing import Any, Callable, Dict, Optional
 log = logging.getLogger("miracache.metrics")
 
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
-HANDLER_TIMEOUT_S = 5.0  # per-connection socket timeout (M01)
-MAX_CONNECTIONS = 4      # concurrent handler threads; more get 503 (M01)
+HANDLER_TIMEOUT_S = 5.0  # per-connection socket timeout
+MAX_CONNECTIONS = 4      # concurrent handler threads; more get 503
 
 _COUNTERS = (
     ("miracache_adapter_hit_tokens_total", "Tokens of lookups answered HIT."),
@@ -95,7 +95,7 @@ class MetricsServer:
 
         class _Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
-            # M01: a peer that connects and says nothing (or stalls mid-request) frees its thread
+            # A peer that connects and says nothing (or stalls mid-request) frees its thread
             # after this long instead of holding it, and a file descriptor, forever.
             timeout = io_timeout
 
@@ -130,7 +130,7 @@ class MetricsServer:
 
         class _Server(ThreadingHTTPServer):
             daemon_threads = True
-            # M01: at most ``max_connections`` handler threads; a connection over the cap gets a
+            # At most ``max_connections`` handler threads; a connection over the cap gets a
             # 503 and is closed at once, so a scraper flood never grows threads/fds in the engine.
             _slots = threading.BoundedSemaphore(max(1, int(max_connections)))
 

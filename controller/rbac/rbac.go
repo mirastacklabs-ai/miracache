@@ -1,4 +1,4 @@
-// Package rbac is the controller's role model (RBAC/audit plan decisions 2-4, RB3). The roles and
+// Package rbac is the controller's role model. The roles and
 // what they grant equal the memory node's table (server/runtime/rbac.*): viewer, operator,
 // security-admin, scope-provider. The bindings live in the signed bundle's sec section; the
 // controller keeps them in its store and writes them into every new sec.
@@ -84,7 +84,7 @@ func Allowed(bindings []bundle.RBAC, identity string, need Need) bool {
 	return false
 }
 
-// ErrLastSecurityAdmin: a change would leave the cluster without a security-admin (P03).
+// ErrLastSecurityAdmin: a change would leave the cluster without a security-admin.
 var ErrLastSecurityAdmin = errors.New("rbac: at least one security-admin must remain")
 
 // HasSecurityAdmin reports whether some binding holds security-admin.

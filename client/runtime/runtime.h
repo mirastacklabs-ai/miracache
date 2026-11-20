@@ -15,20 +15,20 @@
 
 #include "miracache/types.h"
 
-// Client runtime (A1.6 L2): tickets, one completion queue, an eventfd, and the worker threads.
+// Client runtime: tickets, one completion queue, an eventfd, and the worker threads.
 // This directory is the only place in client/ allowed to own threads. The runtime is
-// backend-agnostic: jobs run through the abstract Backend (the real ClientCore arrives in L3).
+// backend-agnostic: jobs run through the abstract Backend (the real ClientCore arrives later).
 // Data-path calls (submit/poll/cancel/eventfd) never throw and never block on I/O.
 namespace miracache {
 
 enum class JobKind : std::uint8_t { Lookup, Fetch, Store };
 
-// A job's lane: the memory node it will run on (a scheduling hint, s12). kNoLane is never capped.
+// A job's lane: the memory node it will run on (a scheduling hint). kNoLane is never capped.
 inline constexpr std::uint32_t kNoLane = 0xFFFFFFFFu;
 
 struct Job {
   JobKind kind = JobKind::Lookup;
-  std::vector<std::uint64_t> keys;  // placeholder key ids; the real key type arrives in L3
+  std::vector<std::uint64_t> keys;  // placeholder key ids; the real key type arrives later
   std::uint32_t lane = kNoLane;
 };
 
@@ -61,7 +61,7 @@ class Backend {
   virtual void discarded(Ticket, const Job&) noexcept {}
 };
 
-// Lanes (s12, tpu-sync cross-check C1): a backend job holds its worker until its I/O has drained, so a memory node that
+// Lanes: a backend job holds its worker until its I/O has drained, so a memory node that
 // stops answering keeps every job sent to it until that job's deadline. With lane_cap > 0 at most lane_cap jobs of one
 // lane run at a time; a job whose lane is full stays queued WITHOUT taking a worker, and the workers run the next jobs
 // of other lanes (FIFO among the runnable ones). Jobs whose lane is a stuck node then hold at most lane_cap workers.

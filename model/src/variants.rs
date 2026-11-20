@@ -171,7 +171,7 @@ pub fn variants() -> Vec<Variant> {
            ["CommittedIntact"], ["NoStaleGenerationRead", "NoTornRead", "NoWrongKeyRead", "NoForeignScopeRead"], false,
            |sw, f| { sw.digest_at_commit = false; sw.rogue = Rogue::None; f.put_id_reuse = true; },
            |b| only(b, 0, 0, 0, 0, 0, 0)),
-        // ---- RL0: multi-rail fetch re-issue (plan v1-multirail Decisions 8, 9; P24) --------
+        // ---- multi-rail fetch re-issue --------
         v!("reissue-before-flush", "a slice is re-issued while its original READ may still land; AEAD off, no rogue",
            ["NoTornRead"],
            ["NoForeignScopeRead", "NoWrongKeyRead", "NoStaleGenerationRead", "DropScopeEffective", "NoCrossPrincipalRead"], false,

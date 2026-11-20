@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Store configuration (A1.4 plan, "CI without hugetlbfs"). Pure data plus validate().
+// Store configuration ("CI without hugetlbfs"). Pure data plus validate().
 #pragma once
 
 #include <cstddef>
@@ -29,9 +29,9 @@ struct PrincipalPolicy {
   std::uint32_t max_scopes = 1024;
   std::uint64_t max_bytes = std::uint64_t{1} << 30;
   Nanos idle_ttl{std::chrono::minutes(30)};  // scope idle TTL, renewed by any hit or commit
-  // Put token buckets (QT2, quota plan decision 4), per principal per node; 0 = unlimited. Burst = one second.
+  // Put token buckets, per principal per node; 0 = unlimited. Burst = one second.
   std::uint64_t put_ops_per_s = 0;    // keys per second
-  std::uint64_t put_bytes_per_s = 0;  // stored bytes per second; a larger block is admitted with debt (P22)
+  std::uint64_t put_bytes_per_s = 0;  // stored bytes per second; a larger block is admitted with debt
 };
 
 struct StoreConfig {
@@ -44,14 +44,14 @@ struct StoreConfig {
   bool require_1g = false;   // Hugetlbfs: demand 1 GiB pages
   bool production = false;   // production configs reject Anon backing
   std::uint32_t node_id = 0;  // test hook: a fixed ID (honoured only when state_dir is empty)
-  // Review r9 S04 + r9b T01-T03: the node state directory (store/node_state.h: node-id, initialised, node-id.lock; locked
+  // The node state directory (store/node_state.h: node-id, initialised, node-id.lock; locked
   // while the Arena lives). The node ID lives there; empty = no file
   // (tests, the ID then lives in the superblock only). The memory node always sets it ([node] state_dir).
   std::string state_dir;
   std::uint32_t owner_pid = 0;  // recorded in the superblock; injected (no getpid in core)
   // The generation high-water mark is persisted every `gen_chunk` values (spec 6.1).
   std::uint64_t gen_chunk = std::uint64_t{1} << 20;
-  // A3.1: records in the persisted scope region (spec 6.1, at the end of segment 0). 0 = auto: none for the volatile
+  // Records in the persisted scope region (spec 6.1, at the end of segment 0). 0 = auto: none for the volatile
   // Anon backing (nothing survives a restart), else one per min_block of data, capped at 4 Mi (kDefaultMaxScopeRecords).
   // STATIC: a change re-formats the store.
   std::uint32_t scope_records = 0;
@@ -61,25 +61,25 @@ struct StoreConfig {
   Nanos put_timeout{std::chrono::seconds(10)};
   Nanos reap_grace{std::chrono::seconds(5)};
   std::uint32_t invalidate_per_s = 10;
-  // Retention (QT1, decision 1): a scope whose opened_at is older than max_ttl misses and is reaped under the sweep
-  // budget; renewal does not extend it. 0 = none (v1 default, P21). Hot-reloadable (Store::set_retention).
+  // Retention: a scope whose opened_at is older than max_ttl misses and is reaped under the sweep
+  // budget; renewal does not extend it. 0 = none (v1 default). Hot-reloadable (Store::set_retention).
   Nanos max_ttl{0};
-  // The one eviction budget (QT1, decision 3; P20), per Store::tick turn. Hot-reloadable (Store::set_evict).
+  // The one eviction budget, per Store::tick turn. Hot-reloadable (Store::set_evict).
   std::uint64_t sweep_bytes_per_s = std::uint64_t{1} << 30;  // evict.sweep_bytes_per_s: bytes freed per second
   std::uint32_t sweep_blocks_per_turn = 64;                  // at most this many blocks per turn
   std::uint32_t high_pct = 92;                               // evict.high_pct: pressure starts above this occupancy
   std::uint32_t low_pct = 88;                                // evict.low_pct: pressure stops at or below this
-  // SC1 scrubber (class A, hot-reloadable): enabled and the bytes/s of extents re-checked (0 = off).
+  // Scrubber (class A, hot-reloadable): enabled and the bytes/s of extents re-checked (0 = off).
   bool scrub_enabled = true;
   std::uint64_t scrub_bytes_per_s = std::uint64_t{64} << 20;
-  // Exact size classes one principal may create; further sizes use the fixed ladder rungs (Q10).
+  // Exact size classes one principal may create; further sizes use the fixed ladder rungs.
   std::uint32_t max_exact_classes_per_owner = 8;
-  // Concurrent PUT_BEGIN puts per endpoint (Q08).
+  // Concurrent PUT_BEGIN puts per endpoint.
   std::uint32_t max_puts_per_endpoint = 64;
-  // Leases one session may hold; further LOOKUPs return all-MISS (Q09).
+  // Leases one session may hold; further LOOKUPs return all-MISS.
   std::uint32_t max_leases_per_session = 4096;
   // max_bytes 0 = "computed" = n_segments x segment_bytes of this config: the same default the node loader produces
-  // (K02; server/dyn_config.h backing_bytes), so a StoreConfig / ServerConfig not built by the loader (tests, tools)
+  // (server/dyn_config.h backing_bytes), so a StoreConfig / ServerConfig not built by the loader (tests, tools)
   // does not get a different cap. Store resolves it; an explicit value wins.
   PrincipalPolicy principal_default = [] {
     PrincipalPolicy p;

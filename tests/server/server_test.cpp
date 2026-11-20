@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A1.4 S7: tickets, frame dispatch and the segment table, end to end through wire frames
+// Tickets, frame dispatch and the segment table, end to end through wire frames
 // over SimFabric (put -> lookup -> READ -> invalidate -> miss), plus the ordering rule that
 // PUT_COMMIT is accepted only on the endpoint that did the PUT_BEGIN.
 #include <arpa/inet.h>
@@ -131,7 +131,7 @@ TEST(Tickets, ForgedAndMalformedRefused) {
 }
 
 // ---- node config -----------------------------------------------------------------------
-TEST(NodeConfig, RetentionEvictAndPutQuotaKnobs) {  // U2-15 + HR1: QT1/QT2 knobs under retention.*, evict.*, quota.* (live)
+TEST(NodeConfig, RetentionEvictAndPutQuotaKnobs) {  // retention, evict and put-quota knobs under retention.*, evict.*, quota.* (live)
   auto ok = parse_node_config(R"(
 [store]
 backing = "anon"
@@ -158,7 +158,7 @@ put_bytes_per_s = 1000000
   ASSERT_TRUE(def);
   EXPECT_EQ(def->server.store.max_ttl, std::chrono::seconds(0));  // off
   EXPECT_FALSE(parse_node_config("[retention]\nmax_ttl_s = -1\n[store]\nbacking = \"anon\"\n"));
-  auto stale = parse_node_config("[store]\nbacking = \"anon\"\nmax_ttl_s = 5\n");  // the pre-HR1 flat name: never released
+  auto stale = parse_node_config("[store]\nbacking = \"anon\"\nmax_ttl_s = 5\n");  // the old flat name: never released
   ASSERT_FALSE(stale);
   EXPECT_NE(std::string(stale.error().context).find("retention.max_ttl_s"), std::string::npos);
 }
@@ -180,13 +180,13 @@ ticket_file = "/tmp/t"
 )");
   ASSERT_TRUE(ok) << ok.error().context;
   EXPECT_EQ(ok->server.store.node_id, 0u);  // assigned at store open (plan 2C)
-  EXPECT_EQ(ok->server.store.state_dir, "/var/lib/miracache");  // review r9 S04: the default state directory
+  EXPECT_EQ(ok->server.store.state_dir, "/var/lib/miracache");  // the default state directory
   auto sd = parse_node_config("[node]\nstate_dir = \"/srv/mira\"\n[store]\nbacking = \"anon\"\n");
   ASSERT_TRUE(sd) << sd.error().context;
   EXPECT_EQ(sd->server.store.state_dir, "/srv/mira");
   EXPECT_FALSE(parse_node_config("[node]\nstate_dir = \"\"\n[store]\nbacking = \"anon\"\n"));  // a path, never empty
   EXPECT_FALSE(parse_node_config("[node]\nstate_dir = 5\n[store]\nbacking = \"anon\"\n"));  // not an ID either
-  {  // A3.3 [nic]: explicit operating-point keys beat the profile; unknown keys and bad values are errors
+  {  // [nic]: explicit operating-point keys beat the profile; unknown keys and bad values are errors
     auto nic = parse_node_config("[store]\nbacking = \"anon\"\n[nic]\nprofiles_file = \"/x.toml\"\nmtu = 1024\ninline_bytes = 64\n"
                                  "ack_timeout_exp = 14\nretry_count = 3\nrnr_retry_count = 5\n");
     ASSERT_TRUE(nic) << nic.error().context;
@@ -235,7 +235,7 @@ struct Fx {
     sc.lab_identity = "lab";
     sc.lab_principal = 5;
     if (tweak) tweak(sc);
-    if (wrap) wrapped = wrap(srv_fab, clock);  // r8b Q01: the server sees a decorated fabric
+    if (wrap) wrapped = wrap(srv_fab, clock);  // The server sees a decorated fabric
     fabric::Fabric& fab = wrapped ? *wrapped : static_cast<fabric::Fabric&>(srv_fab);
     auto s = Server::create(sc, fab, clock, rng, ex ? *ex : inline_exec);
     EXPECT_TRUE(s) << (s ? "" : s.error().context);
@@ -790,7 +790,7 @@ TEST(ServerWire, PutThroughThreadPoolExecutor) {
   EXPECT_TRUE(inv) << (inv ? "" : inv.error().context);
 }
 
-// ---- S7 fix round 2: R01 (send failure must not erase a conn under a caller) -------------------
+// ---- Send failure must not erase a conn under a caller -------------------
 void send_hello_raw(Fx& f, fabric::Endpoint* ep, fabric::EpClass cls, std::uint8_t cid) {
   proto::Hello h;
   h.cls = static_cast<std::uint8_t>(cls);
@@ -864,7 +864,7 @@ TEST(ServerRobust, PeerThatStopsDrainingIsDropped) {
   EXPECT_TRUE(inv) << (inv ? "" : inv.error().context);
 }
 
-// ---- R07: per-identity ticket cap ------------------------------------------------------------
+// ---- per-identity ticket cap ------------------------------------------------------------
 TEST(ServerLimits, OneIdentityAtItsTicketCapDoesNotBlockAnother) {
   Fx f(2, nullptr, nullptr, [](ServerConfig& c) { c.ticket_max_per_identity = 4; });
   f.server->tickets().principals().add("other", 6);
@@ -884,7 +884,6 @@ TEST(ServerLimits, OneIdentityAtItsTicketCapDoesNotBlockAnother) {
   EXPECT_TRUE(f.server->issue_ticket("lab", fabric::EpClass::Control, 0, 4));
 }
 
-// ---- R08 ------------------------------------------------------------------------------------
 TEST(ServerLimits, AdmittedButNeverAcceptedExpires) {
   Fx f;
   auto tk = f.server->issue_ticket("lab", fabric::EpClass::Control, 0, 1);
@@ -939,7 +938,7 @@ TEST(ServerLimits, IdleTimeout) {
   EXPECT_EQ((*busy)->state(), fabric::EpState::Ready);
 }
 
-// S01: idle is per session. The client PINGs on control only; its fetch endpoint is silent.
+// Idle is per session. The client PINGs on control only; its fetch endpoint is silent.
 TEST(ServerLimits, IdleIsPerSessionAndFetchIsExempt) {
   Fx f;
   auto ctl = f.connect(fabric::EpClass::Control);
@@ -965,7 +964,7 @@ TEST(ServerLimits, IdleIsPerSessionAndFetchIsExempt) {
   EXPECT_EQ(f.server->n_conns(), 2u);
 }
 
-// S02: unsolicited SEG_TABLE and GOAWAY go to Control only.
+// Unsolicited SEG_TABLE and GOAWAY go to Control only.
 TEST(ServerWire, UnsolicitedFramesGoToControlOnly) {
   Fx f(/*n_segments=*/6);
   auto ctl = f.connect(fabric::EpClass::Control);
@@ -1069,7 +1068,7 @@ TEST(ServerDrain, GoawayThenServeReadsAndFinishPutsRefuseRoots) {
   ASSERT_TRUE(done);
   EXPECT_EQ(done->e[0].status, 0);
 
-  // r6 A8: no new session during the drain. A connect is refused (before its ticket is redeemed, so
+  // No new session during the drain. A connect is refused (before its ticket is redeemed, so
   // the ticket table keeps it until its TTL), and a HELLO that would start a new
   // session is answered Draining: no HELLO_ACK, so the client cannot flip Up and Down again.
   auto tk = f.server->issue_ticket("lab", fabric::EpClass::Control, 0, 1);
@@ -1140,7 +1139,7 @@ struct DigestingAtDeadline {
   bool clean() { return f.server->arena().superblock().clean_shutdown == 1; }
 };
 
-// r6 A2: the exit order of main.cpp. The executor's queued `done`s run first, so the Digesting put
+// The exit order of main.cpp. The executor's queued `done`s run first, so the Digesting put
 // commits, and only then are the connections dropped and the superblock marked clean.
 TEST(ServerDrain, DeadlineExitCommitsADigestingPutBeforeTheCleanMark) {
   DigestingAtDeadline x;
@@ -1186,7 +1185,7 @@ TEST(ServerDrain, ExitWithoutDrainMarksCleanAtOnce) {
   EXPECT_EQ(f.server->n_conns(), 0u);
 }
 
-// r8b Q01/Q04: the server's fabric, with the exit fence made slow. The first `fail_dereg` deregs fail
+// The server's fabric, with the exit fence made slow. The first `fail_dereg` deregs fail
 // (a dropped QP's flush has not landed yet). While `trickle` is set every poll returns one completion
 // (a CQ-level event the server only counts), as a verbs poll returns as soon as it has one; each poll
 // moves the clock by `step`. `on_poll` runs at the start of every poll.
@@ -1254,7 +1253,7 @@ struct SlowFence {
   }
 };
 
-// r8b Q01: flushes trickling in one per poll (each poll returns early, 1 ms apart) must not use up a
+// Flushes trickling in one per poll (each poll returns early, 1 ms apart) must not use up a
 // fixed iteration cap well inside the 150 ms budget: the fence lands at ~50 ms and the exit is clean.
 TEST(ServerDrain, ExitFenceRetryIsBoundedByTheClockNotByPolls) {
   SlowFence x;
@@ -1272,7 +1271,7 @@ TEST(ServerDrain, ExitFenceRetryIsBoundedByTheClockNotByPolls) {
   EXPECT_EQ(x.f.server->arena().superblock().clean_shutdown, 1);
 }
 
-// r8b Q01: the bounds still hold. A fence that never lands stops at the 150 ms clock; a frozen clock
+// The bounds still hold. A fence that never lands stops at the 150 ms clock; a frozen clock
 // stops after 32 idle polls, or after the hard cap when completions never stop either.
 TEST(ServerDrain, ExitFenceRetryStillTerminates) {
   {
@@ -1306,7 +1305,7 @@ TEST(ServerDrain, ExitFenceRetryStillTerminates) {
   }
 }
 
-// r8b Q04: with drain_ms == 0 begin_drain never ran. The exit fence loop polls, so a connect landing
+// With drain_ms == 0 begin_drain never ran. The exit fence loop polls, so a connect landing
 // then must be refused (draining), and no ticket is handed out.
 TEST(ServerDrain, ExitWithoutDrainAdmitsNoSessionDuringTheFence) {
   SlowFence x;
@@ -1344,7 +1343,7 @@ TEST(ServerDrain, NextWakeIsTheNextTick) {
   EXPECT_EQ(f.server->next_wake_in(), Nanos{0});
 }
 
-// S03/S04: lab ticket file is 0600, and a failed issue keeps the old file.
+// Lab ticket file is 0600, and a failed issue keeps the old file.
 TEST(LabTickets, FileIs0600AndFailedIssueKeepsOldFile) {
   Fx f(2, nullptr, nullptr, [](ServerConfig& c) { c.ticket_max_per_identity = 12; });
   const std::string path = "/tmp/miracache_lab_tickets_" + std::to_string(::getpid());
@@ -1371,7 +1370,7 @@ TEST(LabTickets, FileIs0600AndFailedIssueKeepsOldFile) {
   (void)::unlink(path.c_str());
 }
 
-// S04/S06: config validation.
+// Config validation.
 TEST(NodeConfig, PortsAndRangesAreChecked) {
   const std::string base = "[store]\nbacking = \"anon\"\nsegment_bytes = 4194304\nrun_bytes = 262144\nmin_block_bytes = 4096\n";
   EXPECT_TRUE(parse_node_config(base + "[node]\nlisten = [\"h:7100\"]\n"));
@@ -1477,7 +1476,6 @@ TEST(ServerLimits, LeasesPerPrincipalCapped) {
   EXPECT_NE(lease_of(*c2, true).first, 0u);
 }
 
-// ---- R16 --------------------------------------------------------------------------------------
 TEST(ServerCreate, TooManySegmentsRefused) {
   SimClock clock;
   SeededRandom rng(3);
@@ -1491,8 +1489,8 @@ TEST(ServerCreate, TooManySegmentsRefused) {
   EXPECT_EQ(s.error().code, ErrorCode::InvalidArgument);
 }
 
-// ---- A3.1: warm restart and the backing probe ---------------------------------------------------
-// A fabric that refuses every remote-write registration, as the kernel does for pages of a disk file (UP1).
+// ---- Warm restart and the backing probe ---------------------------------------------------
+// A fabric that refuses every remote-write registration, as the kernel does for pages of a disk file.
 struct NoPinFabric final : fabric::Fabric {
   explicit NoPinFabric(fabric::SimFabric& s) : sim(s) {}
   Expected<fabric::DeviceCaps> probe() override { return sim.probe(); }
@@ -1581,7 +1579,7 @@ TEST(ServerTickets, RailMustMatchListener) {
   EXPECT_FALSE(f.connect_with((*wrong)[0], fabric::EpClass::Control));
   EXPECT_EQ(f.server->n_admitted(), 0u);
   EXPECT_TRUE(f.connect(fabric::EpClass::Control));  // rail 0 works
-  // Two listeners (RL1: the sim keeps one per address): a connect picks its listener by address.
+  // Two listeners (the sim keeps one per address): a connect picks its listener by address.
   Fx g(2, nullptr, nullptr, [](ServerConfig& c) { c.rails = {fabric::RailAddr{"a", 1}, fabric::RailAddr{"b", 2}}; });
   auto r0 = g.server->issue_ticket("lab", fabric::EpClass::Control, 0, 1);
   auto r1 = g.server->issue_ticket("lab", fabric::EpClass::Control, 1, 1);
@@ -1632,11 +1630,11 @@ TEST(Tickets, PrincipalTableRemove) {
 TEST(NodeConfig, LimitsSection) {
   auto d = parse_node_config("[store]\nbacking = \"anon\"\nsegment_bytes = 4194304\nrun_bytes = 262144\nmin_block_bytes = 4096\n");
   ASSERT_TRUE(d) << d.error().context;
-  EXPECT_EQ(d->server.ticket_max_per_identity, 0u);  // unset: Server::create computes it (H07)
+  EXPECT_EQ(d->server.ticket_max_per_identity, 0u);  // unset: Server::create computes it
   EXPECT_EQ(d->server.admit_timeout, 10s);
   EXPECT_EQ(d->server.hello_deadline, 5s);
   EXPECT_EQ(d->server.idle_timeout, 300s);
-  EXPECT_EQ(d->server.max_conns_per_principal, 0u);  // unset: Server::create computes it (G02)
+  EXPECT_EQ(d->server.max_conns_per_principal, 0u);  // unset: Server::create computes it
   EXPECT_EQ(d->server.max_leases_per_principal, 8192u);
   auto c = parse_node_config(R"(
 [store]
@@ -1663,7 +1661,7 @@ max_leases_per_principal = 11
   EXPECT_FALSE(parse_node_config("[limits]\nmax_conns_per_principal = 0\n"));
 }
 
-// ---- metrics (A3.5 M1) ---------------------------------------------------------------------
+// ---- metrics ---------------------------------------------------------------------
 std::string http_get(std::uint16_t port, const std::string& request) {
   int fd = ::socket(AF_INET, SOCK_STREAM, 0);
   EXPECT_GE(fd, 0);
@@ -1815,7 +1813,7 @@ TEST(ServerMetrics, EndpointDeltasOverLoopback) {
   EXPECT_EQ(d("miracache_evict_blocks_total{reason=\"invalidate\"}"), 2);
   EXPECT_EQ(d("miracache_lease_granted_total"), 1);
   EXPECT_EQ(d("miracache_scope_opened_total"), 1);
-  EXPECT_NE(after.find("miracache_store_occupancy_ratio_ppm"), std::string::npos);  // U2-15: registered and exported
+  EXPECT_NE(after.find("miracache_store_occupancy_ratio_ppm"), std::string::npos);  // registered and exported
   EXPECT_NE(after.find("miracache_evict_backlog_blocks"), std::string::npos);
   EXPECT_NE(after.find("kind=\"ops\"} 0", after.find("miracache_put_throttled_total")), std::string::npos);
   EXPECT_EQ(d("miracache_requests_total{op=\"lookup\",status=\"ok\"}"), 2);
@@ -1936,7 +1934,7 @@ TEST(ServerMetrics, SimConservation) {
   }
 }
 
-// ---- admin API: IssueTicket over HTTPS + mTLS (A2.1) -------------------------------------------
+// ---- admin API: IssueTicket over HTTPS + mTLS -------------------------------------------
 // Certs come from deploy/examples/lab-certs.sh (the openssl CLI) into a temp dir, once per test binary:
 // `pki` is the lab CA with node-1, client-1, client-2; `rogue` is another CA with a client-1 of its own.
 struct Certs {
@@ -1950,7 +1948,7 @@ struct Certs {
     rogue = root + "/rogue";
     sh(std::string("bash ") + MIRACACHE_LAB_CERTS_SH + " " + pki + " --nodes 1 --clients 1,2 >/dev/null");
     sh(std::string("bash ") + MIRACACHE_LAB_CERTS_SH + " " + rogue + " --nodes 1 --clients 1 >/dev/null");
-    // "multi": a client cert (lab CA) that carries two spiffe:// URI SANs (A09).
+    // "multi": a client cert (lab CA) that carries two spiffe:// URI SANs.
     sh("cd " + pki +
        " && openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out multi.key 2>/dev/null"
        " && openssl req -new -key multi.key -subj /CN=multi -out multi.csr 2>/dev/null"
@@ -1989,7 +1987,7 @@ int tcp_connect(std::uint16_t port) {
   return fd;
 }
 
-// The test clients write through the no-SIGPIPE BIO too (review r9 S07): with SIGPIPE at its default, a stock socket BIO
+// The test clients write through the no-SIGPIPE BIO too: with SIGPIPE at its default, a stock socket BIO
 // would kill the test process when the server closes first (a handshake budget missed on a loaded host).
 void ssl_use_fd(SSL* ssl, int fd) {
   BIO* bio = new_nosigpipe_socket_bio(fd);  // the fd stays ours; SSL_free frees the BIO
@@ -2077,7 +2075,7 @@ std::vector<IssuedTicket> parse_tickets(const std::string& body) {
 }
 
 struct AdminFx {
-  // hs_ms: the TLS handshake budget (review r9 S07); 0 = the real 300 ms. The tests that run with SIGPIPE at its
+  // hs_ms: the TLS handshake budget; 0 = the real 300 ms. The tests that run with SIGPIPE at its
   // default give the handshake room on a loaded host, so a closed socket is a test failure, not noise.
   explicit AdminFx(std::uint32_t cap = 1024, std::uint32_t hs_ms = 0, std::uint32_t store_wait_ms = 0)
       : f(2, nullptr, nullptr, [cap](ServerConfig& c) {
@@ -2132,7 +2130,7 @@ TEST(AdminJson, StrictParsing) {
 }
 
 TEST(AdminHttpsTest, NoClientCertIsRefused) {
-  AdminFx a(1024, 5000);  // generous handshake budget (S07); production default unchanged
+  AdminFx a(1024, 5000);  // generous handshake budget; production default unchanged
   const auto& c = certs();
   const auto port = a.admin->port();
   Https r = a.run([&] { return tls_call(port, c.pki, "", c.pki, post(R"({"class":"fetch"})")); });
@@ -2144,7 +2142,7 @@ TEST(AdminHttpsTest, NoClientCertIsRefused) {
 }
 
 TEST(AdminHttpsTest, CertFromOtherCaIsRefused) {
-  AdminFx a(1024, 5000);  // generous handshake budget (S07); production default unchanged
+  AdminFx a(1024, 5000);  // generous handshake budget; production default unchanged
   Https r = a.call(R"({"class":"fetch"})", "client-1", certs().rogue);
   EXPECT_TRUE(r.raw.empty());
   EXPECT_EQ(a.f.server->tickets().live(), 0u);
@@ -2154,17 +2152,17 @@ TEST(AdminHttpsTest, CertFromOtherCaIsRefused) {
 }
 
 TEST(AdminHttpsTest, IdentityNotInTableIs403) {
-  AdminFx a(1024, 5000);  // generous handshake budget (S07); production default unchanged
+  AdminFx a(1024, 5000);  // generous handshake budget; production default unchanged
   Https r = a.call(R"({"class":"fetch","count":2})", "client-2");  // valid cert, not in lab.identities
   EXPECT_EQ(r.code(), 403);
   EXPECT_EQ(a.f.server->tickets().live(), 0u);
   EXPECT_EQ(metric(*a.f.server, "miracache_admin_requests_total", {"code=\"403\"", "path=\"/v1/tickets\""}), 1.0);
-  EXPECT_EQ(metric(*a.f.server, "miracache_ticket_issue_fail_total", {"reason=\"unknown_identity\""}), 1.0);  // S02
+  EXPECT_EQ(metric(*a.f.server, "miracache_ticket_issue_fail_total", {"reason=\"unknown_identity\""}), 1.0);
   EXPECT_EQ(metric(*a.f.server, "miracache_ticket_reject_total"), 0.0);  // redeem refusals only
 }
 
 TEST(AdminHttpsTest, GoodIdentityGetsSingleUseTickets) {
-  AdminFx a(1024, 5000);  // generous handshake budget (S07); production default unchanged
+  AdminFx a(1024, 5000);  // generous handshake budget; production default unchanged
   Https r = a.call(R"({"classes":["control","fetch","ingest"],"rail":0,"count":2})");
   ASSERT_EQ(r.code(), 200) << r.raw;
   EXPECT_NE(r.raw.find("Connection: close"), std::string::npos);
@@ -2204,12 +2202,12 @@ TEST(AdminHttpsTest, PerIdentityCapIs429) {
   Https r = a.call(R"({"class":"control","count":1})");
   EXPECT_EQ(r.code(), 429);
   EXPECT_EQ(metric(*a.f.server, "miracache_admin_requests_total", {"code=\"429\""}), 1.0);
-  EXPECT_EQ(metric(*a.f.server, "miracache_ticket_issue_fail_total", {"reason=\"limit\""}), 1.0);  // S02
+  EXPECT_EQ(metric(*a.f.server, "miracache_ticket_issue_fail_total", {"reason=\"limit\""}), 1.0);
   EXPECT_EQ(metric(*a.f.server, "miracache_ticket_reject_total"), 0.0);
 }
 
 TEST(AdminHttpsTest, MalformedAndUnknownFieldsAre400) {
-  AdminFx a(1024, 5000);  // generous handshake budget (S07); production default unchanged
+  AdminFx a(1024, 5000);  // generous handshake budget; production default unchanged
   for (const char* body : {"", "not json", R"({"class":"fetch","extra":1})", R"({"class":"fetch","count":65})",
                            R"({"class":"fetch","rail":9})" /* the table rejects rail >= 4 */})
     EXPECT_EQ(a.call(body).code(), 400) << body;
@@ -2217,7 +2215,7 @@ TEST(AdminHttpsTest, MalformedAndUnknownFieldsAre400) {
 }
 
 TEST(AdminHttpsTest, RoutingAndLimits) {
-  AdminFx a(1024, 5000);  // generous handshake budget (S07); production default unchanged
+  AdminFx a(1024, 5000);  // generous handshake budget; production default unchanged
   const auto& c = certs();
   const auto port = a.admin->port();
   auto raw = [&](const std::string& req) { return a.run([&] { return tls_call(port, c.pki, "client-1", c.pki, req); }); };
@@ -2304,7 +2302,7 @@ long ms_since(std::chrono::steady_clock::time_point t0) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
 }
 
-TEST(AdminHttpsTest, SlowlorisHandshakeClosedWithinHandshakeBudget) {  // A02: the budget, not 2 s
+TEST(AdminHttpsTest, SlowlorisHandshakeClosedWithinHandshakeBudget) {  // The budget, not 2 s
   AdminFx a(1024, 300);  // the mechanism at a short budget (production default: 1500 ms)
   int fd = tcp_connect(a.admin->port());  // connects, sends nothing
   const auto t0 = std::chrono::steady_clock::now();
@@ -2319,7 +2317,7 @@ TEST(AdminHttpsTest, SlowlorisHandshakeClosedWithinHandshakeBudget) {  // A02: t
   EXPECT_GE(metric(*a.f.server, "miracache_admin_tls_fail_total"), 1.0);
 }
 
-TEST(AdminHttpsTest, RequestBudgetIsSeparateFromHandshake) {  // A02
+TEST(AdminHttpsTest, RequestBudgetIsSeparateFromHandshake) {
   AdminFx a;
   const auto port = a.admin->port();
   Https r = a.run([&] {
@@ -2342,7 +2340,7 @@ TEST(AdminHttpsTest, RequestBudgetIsSeparateFromHandshake) {  // A02
   EXPECT_EQ(r.code(), 200) << r.raw;
 }
 
-TEST(AdminHttpsTest, IdleConnectionsDoNotStarveRealClients) {  // A02
+TEST(AdminHttpsTest, IdleConnectionsDoNotStarveRealClients) {
   AdminFx a(1024, 300);  // short test budget (production default: 1500 ms)
   const auto port = a.admin->port();
   std::vector<int> idle;  // 8 workers held: four source addresses x the per-IP limit of 2
@@ -2375,7 +2373,7 @@ TEST(AdminHttpsTest, IdleConnectionsDoNotStarveRealClients) {  // A02
   ::sigaction(SIGPIPE, &old, nullptr);
 }
 
-TEST(AdminHttpsTest, PerSourceIpLimit) {  // A02
+TEST(AdminHttpsTest, PerSourceIpLimit) {
   AdminFx a;
   const auto port = a.admin->port();
   int c1 = tcp_connect_from(port, "127.0.0.2");
@@ -2389,8 +2387,8 @@ TEST(AdminHttpsTest, PerSourceIpLimit) {  // A02
   for (int fd : {c1, c2, c3}) ::close(fd);
 }
 
-TEST(AdminHttpsTest, ResetAfterRequestCannotKillTheServer) {  // A01: SIGPIPE is at its default here
-  AdminFx a(1024, 5000);  // S07: a roomy handshake budget; the client writes through the no-SIGPIPE BIO
+TEST(AdminHttpsTest, ResetAfterRequestCannotKillTheServer) {  // SIGPIPE is at its default here
+  AdminFx a(1024, 5000);  // A roomy handshake budget; the client writes through the no-SIGPIPE BIO
   struct sigaction dfl {}, old {};
   dfl.sa_handler = SIG_DFL;
   ::sigaction(SIGPIPE, &dfl, &old);  // the listener must not depend on main() ignoring SIGPIPE
@@ -2411,7 +2409,7 @@ TEST(AdminHttpsTest, ResetAfterRequestCannotKillTheServer) {  // A01: SIGPIPE is
   ::sigaction(SIGPIPE, &old, nullptr);
 }
 
-TEST(AdminHttpsTest, TlsBioNeverRaisesSigpipe) {  // A01, deterministic: writes to a reset socket, SIGPIPE at default
+TEST(AdminHttpsTest, TlsBioNeverRaisesSigpipe) {  // Deterministic: writes to a reset socket, SIGPIPE at default
   int ls = ::socket(AF_INET, SOCK_STREAM, 0);
   sockaddr_in sa{};
   sa.sin_family = AF_INET;
@@ -2442,7 +2440,7 @@ TEST(AdminHttpsTest, TlsBioNeverRaisesSigpipe) {  // A01, deterministic: writes 
   ERR_clear_error();
 }
 
-TEST(AdminHttpsTest, ResetMidHandshakeCannotKillTheServer) {  // A01
+TEST(AdminHttpsTest, ResetMidHandshakeCannotKillTheServer) {
   AdminFx a(1024, 5000);
   struct sigaction dfl {}, old {};
   dfl.sa_handler = SIG_DFL;
@@ -2457,7 +2455,7 @@ TEST(AdminHttpsTest, ResetMidHandshakeCannotKillTheServer) {  // A01
   ::sigaction(SIGPIPE, &old, nullptr);
 }
 
-TEST(AdminHttpsTest, StopIsPromptWithBusyConnections) {  // A07: SIGHUP rebinds on the store thread
+TEST(AdminHttpsTest, StopIsPromptWithBusyConnections) {  // SIGHUP rebinds on the store thread
   AdminFx a;
   TlsConn c1 = tls_open(a.admin->port());
   TlsConn c2 = tls_open(a.admin->port());
@@ -2470,7 +2468,7 @@ TEST(AdminHttpsTest, StopIsPromptWithBusyConnections) {  // A07: SIGHUP rebinds 
   tls_free(c2);
 }
 
-TEST(AdminHttpsTest, BatchOverTheCapIssuesNothing) {  // A08
+TEST(AdminHttpsTest, BatchOverTheCapIssuesNothing) {
   AdminFx a(4, 5000);
   Https r = a.call(R"({"classes":["control","fetch","ingest"],"count":2})");  // 6 > cap 4
   EXPECT_EQ(r.code(), 429) << r.raw;
@@ -2478,14 +2476,14 @@ TEST(AdminHttpsTest, BatchOverTheCapIssuesNothing) {  // A08
   EXPECT_EQ(a.f.server->tickets().live_for("spiffe://lab/client-1"), 0u);
 }
 
-TEST(AdminHttpsTest, TwoSpiffeSansAre403) {  // A09 (server side)
-  AdminFx a(1024, 5000);  // generous handshake budget (S07); production default unchanged
+TEST(AdminHttpsTest, TwoSpiffeSansAre403) {  // server side
+  AdminFx a(1024, 5000);  // generous handshake budget; production default unchanged
   Https r = a.call(R"({"class":"fetch"})", "multi");  // one cert carrying spiffe://lab/client-1 and client-2
   EXPECT_EQ(r.code(), 403) << r.raw;
   EXPECT_EQ(a.f.server->tickets().live(), 0u);
 }
 
-TEST(MetricsHttpTest, StopIsPromptAndPortIsParsedStrictly) {  // A07, M03
+TEST(MetricsHttpTest, StopIsPromptAndPortIsParsedStrictly) {
   telemetry::Registry reg;
   EXPECT_FALSE(MetricsHttp::start("127.0.0.1:12abc", reg));  // atoi would have taken 12
   EXPECT_FALSE(MetricsHttp::start("127.0.0.1:70000", reg));
@@ -2500,7 +2498,7 @@ TEST(MetricsHttpTest, StopIsPromptAndPortIsParsedStrictly) {  // A07, M03
   for (int fd : idle) ::close(fd);
 }
 
-TEST(NetUtil, PollRetrySurvivesSignals) {  // A06: a SIGHUP must not turn into a timeout
+TEST(NetUtil, PollRetrySurvivesSignals) {  // A SIGHUP must not turn into a timeout
   struct sigaction sa {}, old {};
   sa.sa_handler = [](int) {};
   sigemptyset(&sa.sa_mask);
@@ -2518,7 +2516,7 @@ TEST(NetUtil, PollRetrySurvivesSignals) {  // A06: a SIGHUP must not turn into a
   ::close(sv[1]);
 }
 
-TEST(ServerReload, LabIdentitiesFollowTheConfig) {  // A04
+TEST(ServerReload, LabIdentitiesFollowTheConfig) {
   Fx f(2, nullptr, nullptr, [](ServerConfig& c) { c.lab_identities = {"spiffe://lab/client-1"}; });
   const auto C = fabric::EpClass::Control;
   ASSERT_TRUE(f.server->issue_ticket("spiffe://lab/client-1", C, 0, 2));
@@ -2604,7 +2602,7 @@ TEST(ServerWire, BlockLargerThanRunIsRefusedAtOnceAndCounted) {
   EXPECT_EQ(series(render(*f.server), "miracache_put_too_large_total"), 1.0);
 }
 
-// Review s9 K03: every HELLO_ACK carries the node's largest stored block (TLV 0x0003 = store.run_bytes) behind the boot
+// Every HELLO_ACK carries the node's largest stored block (TLV 0x0003 = store.run_bytes) behind the boot
 // nonce, both non-critical (CRITICAL_EXT clear: an older client skips them).
 TEST(ServerWire, HelloAckCarriesTheMaxStoredBlock) {
   Fx f;
@@ -2619,7 +2617,7 @@ TEST(ServerWire, HelloAckCarriesTheMaxStoredBlock) {
   EXPECT_EQ(a.h.flags & proto::flag::CRITICAL_EXT, 0);
   auto d = proto::decode_hello_ack(a.h, a.body);
   ASSERT_TRUE(d);
-  const std::string host = log::hostname();  // F5: the node's own hostname, as its log lines carry it
+  const std::string host = log::hostname();  // The node's own hostname, as its log lines carry it
   EXPECT_EQ(d->tlvs.size(), proto::kBootNonceTlvSize + proto::kMaxStoredBlockTlvSize + ((4 + host.size() + 7) / 8) * 8);
   EXPECT_EQ(proto::find_hostname(d->tlvs), host);
   ASSERT_TRUE(proto::find_max_stored_block(d->tlvs).has_value());
@@ -2656,7 +2654,7 @@ std::size_t count_of(const std::string& text, const std::string& what) {
   return n;
 }
 
-// Run #272 (Q15): the admin server's time budgets. A client that is slow within the budget succeeds; beyond it the
+// The admin server's time budgets. A client that is slow within the budget succeeds; beyond it the
 // failure is counted and logged with its cause and the client's address.
 TEST(AdminHttpsTest, DefaultBudgetsAreAboveTheOldTightValues) {
   EXPECT_GE(AdminHttps::kHandshakeMs, 1000);
@@ -2717,7 +2715,7 @@ TEST(AdminHttpsTest, SlowStoreThreadBeyondBudgetIs504WithNamedCause) {
   EXPECT_NE(t.find("client=127.0.0.1:"), std::string::npos) << t;
 }
 
-// Review s9 K10: the too-large WARN is rate-limited per (principal, size class): one line per minute, carrying the
+// The too-large WARN is rate-limited per (principal, size class): one line per minute, carrying the
 // principal, the client identity, the peer and the refusals dropped since; the counter still counts every refusal.
 TEST(ServerWire, TooLargeWarnIsRateLimitedPerPrincipalAndSizeClass) {
   Fx f;

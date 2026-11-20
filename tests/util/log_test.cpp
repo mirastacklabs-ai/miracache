@@ -101,7 +101,7 @@ TEST(Log, WritefFormats) {
   EXPECT_NE(out.find("msg=\"n=5 s=x\"\n"), std::string::npos) << out;
 }
 
-// Review s9 K04/K10: the first event of a key passes, then one per interval per key, carrying the count dropped since;
+// The first event of a key passes, then one per interval per key, carrying the count dropped since;
 // keys are bounded (further keys share one overflow slot while every tracked slot is live).
 TEST(LogLimiter, FirstPassesThenOnePerIntervalWithTheDroppedCount) {
   using std::chrono::seconds;
@@ -120,7 +120,7 @@ TEST(LogLimiter, FirstPassesThenOnePerIntervalWithTheDroppedCount) {
   EXPECT_FALSE(l.admit("a", seconds(61)).has_value());
 }
 
-// L09 (review s9b): a full table evicts stale slots for a new key instead of sending it to the overflow slot forever.
+// A full table evicts stale slots for a new key instead of sending it to the overflow slot forever.
 // Stale: interval over with nothing dropped (lossless), or idle one more interval with drops pending. A key with drops
 // inside that extra interval keeps its slot and its count. Time is the caller's (no clock read).
 TEST(LogLimiter, FullTableEvictsStaleSlotsForNewKeys) {
@@ -146,7 +146,7 @@ TEST(LogLimiter, FullTableEvictsStaleSlotsForNewKeys) {
   auto p5 = l.admit("p5", seconds(200));
   ASSERT_TRUE(p5.has_value());
   EXPECT_EQ(*p5, 0u);
-  // R11 (review s11): p3's pending dropped event (71 s) was not forgotten: it moved to a new overflow slot.
+  // p3's pending dropped event (71 s) was not forgotten: it moved to a new overflow slot.
   EXPECT_EQ(l.keys(), 2u) << "p5 and the overflow slot holding p3's dropped event";
   EXPECT_EQ(*l.admit("p6", seconds(201)), 0u) << "the overflow slot does not take p6's place";
   auto ov = l.admit("p7", seconds(202));  // the table is full again: p7 shares the overflow slot, whose line carries it

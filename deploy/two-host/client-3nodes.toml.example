@@ -1,4 +1,4 @@
-# libmiracache client with three memory nodes (static placement, A2.2). Same format as client.toml.
+# libmiracache client with three memory nodes (static placement). Same format as client.toml.
 # Each scope lives on exactly one node (or on replicas nodes, see [placement] below): owner(scope_id) = weighted rendezvous hash (design spec 7.1).
 # `weight` (positive integer, default 1) is the node's share: weights 1,1,2 give 25% / 25% / 50%.
 # Each node needs its own memnode.toml (no ID to set: each memory node draws its own and the client learns it), its own node-N cert, and its own admin address.
@@ -6,7 +6,7 @@
 
 [scope]
 provider    = "static"
-secret_file = "/run/miracache/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600
+secret_file = "/etc/miracache/keys/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600
 
 [[nodes]]
 weight   = 1

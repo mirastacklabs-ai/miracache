@@ -27,7 +27,7 @@ MrManager::~MrManager() {
   }
 }
 
-// Q2: the only bytes a reader may READ: the formatted data runs. Never the superblocks, segment meta, run table, header
+// The only bytes a reader may READ: the formatted data runs. Never the superblocks, segment meta, run table, header
 // table, the scope region or slack. Segment 0's reserved tail runs (where the scope region may sit, layout.h) are the
 // LAST runs, so the data range stays contiguous: just shorter.
 std::span<std::byte> MrManager::data_span(std::uint32_t seg) const {

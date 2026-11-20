@@ -19,7 +19,7 @@ inline constexpr std::uint32_t kFrameMagicLe = 0x4D52414D;
 inline constexpr std::uint8_t kVerMajor = 0;
 inline constexpr std::uint8_t kVerMinor = 0;
 inline constexpr std::size_t kFrameHeaderSize = 32;
-inline constexpr std::size_t kMaxFrameSize = 8192;  // D20; fabric's 64 KiB is untouched
+inline constexpr std::size_t kMaxFrameSize = 8192;  // fabric's 64 KiB is untouched
 inline constexpr std::size_t kMaxBodyLen = kMaxFrameSize - kFrameHeaderSize;  // 8160
 
 namespace fh {  // frame header offsets
@@ -71,16 +71,16 @@ using WireStatusResult = Expected<void, WireError>;
 inline constexpr std::size_t kTlvHeaderSize = 4;
 inline constexpr std::uint16_t kTlvCriticalBit = 0x8000;
 inline constexpr std::uint16_t kTlvTagRelease = 0x0001;  // non-critical
-// H02: HELLO_ACK only, non-critical, value u64 LE: the memory node's boot nonce (drawn once per process). A peer that
+// HELLO_ACK only, non-critical, value u64 LE: the memory node's boot nonce (drawn once per process). A peer that
 // does not know the tag skips it; a HELLO_ACK without it means "no nonce" (a node from before the tag).
 inline constexpr std::uint16_t kTlvTagBootNonce = 0x0002;
 inline constexpr std::size_t kBootNonceTlvSize = 16;  // 4 B header + 8 B value, padded to 8 B
-// Review s9 K03: HELLO_ACK only, non-critical, value u64 LE: the largest stored block (stored_len = 64 B header +
+// HELLO_ACK only, non-critical, value u64 LE: the largest stored block (stored_len = 64 B header +
 // payload + 16 B tag per segment) this node places, i.e. its store.run_bytes. A PUT_BEGIN key with a longer stored_len
 // is refused. Absent (a node from before the tag), 0 or not 8 B long = unknown: the client then cannot check locally.
 inline constexpr std::uint16_t kTlvTagMaxStoredBlock = 0x0003;
 inline constexpr std::size_t kMaxStoredBlockTlvSize = 16;  // 4 B header + 8 B value, padded to 8 B
-// Review s9 F5: HELLO_ACK only, non-critical, value = the memory node's hostname (the value its own logs carry), 1..255
+// HELLO_ACK only, non-critical, value = the memory node's hostname (the value its own logs carry), 1..255
 // printable ASCII bytes (0x21..0x7e, no space), padded to 8 B. Absent (a node from before the tag), empty, longer than
 // 255 B or with any other byte = unknown: static/lab mode has no admin ticket answer to name the node, so this is how the
 // client learns it. The admin/bundle hostname keeps priority.
@@ -98,7 +98,7 @@ inline constexpr std::size_t major_min = 0, major_max = 1, minor = 2, cls = 3, i
 static_assert(hello::z + 4 == kHelloSize && hello::conn_id + 16 == hello::max_frame);
 
 inline constexpr std::size_t kSegTableFixed = 40, kSegEntrySize = 40, kMaxSegEntries = 200;
-inline constexpr std::size_t kMaxRails = 4;  // D9
+inline constexpr std::size_t kMaxRails = 4;
 namespace segt {
 inline constexpr std::size_t n = 0, n_rails = 2, local_rail = 3, table_gen = 4, sg_base = 8,
                              sg_slots = 16, sg_rkey = 24;

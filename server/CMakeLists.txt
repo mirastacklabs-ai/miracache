@@ -1,4 +1,4 @@
-# Memory-node server (A1.4 S7). The library is deterministic (injected Clock/Random/Executor);
+# Memory-node server. The library is deterministic (injected Clock/Random/Executor);
 # threads live only in runtime/ (lint marker `// lint:server-runtime`).
 find_package(Threads REQUIRED)
 find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto SSL)

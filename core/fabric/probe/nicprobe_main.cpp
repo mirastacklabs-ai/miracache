@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // mira-nicprobe [--json] [--profiles FILE] [device...]: report NIC facts, capability trials, the
-// "usable for miracache" verdict and the matched NIC profile (A3.3: profile, verified flag, fixed
+// "usable for miracache" verdict and the matched NIC profile (profile, verified flag, fixed
 // operating point, firmware check). Exit 0 when every probed device is usable, 1 when any is not
 // (or when a device has no matching profile), 2 on usage or open errors.
 //
-// --json: the A1.3 object plus an additive "profiles" array (one entry per device: "device",
+// --json: the probe object plus an additive "profiles" array (one entry per device: "device",
 // and either "profile":{...} or "error":"..."); schema_version is unchanged.
 #include <cstdio>
 #include <cstring>

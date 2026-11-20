@@ -9,7 +9,7 @@
 #     ok/<previous tag> on that same commit: the job `release-record` pushes it (job token) only when every earlier job
 #     of that pipeline passed. Release tags and markers are protected (*.*.*): only a Maintainer's pipeline makes them,
 #     and a marker names its commit, so a tag deleted and re-created elsewhere never inherits it. (The GitLab artifacts
-#     API is not open to the job token on this tier, run #346.)
+#     API is not open to the job token on this tier.)
 # Read-only; runs on a workstation too. Last line "OK: release ..." or "FAIL: release ...".
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -45,6 +45,12 @@ if [[ -n $prev ]]; then
   osha=$(remote_tag "ok/$ptag") || fail "cannot read the tags of origin"
   [[ -n $osha ]] || fail "the $ptag pipeline has not gone green (no ok/$ptag yet): wait for it, or fix and release a new version"
   [[ $osha == "$sha" ]] || fail "ok/$ptag marks ${osha:0:8}, not ${sha:0:8} (re-tagged?): release a new version"
+fi
+if [[ $stage == dev ]]; then
+  # The first stage ties the tag to the version the tree carries (later stages sit on the same commit, so they inherit it).
+  cmake_ver=$(git show "$sha:CMakeLists.txt" | sed -n 's/^project(miracache VERSION \([0-9][0-9.]*\).*/\1/p' | head -n 1) \
+    || fail "cannot read CMakeLists.txt at ${sha:0:8}"
+  [[ $cmake_ver == "$ver" ]] || fail "tag $tag but CMakeLists.txt says ${cmake_ver:-<no version>}: bump the version first"
 fi
 case $stage in
   dev) next="its code was gated on the way into main; tag qa-$ver on this commit" ;;

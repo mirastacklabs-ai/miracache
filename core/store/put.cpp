@@ -15,7 +15,7 @@ namespace miracache::store {
 namespace {
 constexpr std::uint32_t kRetryBusyMs = 50;
 constexpr std::uint32_t kRetryQuotaMs = 1000;
-constexpr std::uint32_t kRetryFullMs = 1000;  // arena full and no run can be freed (R05)
+constexpr std::uint32_t kRetryFullMs = 1000;  // arena full and no run can be freed
 }  // namespace
 
 PutPath::PutPath(Store& store, SlabAllocator& slab, MrManager& mrs, Arena& arena, const Clock& clock, Executor& exec,
@@ -50,7 +50,7 @@ void PutPath::release(Rec& r) {
   }
   r.mrs.clear();
   r.ext.clear();
-  // Only keys this put accepted: a SKIPped key belongs to another live put (Q05).
+  // Only keys this put accepted: a SKIPped key belongs to another live put.
   for (std::size_t i = 0; i < r.keys.size(); ++i)
     if (r.ext_of[i] >= 0) inflight_.erase({r.principal, r.scope, r.keys[i].key});
 }
@@ -68,7 +68,7 @@ void PutPath::end_put(std::map<PutId, Rec>::iterator it) {
 
 PutBeginAck PutPath::put_begin(fabric::EndpointId ep, const PutBeginReq& q) {
   PutBeginAck ack;
-  std::uint64_t adm_ops = 0, adm_bytes = 0;  // QT2: bucket charges of this put, returned if it does not begin
+  std::uint64_t adm_ops = 0, adm_bytes = 0;  // bucket charges of this put, returned if it does not begin
   auto unadmit = [&] {
     if (adm_ops || adm_bytes) store_.put_unadmit(q.principal, adm_ops, adm_bytes);
     adm_ops = adm_bytes = 0;
@@ -94,13 +94,13 @@ PutBeginAck PutPath::put_begin(fabric::EndpointId ep, const PutBeginReq& q) {
   std::set<KeyHash> seen;
   for (const auto& k : q.keys) {
     // stored_len above a run can never be placed (and would overflow the 4 KiB round-up). Below the 64 B extent header
-    // no client extent can be valid, and the restart scan rejects such a header as corrupt (s12, tpu-sync cross-check
-    // C6: it was accepted here and then lost at the next restart): refused at the door, like 0.
+    // no client extent can be valid, and the restart scan rejects such a header as corrupt (it was accepted here and then lost at the next
+    // restart): refused at the door, like 0.
     if (k.stored_len < proto::kExtentHeaderSize || k.stored_len > arena_.config().run_bytes || !seen.insert(k.key).second) {
       ack.status = BeginStatus::Malformed;
       return ack;
     }
-    // R12: an all-zero 16 B prefix is the root marker, so no key may have one; a key sharing its
+    // An all-zero 16 B prefix is the root marker, so no key may have one; a key sharing its
     // parent's prefix would be its own parent.
     if (parent_is_root(k.key) || parent_prefix(k.key) == parent_prefix(k.parent)) {
       ack.status = BeginStatus::Malformed;
@@ -136,7 +136,7 @@ PutBeginAck PutPath::put_begin(fabric::EndpointId ep, const PutBeginReq& q) {
     }
     count_put(PutResult::Skipped, bytes, n - accepted.size());
   };
-  // QT2 (decision 4): the put token buckets. Keys are admitted in order; the first one over budget and every key after
+  // the put token buckets. Keys are admitted in order; the first one over budget and every key after
   // it is SKIPped (never REFUSED), so no admitted key is left without its parent. The ack stays Ok and carries the
   // time until the balance is positive in retry_after_ms (the wire already has the field; entries say SKIP).
   // Fetches are never throttled.
@@ -163,14 +163,14 @@ PutBeginAck PutPath::put_begin(fabric::EndpointId ep, const PutBeginReq& q) {
   }
   if (accepted.size() > SlabAllocator::kMaxBatch) return refuse(0, RefuseReason::Other);
 
-  if (auto e = ep_puts_.find(ep); e != ep_puts_.end() &&  // no-wrap compare (r6 B2): count >= max (teeth: max + 1, one too many)
+  if (auto e = ep_puts_.find(ep); e != ep_puts_.end() &&  // no-wrap compare: count >= max (teeth: max + 1, one too many)
       std::uint64_t{e->second} >= std::uint64_t{arena_.config().max_puts_per_endpoint} + (MIRACACHE_TEETH_ON(EndpointCapLax) ? 1u : 0u))
     return refuse(kRetryBusyMs, RefuseReason::ConnCap);
 
-  // Quota (Q08): reserve the exact-size bytes first (a cheap refusal before any eviction).
+  // Quota: reserve the exact-size bytes first (a cheap refusal before any eviction).
   std::uint64_t reserved = 0;
   for (std::uint64_t l : lens) reserved += slab_.exact_len(l);
-  // Blocks this put depends on (its SKIPped keys and parents) must survive any eviction below (R06).
+  // Blocks this put depends on (its SKIPped keys and parents) must survive any eviction below.
   std::vector<KeyHash> protect;
   for (const auto& k : q.keys) {
     protect.push_back(k.key);
@@ -181,7 +181,7 @@ PutBeginAck PutPath::put_begin(fabric::EndpointId ep, const PutBeginReq& q) {
   auto ext = slab_.alloc_batch(lens, q.principal);
   bool nothing_freeable = false;
   if (!ext && ext.error().code == ErrorCode::ResourceExhausted) {
-    // Q07/R05: free one whole slab run (never a run holding a leased or needed block) and retry once.
+    // Free one whole slab run (never a run holding a leased or needed block) and retry once.
     if (store_.evict_one_run(q.principal, q.scope, protect) > 0)
       ext = slab_.alloc_batch(lens, q.principal);
     else
@@ -191,7 +191,7 @@ PutBeginAck PutPath::put_begin(fabric::EndpointId ep, const PutBeginReq& q) {
     store_.release_inflight(q.principal, reserved);
     if (ext.error().code == ErrorCode::ResourceExhausted) return refuse(nothing_freeable ? kRetryFullMs : kRetryBusyMs, RefuseReason::Full);
     unadmit();
-    ack.status = BeginStatus::Malformed;  // permanent (Q06): retrying cannot help
+    ack.status = BeginStatus::Malformed;  // permanent: retrying cannot help
     ack.entries.clear();
     return ack;
   }
@@ -208,7 +208,7 @@ PutBeginAck PutPath::put_begin(fabric::EndpointId ep, const PutBeginReq& q) {
   }
   if (root) {
     if (Status st = store_.ensure_scope_for_root_put(q.principal, q.scope, clock_.now()); !st) {
-      // U2-08: the scope is an expired or dropped one still draining: retryable (the client backs off and retries
+      // The scope is an expired or dropped one still draining: retryable (the client backs off and retries
       // the same job), not the retry-0 "do not retry" failure.
       if (const std::uint32_t ms = store_.drain_retry_ms(q.principal, q.scope)) return fail_free(ms, RefuseReason::Other);
       if (mx_) bump(mx_->scope_denied);
@@ -298,13 +298,13 @@ void PutPath::put_commit(fabric::EndpointId ep, const PutCommitReq& q, PutDoneFn
   res.put_id = q.put_id;
   res.ep = ep;
   auto it = puts_.find(q.put_id);
-  // Only the QP that carried PUT_BEGIN may commit; another endpoint's id looks unknown (Q16).
+  // Only the QP that carried PUT_BEGIN may commit; another endpoint's id looks unknown.
   if (it == puts_.end() || (it->second.ep != ep && !MIRACACHE_TEETH_ON(ForeignPutId)) || it->second.state != State::Writing) {
     res.status = MIRACACHE_TEETH_ON(UnknownPutOk) ? CommitStatus::Ok : CommitStatus::UnknownPut;  // TEETH: UnknownPutOk
     return done(res);
   }
   Rec& r = it->second;
-  // D6 / D7: indexes ascending and exactly the accepted keys, lengths equal to PUT_BEGIN.
+  // Indexes ascending and exactly the accepted keys, lengths equal to PUT_BEGIN.
   std::vector<std::size_t> want;
   for (std::size_t i = 0; i < r.keys.size(); ++i)
     if (r.ext_of[i] >= 0) want.push_back(i);
@@ -386,7 +386,7 @@ void PutPath::finish_digest(PutId id, const std::vector<std::uint32_t>& server_c
       std::memcpy(h.parent_hash, k.parent.data(), 16);
       h.chain_pos = k.chain_pos;
       h.payload_crc = server_crc[j];
-      // A3.1: the header is written only once the block is in the index (same store-thread turn, so no reader or
+      // The header is written only once the block is in the index (same store-thread turn, so no reader or
       // scrub pin sees the gap). A valid header on media therefore always names a live committed block of a live
       // scope: a block refused here never had one, even if the process dies right now.
       if (store_.commit_block(r.principal, r.scope, k.key, k.parent, e, k.stored_len, r.epoch)) {
@@ -419,7 +419,7 @@ void PutPath::put_cancel(fabric::EndpointId ep, PutId id, PutDoneFn done) {
   res.put_id = id;
   res.ep = ep;
   auto it = puts_.find(id);
-  if (it == puts_.end() || (it->second.ep != ep && !MIRACACHE_TEETH_ON(ForeignPutId))) {  // Q16: a foreign put id looks unknown
+  if (it == puts_.end() || (it->second.ep != ep && !MIRACACHE_TEETH_ON(ForeignPutId))) {  // a foreign put id looks unknown
     res.status = MIRACACHE_TEETH_ON(UnknownPutOk) ? CommitStatus::Ok : CommitStatus::UnknownPut;  // TEETH: UnknownPutOk
     return done(res);
   }
@@ -518,7 +518,7 @@ Status PutPath::check_invariants() const {
       return;
     }
     auto hb = arena_.block(e.seg, header_off(e), kHeaderSlotBytes);
-    if (zombie) {  // A3.1: a ZOMBIE is out of the index and its header is cleared (never resumed after a crash)
+    if (zombie) {  // a ZOMBIE is out of the index and its header is cleared (never resumed after a crash)
       if (std::any_of(hb.begin(), hb.end(), [](std::byte v) { return v != std::byte{0}; })) result = bad("put: zombie header not cleared");
       return;
     }

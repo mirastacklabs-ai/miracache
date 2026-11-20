@@ -9,7 +9,7 @@ import (
 	"miracache/controller/publish"
 )
 
-// F02: a *bundle.Error is a client error only when it carries publish.ErrBadEdit.
+// A *bundle.Error is a client error only when it carries publish.ErrBadEdit.
 func TestPublishStatusBundleErrors(t *testing.T) {
 	be := &bundle.Error{Reason: "drop_before_future", Msg: "x"}
 	cases := []struct {

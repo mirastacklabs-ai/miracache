@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR2: client live configuration (hot-reload plan decisions 2-4). The bundle's config.cluster.client table is parsed over the
+// Client live configuration. The bundle's config.cluster.client table is parsed over the
 // open-time values and swapped in as one atomic snapshot. Real memory-node servers over SimFabric (the rig is the one of
 // membership_test.cpp, copied: the two files build separately), 4-thread traffic with the strict oracle across every
 // class A key, class B recorded as pending, unknown keys ignored and counted, bad values and STATIC keys rejected.
-// HR3b (decision 6): a class B change rebuilds each node make-before-break (ClientRebuild.*): every later make_spec of a
+// A class B change rebuilds each node make-before-break (ClientRebuild.*): every later make_spec of a
 // node gets a spare client NIC, the decrypt executor can be held to keep a job inside a pair, and Overlap samples the
 // client endpoints and the server connections at every drive.
 #include <gtest/gtest.h>
@@ -63,7 +63,7 @@ class CounterSalts final : public NonceSource {
   std::atomic<unsigned> n_{0};
 };
 
-// HR3b: the client's decrypt executor. Inline, unless a test holds it: then a fetch's decrypt waits (the job stays inside
+// The client's decrypt executor. Inline, unless a test holds it: then a fetch's decrypt waits (the job stays inside
 // its pair, its lease held) until release() runs it on the test thread.
 class GateExecutor final : public Executor {
  public:
@@ -186,9 +186,9 @@ server::ServerConfig server_cfg() {
   return sc;
 }
 
-// MB6b: stands in for MB4's epoch enforcement (the real server enforces it from MB4 on) at the client's side of the sim
+// Stands in for the memory node's epoch enforcement (the real server enforces it) at the client's side of the sim
 // fabric. Per memory node it has an applied (epoch, bundle_gen_lo), stamps every frame it delivers to the client with
-// them (decision 8: "every reply frame carries the node's epoch and bundle_gen_lo"), and answers a PUT_BEGIN whose frame
+// them ("every reply frame carries the node's epoch and bundle_gen_lo"), and answers a PUT_BEGIN whose frame
 // epoch differs from the node's with StaleEpoch (retry 0 when the frame is lower, 50 ms when higher), or Draining when
 // `draining` is set, without forwarding it to the server. Everything else passes through to the real server.
 struct NodeStamp {
@@ -333,14 +333,14 @@ struct World {
     for (unsigned i = 1; i <= kServers; ++i) {
       sfab[i - 1] = &net.add_node(i);
       cfab[i - 1] = &net.add_node(10 + i);
-      // HR3b: a planned rebuild asks make_spec for a fresh fabric (two pairs never share one); every later spec of a
+      // A planned rebuild asks make_spec for a fresh fabric (two pairs never share one); every later spec of a
       // node gets the next spare client NIC.
       for (unsigned k = 0; k < kSpares; ++k) spare[i - 1][k] = &net.add_node(100 + (i - 1) * kSpares + k);
       if (shim_on) shim[i - 1] = std::make_unique<ShimFabric>(*cfab[i - 1], stamps[i - 1]);
     }
     for (unsigned i = 1; i <= kServers; ++i) {
       auto sc = server_cfg();
-      sc.rails = {fabric::RailAddr{"sim", static_cast<std::uint16_t>(7000 + i)}};  // where the client dials: the sim matches exactly (G08)
+      sc.rails = {fabric::RailAddr{"sim", static_cast<std::uint16_t>(7000 + i)}};  // where the client dials: the sim matches exactly
       if (max_conns) sc.max_conns_per_principal = max_conns;
       auto w = wrong_id.find(i);
       sc.store.node_id = w != wrong_id.end() ? w->second : i;
@@ -355,7 +355,7 @@ struct World {
     o.slice_size = 2048;
     return o;
   }
-  // A wait on a frozen server ends at its sim-time deadline (WirePort, review w5 U2-26: no call-count cap any more).
+  // A wait on a frozen server ends at its sim-time deadline (WirePort, no call-count cap any more).
   // The 100 us real-time cost of an idle step while a server is frozen is a throttle on the shared sim clock (see
   // wire_port_test MultiWorld); membership_test's World no longer needs it.
   void drive() {
@@ -409,7 +409,7 @@ struct World {
   static constexpr unsigned kSpares = 16;
   fabric::SimFabric* spare[kServers][kSpares];
   std::atomic<unsigned> specs_made[kServers] = {};
-  std::function<void()> on_drive;  // HR3b tests: samples the sim each drive (set before traffic, cleared after)
+  std::function<void()> on_drive;  // rebuild tests: samples the sim each drive (set before traffic, cleared after)
   // The client NICs of node `id` (1-based): the first and the spares. In the sim turn only.
   std::size_t client_endpoints(unsigned id) const {
     std::size_t n = cfab[id - 1]->endpoint_count();
@@ -498,7 +498,7 @@ bool until(P pred, milliseconds cap = milliseconds(30000)) {
   return pred();
 }
 
-// G11: waits for `pred` while the simulation makes progress, for tests that real threads drive through a long sequence.
+// Waits for `pred` while the simulation makes progress, for tests that real threads drive through a long sequence.
 // A tight real-time window fails under a sanitizer on a loaded host (the same sim time costs many times more wall time),
 // so this fails only on a real problem: the sim clock stood still for `stall` of real time (a hang), the sim ran
 // `sim_cap` of virtual time without the condition (a livelock), or the `wall_cap` backstop (well inside ctest's TIMEOUT).
@@ -566,7 +566,7 @@ struct Rig {
     cur_gen = first->generation();
     if (shim)  // every node of the first bundle runs it (they gave it to us)
       for (const auto& nv : first->view.body.nodes) w.stamps[nv.node_id - 1].set(cur_epoch, static_cast<std::uint32_t>(cur_gen));
-    if (bundle_servers) {  // the servers of the first bundle already run it (bundle mode, MB3b apply)
+    if (bundle_servers) {  // the servers of the first bundle already run it (bundle mode, apply)
       cur_env = first->envelope;
       for (const auto& nv : first->view.body.nodes) w.srv[nv.node_id - 1]->apply_bundle(first->view);
     }
@@ -576,7 +576,7 @@ struct Rig {
     env.salts = &w.salts;
     env.drive = [this] { w.drive(); };
     env.replica_buffer_bytes = 8u << 20;
-    // As membership_test's rig (run #200): HR2 clamps store deadlines to put_max_ms (2.5 s of SIM time by default), which
+    // As membership_test's rig: the live configuration clamps store deadlines to put_max_ms (2.5 s of SIM time by default), which
     // the driving threads burn in milliseconds of real time while a job waits for its sim turn. The tests' own deadlines apply.
     env.put_max_ms = 600000;
     env.set_crypto_workers = [this](unsigned n) { crypto_workers = n; };
@@ -596,14 +596,14 @@ struct Rig {
       if (id_of_admin_connected) {
         const bool c = id_of_admin_connected(id);
         connected_at_push.push_back(c);
-        first_push_connected.emplace(id, c);  // MB6b also pushes to lagging nodes: per node, its first push
+        first_push_connected.emplace(id, c);  // the client also pushes to lagging nodes: per node, its first push
       }
       if (fail_pushes > 0) {
         --fail_pushes;
         return Error{ErrorCode::LinkDown, "test: push fails"};
       }
       if (shim_) w.stamps[id - 1].set(cur_epoch, static_cast<std::uint32_t>(cur_gen));  // the node applied our envelope
-      if (bundle_servers_) {  // MB3b servers: the pushed envelope is verified and applied, as the node's POST /v1/bundle would
+      if (bundle_servers_) {  // bundle-mode servers: the pushed envelope is verified and applied, as the node's POST /v1/bundle would
         auto v = control::open_bundle(cur_env, trust());
         if (!v) return Error{ErrorCode::Corrupt, "test: pushed envelope does not verify"};
         std::lock_guard sl(w.srv_mu);
@@ -692,7 +692,7 @@ void cycle(Rig& r, Oracle& o, int scope, std::uint64_t v) {
   if (!fc) return o.on_missing_completion("fetch " + key);
   const KeyStatus fs = fc->status.at(0);
   o.on_fetch(key, fs, fs == KeyStatus::Hit ? decode(scope, out) : std::nullopt);
-  // Y19: also re-read an OLDER committed key. After a membership change its owner may be another node: a Miss is fine,
+  // Also re-read an OLDER committed key. After a membership change its owner may be another node: a Miss is fine,
   // a Hit must still carry exactly that key's version (the stale-bytes rule).
   if (v > 3) {
     const std::uint64_t ov = v - 3;  // each pass stores v, v+1, v+2 in its 3 scopes: v-3 is this scope's previous key
@@ -732,7 +732,7 @@ struct Traffic {
   std::vector<std::thread> th;
 };
 
-// Waits (real time, `cap`) until the traffic has done more than `n` more ops. s12 (CI pipeline 3080856180, asan lane: a
+// Waits (real time, `cap`) until the traffic has done more than `n` more ops. (On an asan CI lane a
 // 30 s wait timed out in ConnectionCapHitDuringTheOverlapLeavesTheOldPairServing, which takes 0.4-8 s locally): a timeout
 // says where the time went: ops, the workers' job-loop turns, the keepalive ticks, sim time and rebuild failures over
 // the wait.
@@ -750,7 +750,7 @@ void settle_traffic(Rig& r, Traffic& tr, std::uint64_t n, milliseconds cap = mil
 }
 
 
-// ---- HR2 tests -------------------------------------------------------------------------------------------------
+// ---- live configuration tests -------------------------------------------------------------------------------------------------
 
 std::optional<long long> series(const std::string& text, const std::string& name, std::initializer_list<std::string> parts) {
   std::size_t pos = 0;
@@ -876,9 +876,9 @@ TEST(ClientDynParse, BadValuesStaticKeysAndCrossFieldRulesRejectTheWholeTable) {
       "[cluster.client.landing]\nsubpool_bytes = 1048577\n",
       "[cluster.client.fabric]\ndevice = \"rxe0\"\n",                                    // STATIC keys
       "[cluster.client.fabric]\nprofiles_file = \"/x\"\n",
-      "[cluster.client.fabric]\nread_depth = 8\n",                                      // G06: NIC operating point is local
+      "[cluster.client.fabric]\nread_depth = 8\n",                                      // NIC operating point is local
       "[cluster.client.fabric]\nwindow_bytes = 1048576\n",
-      "[cluster.client.deadline]\nput_max_ms = 3000\n",                                  // G06: 4 x 3000 > the default 10 s put_timeout
+      "[cluster.client.deadline]\nput_max_ms = 3000\n",                                  // 4 x 3000 > the default 10 s put_timeout
       "[cluster.client.deadline]\nput_max_ms = 1000\n\n[cluster.memnode.lease]\nput_timeout_s = 3\n",
       "[cluster.client.tls]\ncert = \"/x\"\n",
       "[cluster.client.scope]\nsecret_file = \"/x\"\n",
@@ -895,7 +895,7 @@ TEST(ClientDynParse, BadValuesStaticKeysAndCrossFieldRulesRejectTheWholeTable) {
   EXPECT_NE(r.error.find("crypto.workers"), std::string::npos) << r.error;
   r = parse_client_dyn("[cluster.client.fabric\n", base, 3);
   EXPECT_FALSE(r.error.empty()) << "unparseable text";
-  // G06: a static fabric key is refused BY NAME (never silently ignored), and put_max_ms may rise with put_timeout_s.
+  // A static fabric key is refused BY NAME (never silently ignored), and put_max_ms may rise with put_timeout_s.
   r = parse_client_dyn("[cluster.client.fabric]\ninline_bytes = 64\n", base, 3);
   EXPECT_NE(r.error.find("fabric.inline_bytes is STATIC"), std::string::npos) << r.error;
   r = parse_client_dyn("[cluster.client.deadline]\nput_max_ms = 5000\n\n[cluster.memnode.lease]\nput_timeout_s = 20\n", base, 3);
@@ -1141,12 +1141,12 @@ TEST(ClientReload, SnapshotLoadsAreAtomicWhileSwapping) {
   EXPECT_EQ(torn.load(), 0u);
 }
 
-// ---- HR3b: planned rebuild (class B, make-before-break) ----------------------------------------------------------
+// ---- Planned rebuild (class B, make-before-break) ----------------------------------------------------------
 
-// Multi-rail decision 6: one session holds, per paired rail, 1 control + fetch_qps fetch + 1 ingest endpoints. These sim
+// One session holds, per paired rail, 1 control + fetch_qps fetch + 1 ingest endpoints. These sim
 // nodes have one rail.
 constexpr unsigned session_eps(unsigned fetch_qps, unsigned rails = 1) { return rails * (2 + fetch_qps); }
-// The connection-cap rule (hot-reload plan decision 6) for one client (stagger 1) over a sequence of fetch_qps values
+// The connection-cap rule for one client (stagger 1) over a sequence of fetch_qps values
 // applied one after another: during each rebuild the client holds the old-size session and the new-size one.
 template <std::size_t N>
 constexpr unsigned overlap_cap(const unsigned (&qps)[N], unsigned rails = 1) {
@@ -1186,7 +1186,7 @@ struct Overlap {
   World& w_;
 };
 
-// HR7: every node's rail 0 shows `want` fetch QPs connected (miracache_client_rail_fetch_qps, the active pair's).
+// Every node's rail 0 shows `want` fetch QPs connected (miracache_client_rail_fetch_qps, the active pair's).
 bool rails_show_qps(Client& c, long long want) {
   const std::string m = c.metrics_text();
   for (const char* id : {"1", "2", "3"})
@@ -1220,7 +1220,7 @@ int scope_of_node(std::size_t want) {  // a scope node `want` (0-based in {1,2,3
 }
 
 // A class B change under 4-thread traffic rebuilds every node, one at a time, with 0 failed operations by the strict
-// oracle, through R = 1, R = 2 sync and R = 2 async (replica legs and the replicator pin pairs too). HR7: fabric.fetch_qps
+// oracle, through R = 1, R = 2 sync and R = 2 async (replica legs and the replicator pin pairs too). fabric.fetch_qps
 // goes 1 (open) -> 4 -> 2 -> 1 and each pair really runs that many fetch QPs. The server's connection cap is exactly the
 // rule's minimum for one client over that sequence (the largest old-size + new-size session pair: 6 + 4 = 10 endpoints):
 // every overlap fits, nothing is refused.
@@ -1396,7 +1396,7 @@ TEST(ClientRebuild, DrainDeadlineEndsTheOldSessionOfABusyPair) {
   ASSERT_TRUE(until([&] { return ov.conns[1].load() == session_eps(1); }, milliseconds(60000))) << "the drain ended the old session";
   EXPECT_GE(pair0.use_count(), 3) << "not closed: the job is still inside";
   EXPECT_EQ(r.cl->rebuilding_slot(), static_cast<long>(slot2));
-  // F09: the held token is visible (slot, node identity) and its age grows while the job stays inside.
+  // The held token is visible (slot, node identity) and its age grows while the job stays inside.
   const std::string tok = "miracache_client_rebuild_token_held_seconds";
   const std::initializer_list<std::string> who{"slot=\"" + std::to_string(slot2) + "\"", "node_id=\"2\"", "hostname=", "addr="};
   ASSERT_TRUE(until([&] { return series(r.cl->metrics_text(), tok, who).value_or(0) >= 1; }, milliseconds(120000)))
@@ -1439,7 +1439,7 @@ TEST(ClientRebuild, AFailedBuildKeepsTheOldPairServing) {
   EXPECT_GT(o.count_of(KeyStatus::Hit), 0u) << o.report();
 }
 
-// G01: a ticket cache sized as AdminTicketSource sizes it: prepare() refills a class below max(2, need) by
+// A ticket cache sized as AdminTicketSource sizes it: prepare() refills a class below max(2, need) by
 // max(batch, need) (need: fetch_qps for fetch, 1 otherwise; capped at 2 x that), and a build only draws from the
 // cache. Each spec (each planned rebuild) gets a fresh one, as make_spec's fresh admin source.
 struct CappedTickets {
@@ -1480,7 +1480,7 @@ void capped_tickets(Client::NodeSpec& ns, const control::NodeView&) {
   };
 }
 
-// G01: a bundle that raises fabric.fetch_qps above the ticket batch (1 -> 8, ticket_batch 4: the shipped E810 iWARP
+// A bundle that raises fabric.fetch_qps above the ticket batch (1 -> 8, ticket_batch 4: the shipped E810 iWARP
 // value) rebuilds every node. The fresh ticket source of a rebuild learns the new fetch_qps and the live batch before
 // its first refill; before the fix it held 4 fetch tickets, every rebuild failed and the old pairs stayed forever.
 TEST(ClientRebuild, FetchQpsAboveTheTicketBatchRebuildsWithEnoughTickets) {
@@ -1503,7 +1503,7 @@ TEST(ClientRebuild, FetchQpsAboveTheTicketBatchRebuildsWithEnoughTickets) {
   EXPECT_GT(o.count_of(KeyStatus::Hit), 0u) << o.report();
 }
 
-// G09 (review G07, Q6): a planned rebuild whose new pair hits a LOCAL device limit (the overlap is where a CQ/QP limit is
+// A planned rebuild whose new pair hits a LOCAL device limit (the overlap is where a CQ/QP limit is
 // most likely) is counted in miracache_client_endpoint_build_failures_total{cause="local_resource"} with the node's
 // identity, as a first build is; the old pair keeps serving and the rebuild goes through once the device has room.
 TEST(ClientRebuild, LocalResourceFailureOfARebuildIsCountedByCause) {
@@ -1522,7 +1522,7 @@ TEST(ClientRebuild, LocalResourceFailureOfARebuildIsCountedByCause) {
   ASSERT_TRUE(until([&] { return slots_run(*r.cl, 8u << 20, 4096, 1) && r.cl->rebuilding_slot() < 0; }, milliseconds(120000)));
 }
 
-// H06: a planned rebuild fails (local device limit), then its change is reverted before a retry succeeds. The failure's
+// A planned rebuild fails (local device limit), then its change is reverted before a retry succeeds. The failure's
 // open entry is settled when the pending rebuild is withdrawn (one "withdrawn" line, no "recovered" line), so the next
 // failure of the same cause (the change published again) is logged again instead of being swallowed.
 TEST(ClientRebuild, WithdrawnRebuildSettlesItsFailureSoTheNextOneIsLogged) {
@@ -1575,8 +1575,8 @@ TEST(ClientRebuild, WithdrawnRebuildSettlesItsFailureSoTheNextOneIsLogged) {
   ::unlink(tmpl);
 }
 
-// R09 (review s11): a planned rebuild fails (local device limit on its fresh NIC) while the old pair keeps serving; the
-// old pair's session then reconnects (its rail 0 comes up again, Q03's filtered recovery). Before: that reconnect
+// A planned rebuild fails (local device limit on its fresh NIC) while the old pair keeps serving; the
+// old pair's session then reconnects (its rail 0 comes up again, the filtered recovery). Before: that reconnect
 // closed the rebuild's entry with a false "recovered ... via session reconnect" line. Now the entry stays the rebuild's:
 // no recovery line, and withdrawing the rebuild settles it.
 TEST(ClientRebuild, OldPairReconnectDoesNotCloseAPendingRebuildsFailure) {
@@ -1631,7 +1631,7 @@ TEST(ClientRebuild, OldPairReconnectDoesNotCloseAPendingRebuildsFailure) {
     const std::uint64_t downs = p->session_down_count();
     // The old session ends; it reconnects on its own (working) NIC. The sim is single-threaded and the client's keepalive
     // threads run (keepalive_ms = 20), so the abort happens in the client's sim turn (drive(), under srv_mu), not on the
-    // test thread (run #277: tsan saw this abort's write of SimEndpoint::aborted_ race a keepalive ping's can_post()).
+    // test thread (tsan saw this abort's write of SimEndpoint::aborted_ race a keepalive ping's can_post()).
     std::atomic<bool> aborted{false};
     {
       std::lock_guard lk(r.w.srv_mu);
@@ -1647,7 +1647,7 @@ TEST(ClientRebuild, OldPairReconnectDoesNotCloseAPendingRebuildsFailure) {
       r.w.on_drive = nullptr;
     }
     EXPECT_TRUE(until([&] { return p->session_down_count() > downs && p->session_up(); }, milliseconds(120000)));
-    // The reconnect's on_rails_up has run (run #297; was a 100 ms real-time sleep): node 1's keepalive thread flips the
+    // The reconnect's on_rails_up has run (was a 100 ms real-time sleep): node 1's keepalive thread flips the
     // session Up and then calls on_rails_up in the same reconnect step; only after that step returns does a later tick
     // PING on this port (the reconnect sends none, and no traffic runs here to probe a suspect rail). So a PING counted
     // after Up was seen proves the step, and with it on_rails_up, is over.
@@ -1659,7 +1659,7 @@ TEST(ClientRebuild, OldPairReconnectDoesNotCloseAPendingRebuildsFailure) {
     EXPECT_TRUE(until([&] { return count(withdrawn) >= 1; }, milliseconds(120000))) << text();
     EXPECT_EQ(count(recovered), 0u) << text();
     // Node 1's rebuild never went through: its old pair still serves and no "in service" line names it. Node-scoped on
-    // purpose (run #294): the class B change rebuilt nodes 2 and 3 and the revert rebuilds them back, on their own
+    // purpose: the class B change rebuilt nodes 2 and 3 and the revert rebuilds them back, on their own
     // keepalive threads, so the client-wide rebuilds_done() can move at any time during this test.
     EXPECT_EQ(count(in_service), 0u) << text();
     EXPECT_EQ(r.cl->wire_port(static_cast<std::size_t>(s1)), p);

@@ -2,7 +2,7 @@
 # Runs INSIDE the dev container (tools/dev/run.sh -- tools/ci/pybind_check.sh): the Python-binding tail of
 # tools/ci/build_and_test.sh on its own. Tests the binding against the already built build/dev/client/libmiracache.so,
 # then builds the wheel and runs the round-trip test from the unpacked wheel. tools/ci/full_gate.sh no longer calls it:
-# the devrel lane's build_and_test.sh dev release already runs this same binding + wheel step as part of its tail (R07).
+# the devrel lane's build_and_test.sh dev release already runs this same binding + wheel step as part of its tail.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 dev_lib=build/dev/client/libmiracache.so

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR1: the memory node's live configuration (hot-reload plan decisions 1, 2, 4, 5, 7; review P13, P16, P32, P39).
+// The memory node's live configuration.
 //
 // One key table, C++ only (no Go copy: the controller and mirctl use the node's dry run, POST /v1/bundle?dry_run=1).
 // Source, by mode (never both): bundle mode = `config.cluster.memnode` of the signed bundle, merged key by key with the
@@ -10,11 +10,11 @@
 //   ----------------------------------------  -----  ----------  -------------------------------------------
 //   lease.ttl_s / max_s / put_timeout_s        A      30/300/10   Store::set_limits, PutPath::set_timeouts
 //   ticket.ttl_s                               A      300         TicketTable::set_limits (new tickets)
-//   limits.ticket_max_per_identity             A      computed    TicketTable::set_limits (H07: default_ticket_max)
+//   limits.ticket_max_per_identity             A      computed    TicketTable::set_limits (default_ticket_max)
 //   limits.admit_timeout_s / hello_deadline_s / idle_timeout_s / max_conns_per_principal / max_leases_per_principal
 //                                              A      10/5/300/computed/8192   ServerConfig (read on each use)
 //   store.invalidate_per_s                     A      10          Store::set_limits
-//   store.max_scopes / max_bytes               A      1024 / computed  max_bytes unset (0) = n_segments x segment_bytes of THIS node (K02); the DEFAULT principal policy (P32: max_bytes is the
+//   store.max_scopes / max_bytes               A      1024 / computed  max_bytes unset (0) = n_segments x segment_bytes of THIS node; the DEFAULT principal policy (max_bytes is the
 //                                                     per-principal cap for principals without a bundle quota. It is NOT the
 //                                                     store's reservation: that is n_segments x segment_bytes, STATIC)
 //   store.max_exact_classes_per_owner          A      8           SlabAllocator
@@ -22,7 +22,7 @@
 //   evict.sweep_bytes_per_s / sweep_blocks_per_turn / high_pct / low_pct
 //                                              A      1 GiB/s, 64, 92, 88   Store::set_evict
 //   quota.put_ops_per_s / put_bytes_per_s      A      0 / 0       default policy (token buckets read it on each put)
-//   scrub.enabled / bytes_per_s                A      true, 64 MiB/s  Scrubber::set_rate (SC1; 0 bytes/s = off)
+//   scrub.enabled / bytes_per_s                A      true, 64 MiB/s  Scrubber::set_rate (0 bytes/s = off)
 //   node.drain_ms                              A, node-local     5000   local file only (SIGHUP); in the bundle table: pending
 //   admin.* / telemetry.listen / log.* / audit.*  B, node-local  local file only; in the bundle table: pending
 //
@@ -32,11 +32,11 @@
 // control.*; executor.*; nic.*. In the bundle table a STATIC key rejects the WHOLE table (and the bundle: the dry run
 // says so); on SIGHUP a STATIC key whose value changed rejects the whole dynamic reload and the old snapshot stays.
 //
-// The pre-HR1 flat names store.scope_idle_ttl_s, max_ttl_s, sweep_*, high_pct, low_pct, put_* were never released:
+// The earlier flat names store.scope_idle_ttl_s, max_ttl_s, sweep_*, high_pct, low_pct, put_* were never released:
 // they are STALE-KEY ERRORS that name the new key (no deprecation alias). Unknown keys: an error in the local file
-// (it is the operator's own file), ignored + warned + counted in the bundle table (rolling upgrades, P16).
+// (it is the operator's own file), ignored + warned + counted in the bundle table (rolling upgrades).
 //
-// Applying (P13): parse and validate are pure (admin thread for a bundle, main for SIGHUP); Server::apply_dyn swaps on
+// Applying: parse and validate are pure (admin thread for a bundle, main for SIGHUP); Server::apply_dyn swaps on
 // the store thread between run_once turns. An op uses the values current when it starts; granted leases keep their
 // expiry, begun puts keep their deadline.
 #pragma once
@@ -60,7 +60,7 @@ struct DynConfig {
   Nanos lease_max{std::chrono::seconds(300)};
   Nanos put_timeout{std::chrono::seconds(10)};
   Nanos ticket_ttl{std::chrono::seconds(300)};
-  std::uint32_t ticket_max_per_identity = 0;  // 0 only before Server::create resolves the computed default (H07)
+  std::uint32_t ticket_max_per_identity = 0;  // 0 only before Server::create resolves the computed default
   Nanos admit_timeout{std::chrono::seconds(10)};
   Nanos hello_deadline{std::chrono::seconds(5)};
   Nanos idle_timeout{std::chrono::seconds(300)};
@@ -69,7 +69,7 @@ struct DynConfig {
   // store
   std::uint32_t invalidate_per_s = 10;
   std::uint32_t max_scopes = 1024;
-  std::uint64_t max_bytes = 0;  // 0 only before it is resolved to n_segments x segment_bytes of this node (K02)
+  std::uint64_t max_bytes = 0;  // 0 only before it is resolved to n_segments x segment_bytes of this node
   std::uint32_t max_exact_classes_per_owner = 8;
   // retention / evict / quota
   Nanos idle_ttl{std::chrono::minutes(30)};
@@ -95,7 +95,7 @@ DynConfig dyn_from_server_config(const ServerConfig& c);
 // Writes the class A fields into a ServerConfig (the file parser and the Server both use it).
 void dyn_into_server_config(const DynConfig& d, ServerConfig& c);
 
-// Cross-field and range rules (decision 7). Error context names keys, never values.
+// Cross-field and range rules. Error context names keys, never values.
 Status validate_dyn(const DynConfig& d);
 
 struct DynParse {
@@ -128,15 +128,15 @@ struct SighupPlan {
   DynPtr dyn;
   std::vector<std::string> static_changed;
 };
-// The one rule for store.max_bytes (K02): 0 = computed = n_segments x segment_bytes of THIS node. Resolved in
+// The one rule for store.max_bytes: 0 = computed = n_segments x segment_bytes of THIS node. Resolved in
 // dyn_from_server_config (so Server::create, SIGHUP and bundle mode, which starts from that snapshot, all agree).
 constexpr std::uint64_t backing_bytes(const store::StoreConfig& s) {
   return static_cast<std::uint64_t>(s.segment_bytes) * s.n_segments;
 }
 
 // `conns_default` is the node's computed limits.max_conns_per_principal (0 = keep `current`'s): a file that does not set
-// the key falls back to it; `tickets_default` likewise for limits.ticket_max_per_identity (H07). A changed [[node.rails]]
-// device or subnet is a STATIC change (G04).
+// the key falls back to it; `tickets_default` likewise for limits.ticket_max_per_identity. A changed [[node.rails]]
+// device or subnet is a STATIC change.
 SighupPlan plan_sighup(const NodeConfig& boot, const NodeConfig& fresh, const DynConfig& current, bool bundle_mode,
                        std::uint32_t conns_default = 0, std::uint32_t tickets_default = 0);
 
@@ -146,8 +146,8 @@ constexpr std::uint32_t default_max_conns(std::size_t rails, std::uint32_t fetch
   return static_cast<std::uint32_t>(16 * (rails == 0 ? 1 : rails) * (2 + fetch_qps));
 }
 
-// H07: the default limits.ticket_max_per_identity when the key is not set, sized like default_max_conns: room for 16
-// client sessions of one identity, each holding the G01 ticket inventory on every rail.
+// The default limits.ticket_max_per_identity when the key is not set, sized like default_max_conns: room for 16
+// client sessions of one identity, each holding the ticket inventory on every rail.
 //   - Per (session, rail, class) the client's admin ticket cache holds at most cap(need) = 2 x max(ticket_batch, need)
 //     (AdminTicketSource::want: request = max(batch, need), cap = max(2 x request, max(refill_below, need)), and
 //     refill_below 2 <= 2 x batch). need = 1 for control and ingest, fetch_qps for fetch (clamped to 1..64).

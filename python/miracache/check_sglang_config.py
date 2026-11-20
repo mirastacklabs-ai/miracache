@@ -90,8 +90,7 @@ def problems(extra: Dict[str, Any], page_size: Any, pp_size: Any) -> List[Proble
     if isinstance(pp_size, bool) or not isinstance(pp_size, int):
         out.append(("sglang.args", f"--pp-size must be an integer; got {pp_size!r}"))
     elif pp_size > 1:
-        out.append(("sglang.pp", "SGLang pipeline parallelism (PP>1) is unsupported in v1 "
-                    "(design/03 R29)"))
+        out.append(("sglang.pp", "SGLang pipeline parallelism (PP>1) is unsupported in v1"))
     if page_size is None:
         out.append(("sglang.page_size", f"--page-size is not set (SGLang default 1); use "
                     f"--page-size >= {MIN_PAGE_SIZE} (64 recommended)"))

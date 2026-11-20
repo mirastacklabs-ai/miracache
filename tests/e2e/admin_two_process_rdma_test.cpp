@@ -231,7 +231,7 @@ TEST_P(AdminE2e, ClientWithOnlyAdminPutsAndFetchesThroughTheRealMemnode) {
   }
   const std::string metrics = c.metrics_text();
   EXPECT_NE(metrics.find("miracache_client_ticket_fetch_total{result=\"ok\"} 1"), std::string::npos) << metrics;
-  // B11: the QP attribute readback gauges carry the node identity on both sides.
+  // The QP attribute readback gauges carry the node identity on both sides.
   const std::string node_m = http_get(tel_port, "/metrics");
   std::cerr << "NODE /metrics (miracache_qp_*):\n";
   for (const std::string& m : {node_m, metrics}) {
@@ -246,7 +246,7 @@ TEST_P(AdminE2e, ClientWithOnlyAdminPutsAndFetchesThroughTheRealMemnode) {
   EXPECT_NE(metrics.find("miracache_qp_retry_count{"), std::string::npos);
   EXPECT_NE(metrics.find("role=\"active\""), std::string::npos);
   EXPECT_NE(metrics.find("node_id=\""), std::string::npos);
-  {  // F3 (K08): the client's qp series carry the real node ID (never "unknown") and no unknown series is left exposed.
+  {  // The client's qp series carry the real node ID (never "unknown") and no unknown series is left exposed.
     std::istringstream is(metrics);
     int n = 0;
     for (std::string ln; std::getline(is, ln);)

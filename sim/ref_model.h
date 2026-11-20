@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Reference model for the store simulator (A1.4 S6): what a client may and must see.
+// Reference model for the store simulator: what a client may and must see.
 //
 // The model is a SUPERSET of the store's contents. It adds a key only when PUT_DONE says
 // Committed and removes it only on an explicit INVALIDATE (matching generation), scope or

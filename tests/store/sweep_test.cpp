@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB3b store hooks: drop_before by opened_at (monotonic, incremental, lookups miss at once) and cap-cut
-// convergence (P09: a cut never evicts the whole overage in one call; the rest converges through sweep_step).
+// Store hooks: drop_before by opened_at (monotonic, incremental, lookups miss at once) and cap-cut
+// convergence (a cut never evicts the whole overage in one call; the rest converges through sweep_step).
 #include <memory>
 #include <vector>
 
@@ -214,7 +214,7 @@ TEST(Sweep, Y02LongChainConvergesAndDeadScopesBehindItAreFreed) {
   f.inv();
 }
 
-// Z08: kh() orders keys by their low byte first, so in a 1,000-block chain the leaf (1000) sits ~930 keys into the
+// kh() orders keys by their low byte first, so in a 1,000-block chain the leaf (1000) sits ~930 keys into the
 // scope and, once the tail is being dropped, the next leaf lies more than one scan cap (576 keys) past the cursor,
 // across the wrap. A capped scan that wrapped must not be taken for "no leaf anywhere": every turn still frees the
 // chain tail first, so no block is ever left without its parent.

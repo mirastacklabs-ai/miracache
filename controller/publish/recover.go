@@ -12,8 +12,8 @@ import (
 	"miracache/controller/store"
 )
 
-// Recover rebuilds the store's state from a memory node's bundle.current (`--recover-from`,
-// decision 12): membership (desired nodes by admin address), sec (principals, rbac), config, the
+// Recover rebuilds the store's state from a memory node's bundle.current (`--recover-from`):
+// membership (desired nodes by admin address), sec (principals, rbac), config, the
 // generations and the last envelope. The envelope must verify against trust. It refuses a node
 // that is behind the store. The signing keys are not recoverable and must come from backup.
 func Recover(ctx context.Context, c *NodeClient, trust *bundle.TrustKeys, st *store.Store, admin string, log *slog.Logger) error {

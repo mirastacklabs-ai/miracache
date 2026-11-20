@@ -34,7 +34,7 @@ constexpr std::uint64_t kMinSubpool = 1ull << 20;
 constexpr std::uint64_t kMaxSubpool = 64ull << 30;
 constexpr std::uint64_t kSubpoolAlign = 4096;
 constexpr std::int64_t kMinWorkers = 1, kMaxWorkers = 64;
-constexpr std::size_t kMaxRails = 4;  // RL2 decision 1: a rail = (device, port, IP), at most 4 per node (the wire carries 4)
+constexpr std::size_t kMaxRails = 4;  // A rail = (device, port, IP), at most 4 per node (the wire carries 4)
 
 Error bad(const char* ctx) { return Error{ErrorCode::InvalidArgument, ctx}; }
 
@@ -110,7 +110,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
     for (auto&& el : *arr) {
       const toml::table& t = *el.as_table();
       static constexpr const char* kNode[] = {"rails", "admin", "identity", "weight", "zone"};
-      // Plan 2C: the ID is the memory node's own (random, in its superblock); the client learns it from HELLO_ACK.
+      // The ID is the memory node's own (random, in its superblock); the client learns it from HELLO_ACK.
       if (t.contains("id")) return bad("config: node id was removed; node IDs are assigned automatically");
       if (auto* e = unknown_key(t, kNode)) return bad(e);
       NodeConfig nc;
@@ -154,7 +154,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
         if (nc.admin.empty()) return bad("config: nodes.identity needs nodes.admin");
         nc.identity = std::move(*s);
       }
-      // A09: without a pinned identity any serverAuth cert under the lab CA would pass as the admin server.
+      // Without a pinned identity any serverAuth cert under the lab CA would pass as the admin server.
       if (!nc.admin.empty() && nc.identity.empty()) return bad("config: nodes.identity is required when nodes.admin is set");
       cfg.nodes.push_back(std::move(nc));
     }
@@ -172,7 +172,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
       if (!s || s->empty()) return bad("config: fabric.profiles_file must be a non-empty string");
       cfg.profiles_file = std::move(*s);
     }
-    // A3.3 operating point keys: a set key beats the NIC profile.
+    // Operating point keys: a set key beats the NIC profile.
     auto opt_int = [&](const char* key, std::int64_t lo, std::int64_t hi, auto& out, const char* ctx) -> const char* {
       if (auto* p = t->get(key)) {
         if (!p->is_integer()) return ctx;
@@ -222,7 +222,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
     if (auto* p = t->get("keepalive_ms")) {
       if (!p->is_integer()) return bad("config: fabric.keepalive_ms must be an integer");
       std::int64_t v = p->as_integer()->get();
-      // R03: the keepalive thread also runs the reconnect; without it a dropped session never heals.
+      // The keepalive thread also runs the reconnect; without it a dropped session never heals.
       if (v == 0) return bad("config: fabric.keepalive_ms = 0 is not allowed for a wire client (it drives PING and reconnect); use 10..600000");
       if (v < 10 || v > 600000) return bad("config: fabric.keepalive_ms must be 10..600000");
       cfg.keepalive_ms = static_cast<std::uint32_t>(v);
@@ -238,7 +238,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
       if (!s) return bad("config: fabric.device must be a string");
       cfg.device = std::move(*s);
     }
-    // RL2 decision 5: fabric.devices = [{device, subnet}, ...] (1..4, STATIC). The legacy fabric.device is one device
+    // fabric.devices = [{device, subnet}, ...] (1..4, STATIC). The legacy fabric.device is one device
     // with subnet "" (both together are a config error: one home per value).
     if (auto* p = t->get("devices")) {
       const toml::array* a = p->as_array();
@@ -262,7 +262,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
         if (!seen.insert(ld.device).second) return bad("config: duplicate fabric.devices[].device");
         cfg.devices.push_back(std::move(ld));
       }
-      // H01: only the first device without a subnet (the wildcard) is ever paired; a second one would sit unused.
+      // Only the first device without a subnet (the wildcard) is ever paired; a second one would sit unused.
       std::size_t wildcards = 0;
       for (const auto& ld : cfg.devices) wildcards += ld.subnet.empty() ? 1 : 0;
       if (wildcards > 1)
@@ -374,7 +374,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
     for (const char* e : {path("cert", cfg.tls_cert), path("key", cfg.tls_key), path("ca", cfg.tls_ca)})
       if (e) return bad(e);
   }
-  // [control] (MB5, bundle mode)
+  // [control] (bundle mode)
   if (auto* n = root.get("control")) {
     const toml::table* t = n->as_table();
     if (!t) return bad("config: [control] must be a table");
@@ -416,7 +416,7 @@ Expected<ClientConfig> parse_validate(std::string_view text, bool check_fs) {
   if (any_admin && (cfg.tls_cert.empty() || cfg.tls_key.empty() || cfg.tls_ca.empty()))
     return bad("config: nodes.admin needs tls.cert, tls.key and tls.ca");
 
-  // Bundle mode (MB5): membership comes from the signed bundle, so the static lab inputs are errors.
+  // Bundle mode: membership comes from the signed bundle, so the static lab inputs are errors.
   if (cfg.control) {
     if (!cfg.nodes.empty()) return bad("config: [control] and [[nodes]] are mutually exclusive");
     if (cfg.static_membership) return bad("config: [control] and lab.static_membership = true are mutually exclusive");

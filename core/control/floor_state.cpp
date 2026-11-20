@@ -133,7 +133,7 @@ Expected<Verdict, BundleError> check_against_floor(const Floor& floor, const Bun
     if (gen == floor.generation && b.body_hash != floor.body_hash) {
       return BundleError{Reject::EqualGeneration, "same generation, different body hash"};
     }
-    // W07: a new sec needs a new generation (a poller with after=G would never fetch it).
+    // A new sec needs a new generation (a poller with after=G would never fetch it).
     if (gen == floor.generation && b.sec.sec_generation > floor.sec_generation) {
       return BundleError{Reject::EqualGeneration, "same generation and body, higher sec_generation: bump the generation"};
     }
@@ -225,7 +225,7 @@ Expected<Floor, Error> FloorState::load() const {
 // tmp + fsync + rename + directory fsync; the caller holds the exclusive lock.
 static Status write_floor_file(const std::string& dir, const Floor& f) {
   const std::string tmp = dir + "/bundle-floor.tmp";
-  // W08: a stale or planted tmp (file or symlink) is unlinked first and never followed.
+  // A stale or planted tmp (file or symlink) is unlinked first and never followed.
   if (::unlink(tmp.c_str()) != 0 && errno != ENOENT) return io("floor: cannot remove a stale temp file");
   Fd out(::open(tmp.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
   if (out.fd < 0) return io("floor: cannot create the temp file");
@@ -256,7 +256,7 @@ Expected<Verdict, CommitError> FloorState::commit(const BundleView& b, std::uint
     if (!cur) return CommitError(cur.error());
     f = std::move(cur.value());
   }
-  // W06: the check and the write are one step under the exclusive lock; the loser learns it lost.
+  // The check and the write are one step under the exclusive lock; the loser learns it lost.
   auto verdict = check_against_floor(f, b, pinned_min_sec_generation);
   if (!verdict) return CommitError(verdict.error());
   if (verdict.value() == Verdict::Replace) return Verdict::Replace;

@@ -49,7 +49,7 @@ class WakeFd {
     return ::poll(p, fabric_fd >= 0 ? 2 : 1, timeout_ms);
   }
 
-  // RL1: several fabrics (one per device): waits on the eventfd and every fabric fd >= 0 (at most 7 of them).
+  // several fabrics (one per device): waits on the eventfd and every fabric fd >= 0 (at most 7 of them).
   int wait(const std::vector<int>& fabric_fds, int timeout_ms) const {
     ::pollfd p[8] = {{fd_, POLLIN, 0}};
     nfds_t n = 1;

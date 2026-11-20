@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB4 scenario: three real memory-node Servers over SimFabric, a controller that walks them through joins, drains,
+// Membership scenario: three real memory-node Servers over SimFabric, a controller that walks them through joins, drains,
 // read-only, removals, failures and re-adds (epoch + 1 on every view change, none at leave), applying each bundle to
 // the nodes in a random order with random lag, and a client that sends PUT_BEGINs and LOOKUPs at random nodes with
 // frame epochs that are right, behind or ahead. An independent oracle (owner_set over view_from_bundle, as the client
 // computes it) predicts every reply: StaleEpoch (and its retry), Draining, SKIP, accept. Checked on every reply: the
 // node's epoch and bundle generation stamp. After every step: Server::check_invariants (RootPutAtReplica,
 // NoPutOnReadOnly ghosts). A node that applies a bundle without itself must send exactly one GOAWAY; a removed node
-// that is listed again must accept roots again (P08). R = 1 and R = 2.
+// that is listed again must accept roots again. R = 1 and R = 2.
 #include <algorithm>
 #include <array>
 #include <cstring>

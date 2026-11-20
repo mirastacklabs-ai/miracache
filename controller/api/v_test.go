@@ -8,7 +8,7 @@ import (
 	"miracache/controller/store"
 )
 
-// V03: a new second for the same key before the flush must not lose the unflushed window.
+// A new second for the same key before the flush must not lose the unflushed window.
 func TestCoalescerKeepsUnflushedWindow(t *testing.T) {
 	c := newCoalescer()
 	e := audit.Entry{Actor: "spiffe://x", Action: "api.call", Result: "denied"}
@@ -47,7 +47,7 @@ func (r *rig) isFailed(admin string) bool {
 	return false
 }
 
-// V04: operator actions clear the failed record, and forget clears it on request.
+// Operator actions clear the failed record, and forget clears it on request.
 func TestOperatorActionsClearFailedRecords(t *testing.T) {
 	r := newRig(t, 3, 2)
 	r.seedPublish(cfg(1, ""))
@@ -78,7 +78,7 @@ func TestOperatorActionsClearFailedRecords(t *testing.T) {
 	}
 }
 
-// V15: the drain start is stamped on a move from active to draining or readonly.
+// The drain start is stamped on a move from active to draining or readonly.
 func TestDrainSinceStampedForReadonlyToo(t *testing.T) {
 	r := newRig(t, 3, 3)
 	r.seedPublish(cfg(1, ""))
@@ -91,7 +91,7 @@ func TestDrainSinceStampedForReadonlyToo(t *testing.T) {
 	}
 }
 
-// V16: the API's own report storage follows the same cap policy (429, stale ones make room).
+// The API's own report storage follows the same cap policy (429, stale ones make room).
 func TestReportCap429(t *testing.T) {
 	r := newRig(t, 1, 1)
 	r.srv.cfg.MaxReporters = 2

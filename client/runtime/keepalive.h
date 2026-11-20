@@ -56,7 +56,7 @@ class KeepaliveThread {
     std::lock_guard lk(mu_);
     next_ms_ = ms;
   }
-  // HR2: the regular period from the next wait on (0 is ignored: a started thread always has a period).
+  // The regular period from the next wait on (0 is ignored: a started thread always has a period).
   void set_period(unsigned ms) {
     if (ms == 0) return;
     std::lock_guard lk(mu_);

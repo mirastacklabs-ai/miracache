@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Client-push put path (A1.4 S4b; spec 8.2 two-phase put, 8.3 idempotent puts).
+// Client-push put path (spec 8.2 two-phase put, 8.3 idempotent puts).
 //
 //   put_begin   scope check (implicit open only at the chain root, rev 5.1), SKIP for keys
 //               already COMMITTED, allocation, (Writing, gen) in state_gen, write MR(s).
@@ -7,7 +7,7 @@
 //               extent on the Executor) -> DONE (header written, then commit_block).
 //   put_cancel / timeout / endpoint down: fence, free.
 // A CQE is not placement: nothing is trusted until the fence and the digest. Only the
-// endpoint that did PUT_BEGIN may commit or cancel. Typed API; S7 maps it to frames.
+// endpoint that did PUT_BEGIN may commit or cancel. Typed API; the server maps it to frames.
 // Batches take at most SlabAllocator::kMaxBatch accepted keys in v0 (larger: REFUSED,
 // retry 0). Single-threaded (store thread).
 #pragma once
@@ -42,7 +42,7 @@ struct PutBeginReq {
   PrincipalId principal = 0;
   ScopeId scope{};
   std::vector<PutKey> keys;  // 1..64
-  std::uint32_t device = 0;  // RL1: device (fabric index) of the ingest rail the put began on; its write MRs go there
+  std::uint32_t device = 0;  // device (fabric index) of the ingest rail the put began on; its write MRs go there
 };
 
 enum class BeginStatus : std::uint8_t { Ok = 0, Refused = 1, Malformed = 2 };
@@ -55,34 +55,34 @@ struct BeginEntry {
   std::uint8_t mr_index = 0;
   std::uint64_t offset = 0;  // from the MR's addr
 };
-// Why a Refused PUT_BEGIN is a per-key SKIP and not a failure (membership plan decision 8): the node answered
+// Why a Refused PUT_BEGIN is a per-key SKIP and not a failure: the node answered
 // StaleEpoch or Draining. Only the wire port sets it; the client counts miracache_client_put_skipped_total{reason}.
 enum class BeginSkip : std::uint8_t { None = 0, StaleEpoch = 1, Draining = 2 };
 struct PutBeginAck {
   PutId put_id = 0;  // 0 when nothing was accepted
   BeginStatus status = BeginStatus::Ok;
   BeginSkip skip = BeginSkip::None;  // Refused only
-  std::uint32_t retry_after_ms = 0;  // Refused: 0 = do not retry (D21)
+  std::uint32_t retry_after_ms = 0;  // Refused: 0 = do not retry
   std::vector<MrRef> mr;
   std::vector<BeginEntry> entries;  // one per requested key
 };
 
 struct CommitEntry {
-  std::uint16_t key_index = 0;  // index into the PUT_BEGIN keys; strictly ascending (D6)
+  std::uint16_t key_index = 0;  // index into the PUT_BEGIN keys; strictly ascending
   std::uint32_t crc32c = 0;
-  std::uint64_t stored_len = 0;  // must equal the PUT_BEGIN value (D7)
+  std::uint64_t stored_len = 0;  // must equal the PUT_BEGIN value
 };
 struct PutCommitReq {
   PutId put_id = 0;
   std::vector<CommitEntry> e;  // exactly the accepted keys
 };
 
-// WrongEndpoint is no longer returned (Q16): another endpoint's put id answers UnknownPut so
+// WrongEndpoint is no longer returned: another endpoint's put id answers UnknownPut so
 // put ids of other endpoints are not an oracle. The value is kept for compatibility.
 enum class CommitStatus : std::uint8_t { Ok, Malformed, UnknownPut, WrongEndpoint };
 struct PutDoneResult {
   PutId put_id = 0;
-  fabric::EndpointId ep = 0;  // endpoint that owns the put: S7 routes PUT_DONE (also for timeouts)
+  fabric::EndpointId ep = 0;  // endpoint that owns the put: the server routes PUT_DONE (also for timeouts)
   CommitStatus status = CommitStatus::Ok;
   std::vector<proto::DoneEntry> e;  // per accepted key
 };
@@ -94,7 +94,7 @@ class PutPath {
   PutPath(Store& store, SlabAllocator& slab, MrManager& mrs, Arena& arena, const Clock& clock, Executor& exec,
           PutDoneFn notify = {});
 
-  // HR1: the live put timeout; a put already begun keeps its deadline. Store thread.
+  // The live put timeout; a put already begun keeps its deadline. Store thread.
   void set_timeouts(Nanos put_timeout) { put_timeout_ = put_timeout; }
   Nanos put_timeout() const { return put_timeout_; }
   // Optional counters (null = none); the pointee must outlive the put path.
@@ -131,7 +131,7 @@ class PutPath {
     bool aborted = false;  // Digesting: free instead of commit
     Nanos begun{0};        // when PUT_BEGIN ran, for the commit-latency histogram
     bool counted = false;  // every accepted key already counted committed/aborted
-    std::uint64_t charged = 0;  // in-flight bytes reserved on the principal (Q08)
+    std::uint64_t charged = 0;  // in-flight bytes reserved on the principal
     PutDoneFn done;
   };
   struct Limbo {
@@ -166,7 +166,7 @@ class PutPath {
   PutId next_id_ = 1;
   std::map<PutId, Rec> puts_;
   std::set<InflightKey> inflight_;
-  std::map<fabric::EndpointId, std::uint32_t> ep_puts_;  // live puts per endpoint (Q08)
+  std::map<fabric::EndpointId, std::uint32_t> ep_puts_;  // live puts per endpoint
   std::vector<Limbo> limbo_;
 };
 

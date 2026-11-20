@@ -6,6 +6,18 @@ alpha; until a stable release, any version may change formats, configuration or 
 
 ## [Unreleased]
 
+## [alpha-0.3.0] - 2026-11-20
+
+### Changed
+- Versions: CMake, the Python package and the model crate are `0.3.0`, and a release tag must match the CMake
+  version (fixes the 0.2.0 known issue).
+- Lab and example configs read the client secret from `/etc/miracache/keys/secret`, the path the docs use.
+- Comments no longer cite internal review and planning notes.
+- A backfill of an older release's images no longer moves the `alpha` tag.
+
+### Added
+- `deploy/docker/README.md` and `docs/operations.md`: published images, how to run and verify them (cosign 3.x).
+
 ## [alpha-0.2.3] - 2026-11-20
 
 ### Fixed

@@ -1,4 +1,4 @@
-// Package api is the controller's HTTPS API (membership plan decisions 5, 12, 13; MB8b; RB3).
+// Package api is the controller's HTTPS API.
 //
 // Transport: TLS 1.3 with mTLS; the caller's identity is the first spiffe:// URI SAN of its client
 // certificate (none: 403). Authorization is deny by default; the code table is routeTable
@@ -54,7 +54,7 @@ type Auditor interface {
 	Head() string
 }
 
-// Membership is the failure detector and drain engine (controller/membership, MB9). Optional: with
+// Membership is the failure detector and drain engine (controller/membership). Optional: with
 // none, client reports are only stored and member remove is not gated.
 type Membership interface {
 	// Submit attributes a client report to the caller's mTLS identity (never to a field in the
@@ -74,8 +74,8 @@ type Membership interface {
 type Config struct {
 	Store *store.Store
 	Pub   Publisher
-	Mem   Membership // optional (MB9)
-	// MaxReporters and ReportFresh are the one report-storage policy (V16): at most MaxReporters
+	Mem   Membership // optional
+	// MaxReporters and ReportFresh are the one report-storage policy: at most MaxReporters
 	// identities (default 1024); when full, reports older than ReportFresh (default 6 s) are dropped
 	// first, then a new identity is refused with 429. The same values go to membership.Config.
 	MaxReporters int
@@ -360,7 +360,7 @@ func (s *Server) postMembers(w http.ResponseWriter, r *http.Request, id string) 
 		if weight == 0 {
 			weight = 1
 		}
-		ch = publish.Change{Reason: "member add " + q.Admin, Edit: func(next *store.State) { next.Failed = dropFailed(next.Failed, q.Admin) }, // V04
+		ch = publish.Change{Reason: "member add " + q.Admin, Edit: func(next *store.State) { next.Failed = dropFailed(next.Failed, q.Admin) },
 			Join: &store.DesiredNode{Admin: q.Admin, Weight: weight, Zone: q.Zone, State: "active"}}
 		detail = append(detail, audit.Field{Key: "weight", Val: weight})
 	case "set":
@@ -374,7 +374,7 @@ func (s *Server) postMembers(w http.ResponseWriter, r *http.Request, id string) 
 					continue
 				}
 				if (q.State == "draining" || q.State == "readonly") && next.Nodes[i].State == "active" {
-					// The drain timers (MB9) run from this stamp, kept in the store.
+					// The drain timers run from this stamp, kept in the store.
 					next.Nodes[i].DrainSince = s.cfg.Now().UTC().Format(time.RFC3339)
 				}
 				if q.State == "active" {
@@ -410,7 +410,7 @@ func (s *Server) postMembers(w http.ResponseWriter, r *http.Request, id string) 
 			}
 		}
 		ch = publish.Change{Reason: "member remove " + q.Admin, Edit: func(next *store.State) {
-			next.Failed = dropFailed(next.Failed, q.Admin) // V04: an operator removal must not auto-rejoin
+			next.Failed = dropFailed(next.Failed, q.Admin) // an operator removal must not auto-rejoin
 			kept := next.Nodes[:0]
 			for _, n := range next.Nodes {
 				if n.Admin != q.Admin {
@@ -421,7 +421,7 @@ func (s *Server) postMembers(w http.ResponseWriter, r *http.Request, id string) 
 		}}
 	case "forget":
 		// A node the failure detector removed: stop counting it against the removal budget and never
-		// auto-rejoin it (MB10 mirctl node forget).
+		// auto-rejoin it (mirctl node forget).
 		inFailed := false
 		for _, f := range st.Failed {
 			inFailed = inFailed || f.Admin == q.Admin
@@ -434,7 +434,7 @@ func (s *Server) postMembers(w http.ResponseWriter, r *http.Request, id string) 
 			next.Failed = dropFailed(next.Failed, q.Admin)
 		}}
 	case "confirm_remove":
-		// A node held in pending_removal by static stability (decision 11); mirctl node confirm-remove.
+		// A node held in pending_removal by static stability; mirctl node confirm-remove.
 		if s.cfg.Mem == nil {
 			writeErr(w, http.StatusNotImplemented, "no_membership", "failure detection is not running")
 			return
@@ -528,7 +528,7 @@ func ConfigFromBody(b *bundle.Body) (string, error) {
 	return buf.String(), nil
 }
 
-// postRollback restores config.* from a stored body and nothing else (decision 13, P01): the edit
+// postRollback restores config.* from a stored body and nothing else: the edit
 // below touches ConfigTOML only, so membership, principals, rbac, drop_before and the epoch come
 // from the current state and the publisher derives the epoch itself (receivers also refuse a
 // lower one).

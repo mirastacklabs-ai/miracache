@@ -13,7 +13,7 @@ import (
 	"miracache/controller/store"
 )
 
-// The sec-changing routes (RB3, membership plan Q13). Each one is a publish: the controller holds
+// The sec-changing routes. Each one is a publish: the controller holds
 // the security key online in v1, builds the new sec from the store, and a publish-only key could
 // not have signed it. Every change is audited with the caller's roles.
 

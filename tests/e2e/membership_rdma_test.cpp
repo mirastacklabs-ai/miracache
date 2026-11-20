@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB11: membership end to end on rxe0 / siw0 (label `rdma`). The M2 exit: add or drain a memory node under load with
+// Membership end to end on rxe0 / siw0 (label `rdma`). The exit criterion: add or drain a memory node under load with
 // 0 failed operations.
 //
 // Real processes: mira-memnode x 3-4 in BUNDLE mode ([control] trust_keys, state_dir, admin mTLS), the real Go
 // mira-controller (publishes, reconcile loop, API, failure detector) and mirctl (first publish and the operator
 // commands node add / node drain), plus one in-process C++ Client opened in bundle mode ([control] endpoints /
 // controller / trust_keys / state_dir), so the test also covers the bundle-mode open on real hardware and the
-// client reports (MB7) to the controller. Four traffic threads (put / lookup / fetch, versioned payloads) run through
+// client reports to the controller. Four traffic threads (put / lookup / fetch, versioned payloads) run through
 // the oracle in tests/util/oracle.h.
 //
 // How the Go binaries are driven: the controller is a long-running helper PROCESS (it has to be SIGKILLed mid-push),
@@ -17,8 +17,8 @@
 // Cases (a test each):
 //   JoinFourthNode        1. 3 nodes, R=2, add a 4th under traffic            STRICT oracle
 //   DrainToRemoval        2. drain one node through every phase to removal    STRICT oracle
-//   ControllerKilledMidPush 3. SIGKILL the controller mid-push (P06): a node lags; clients push their envelope   FAULT
-//   ControllerKilledMidJoin 4. SIGKILL the controller mid-join (Q05): the new node acked, the others lag        FAULT
+//   ControllerKilledMidPush 3. SIGKILL the controller mid-push: a node lags; clients push their envelope   FAULT
+//   ControllerKilledMidJoin 4. SIGKILL the controller mid-join: the new node acked, the others lag        FAULT
 //   ReplicasAcrossZones   5. R=2 over two zones: each scope has one replica per zone     STRICT oracle
 //
 // Making a node lag (cases 3 and 4): the node is SIGKILLed first (a connection to a stopped process would still buffer
@@ -596,7 +596,7 @@ class MembershipE2e : public ::testing::TestWithParam<std::string> {
   // p50 / p99 per op kind over ops that STARTED in [from_us, to_us).
   void phase_report(const std::string& label, std::int64_t from_us, std::int64_t to_us) {
     std::ostringstream o;
-    o << "[MB11] " << label << " (" << static_cast<double>(to_us - from_us) / 1e6 << " s):";
+    o << "[membership e2e] " << label << " (" << static_cast<double>(to_us - from_us) / 1e6 << " s):";
     std::size_t skipped_puts = 0;
     for (int op = 0; op < 3; ++op) {
       std::vector<std::int64_t> lat;
@@ -638,7 +638,7 @@ class MembershipE2e : public ::testing::TestWithParam<std::string> {
   void finish(OracleMode mode, const char* what) {
     stop_traffic();
     const std::string rep = oracle_->report();
-    std::fprintf(stderr, "[MB11] %s %s excused_ops=%llu\n", what, rep.c_str(), static_cast<unsigned long long>(excused_ops_.load()));
+    std::fprintf(stderr, "[membership e2e] %s %s excused_ops=%llu\n", what, rep.c_str(), static_cast<unsigned long long>(excused_ops_.load()));
     EXPECT_EQ(oracle_->failed(), 0u) << rep << (mode == OracleMode::Strict ? " (strict)" : " (fault)");
     std::uint64_t hangs = 0;
     for (int t = 0; t < kThreads; ++t)
@@ -699,15 +699,15 @@ TEST_P(MembershipE2e, JoinFourthNode) {
   phase_report("case1 during add (mirctl start .. client on new epoch)", t_cmd, t_done);
   phase_report("case1 after add", t_done + 1'000'000, t_end);
   const double skip_s = skip_window_s(t_cmd, t_done + 1'000'000);
-  std::fprintf(stderr, "[MB11] case1 stale-epoch skip window %.2f s; generation %ld -> %ld; epoch %u -> %u\n", skip_s, g0, gen(0), e0,
+  std::fprintf(stderr, "[membership e2e] case1 stale-epoch skip window %.2f s; generation %ld -> %ld; epoch %u -> %u\n", skip_s, g0, gen(0), e0,
                cl_->membership_epoch());
   EXPECT_LE(skip_s, 5.0) << "puts skipped for longer than a join may take (plan: at most 2 s)";
   for (int i = 0; i < 4; ++i) EXPECT_EQ(gen(i), gen(0)) << "node " << i + 1 << dump_gens();
   EXPECT_GT(scopes_open(3), 0) << "the new node holds nothing after 6 s of traffic";
   const std::string cm = cl_->metrics_text();
-  std::fprintf(stderr, "[MB11] case1 client put_skipped_total=%g; controller holds reports from %ld client identities\n",
+  std::fprintf(stderr, "[membership e2e] case1 client put_skipped_total=%g; controller holds reports from %ld client identities\n",
                family_sum(cm, "miracache_client_put_skipped_total"), controller_reports());
-  EXPECT_GE(controller_reports(), 1) << "MB7: the client sent no report to the controller";
+  EXPECT_GE(controller_reports(), 1) << "the client sent no report to the controller";
   finish(OracleMode::Strict, "case1");
 }
 
@@ -724,15 +724,15 @@ TEST_P(MembershipE2e, DrainToRemoval) {
   // Draining -> readonly (3 s) -> removed (<= 12 s, or earlier when empty): the node's own bundle generation is the witness.
   ASSERT_TRUE(until([&] { return gen(0) >= g0 + 3; }, seconds(60), 250)) << "drain did not run to the end:" << dump_gens();
   const std::int64_t t_removed = now_us();
-  std::fprintf(stderr, "[MB11] case2 generations %ld (before) -> %ld (draining) -> %ld (removed)\n", g0, g_drain, gen(0));
+  std::fprintf(stderr, "[membership e2e] case2 generations %ld (before) -> %ld (draining) -> %ld (removed)\n", g0, g_drain, gen(0));
   ASSERT_TRUE(until([&] { return cl_->node_count() <= 4; }, seconds(5)));
   sleep_ms(4000);
   const std::int64_t t_end = now_us();
   phase_report("case2 before drain", t_base0, t_cmd);
   phase_report("case2 draining + readonly", t_cmd, t_removed);
   phase_report("case2 after removal", t_removed + 1'000'000, t_end);
-  std::fprintf(stderr, "[MB11] case2 stale-epoch skip window around the drain epoch %.2f s\n", skip_window_s(t_cmd, t_epoch + 1'000'000));
-  // The operator stops the removed node: SIGTERM must exit 0 (decision 10.4).
+  std::fprintf(stderr, "[membership e2e] case2 stale-epoch skip window around the drain epoch %.2f s\n", skip_window_s(t_cmd, t_epoch + 1'000'000));
+  // The operator stops the removed node: SIGTERM must exit 0 (the shutdown contract).
   kill_proc(node_[1], SIGTERM);
   EXPECT_TRUE(last_exit_ok_) << "the removed node did not exit 0 on SIGTERM";
   sleep_ms(3000);
@@ -759,22 +759,22 @@ TEST_P(MembershipE2e, ControllerKilledMidPush) {
   ASSERT_TRUE(until([&] { return gen(0) > g0; }, seconds(20), 2)) << "the controller never pushed the readonly step";
   kill_proc(ctl_, SIGKILL);  // mid-push: node 3 was unreachable, the others have the step
   ASSERT_TRUE(start_node(2));
-  // The lag is read from node 3's own start-up line, not its live gauge: the client's catch-up push (decision 8: every reply
+  // The lag is read from node 3's own start-up line, not its live gauge: the client's catch-up push (every reply
   // frame stamps the node's generation, and the first reply after the reconnect shows node 3 behind) may land within
-  // milliseconds of "listening", before the test's first metrics sample (run #308: gauge already 3 of 3 at the sample).
+  // milliseconds of "listening", before the test's first metrics sample (gauge already 3 of 3 at the sample).
   const long g_lag = start_gen(2);
   const long g_new = gen(0);
-  std::fprintf(stderr, "[MB11] case3 controller killed at generation %ld; node 3 restarted from bundle.current at %ld (cluster %ld, node 3 now %ld)\n", g0,
+  std::fprintf(stderr, "[membership e2e] case3 controller killed at generation %ld; node 3 restarted from bundle.current at %ld (cluster %ld, node 3 now %ld)\n", g0,
                g_lag, g_new, gen(2));
   // Node 3 was dead for the whole readonly publish (the controller found it unreachable), so its bundle.current is the drain
   // generation exactly, and that is behind the cluster.
   EXPECT_EQ(g_lag, g0) << "a restarted node must serve from its bundle.current: " << slurp(tag("memnode", 3, starts_[2]));
   EXPECT_LT(g_lag, g_new) << "node 3 should lag: " << dump_gens();
-  // No controller: clients push their envelope to the lagging node (P06).
+  // No controller: clients push their envelope to the lagging node.
   const auto t_wait0 = Clk::now();
   ASSERT_TRUE(until([&] { return gen(2) >= g_new; }, seconds(30), 50)) << "the lagging node was not caught up by the clients:" << dump_gens();
   const double catch_up = std::chrono::duration<double>(Clk::now() - t_wait0).count();
-  std::fprintf(stderr, "[MB11] case3 lagging node caught up by the client push in %.2f s with no controller (controller reconcile period 5 s)\n", catch_up);
+  std::fprintf(stderr, "[membership e2e] case3 lagging node caught up by the client push in %.2f s with no controller (controller reconcile period 5 s)\n", catch_up);
   sleep_ms(3000);  // the restarted node 3 reconnects
   const std::int64_t t_back = now_us();
   fault_on_ = false;
@@ -787,7 +787,7 @@ TEST_P(MembershipE2e, ControllerKilledMidPush) {
   ASSERT_TRUE(start_controller());
   ASSERT_TRUE(until([&] { return gen(0) >= g_new && gen(1) >= g_new && gen(2) >= g_new; }, seconds(30))) << dump_gens();
   const std::uint32_t e1 = cl_->membership_epoch();
-  std::fprintf(stderr, "[MB11] case3 after the controller restart:%s; client epoch %u -> %u\n", dump_gens().c_str(), e0, e1);
+  std::fprintf(stderr, "[membership e2e] case3 after the controller restart:%s; client epoch %u -> %u\n", dump_gens().c_str(), e0, e1);
   EXPECT_GT(e1, e0) << "the client never adopted the new epoch";
   sleep_ms(2000);
   finish(OracleMode::Fault, "case3");
@@ -800,7 +800,7 @@ TEST_P(MembershipE2e, ControllerKilledMidJoin) {
   const long g0 = gen(0);
   const std::int64_t t_base0 = now_us() - 2'500'000, t_fault = now_us();
   // A join needs every node reachable (an unreachable node aborts the publish), so no node is down beforehand. The new node
-  // acks first (Q05); the instant it holds the join generation the controller is SIGKILLed and node 3 with it (its copy of the
+  // acks first; the instant it holds the join generation the controller is SIGKILLed and node 3 with it (its copy of the
   // push, if not applied yet, dies with the process), then node 3 restarts on its state_dir. Whether the others had the push
   // already is a race (the controller fans out in parallel within milliseconds); the test reports which nodes lagged.
   pid_t add = spawn(mirctl_node("add", 3), dir_ + "/add.log");
@@ -811,20 +811,20 @@ TEST_P(MembershipE2e, ControllerKilledMidJoin) {
   kill_node(2, SIGKILL);
   (void)wait_exit(add, seconds(5));
   ASSERT_TRUE(start_node(2));
-  std::fprintf(stderr, "[MB11] case4 node 3 restarted from bundle.current at generation %ld (cluster %ld)\n", gen(2), gen(3));
+  std::fprintf(stderr, "[membership e2e] case4 node 3 restarted from bundle.current at generation %ld (cluster %ld)\n", gen(2), gen(3));
   const long g_new = gen(3);
-  std::fprintf(stderr, "[MB11] case4 controller killed after the new node acked generation %ld (was %ld); at that point:%s\n", g_new, g0, dump_gens().c_str());
+  std::fprintf(stderr, "[membership e2e] case4 controller killed after the new node acked generation %ld (was %ld); at that point:%s\n", g_new, g0, dump_gens().c_str());
   const auto t_wait0 = Clk::now();
   auto all_at = [&] { return gen(0) >= g_new && gen(1) >= g_new && gen(2) >= g_new; };
   // If the race left every old node at G-1 and only the new node at G, no client has a source for G (their endpoints are the old
-  // nodes), so the clients cannot push it; the restarted controller's reconcile loop (5 s) is what finishes the join (Q05).
+  // nodes), so the clients cannot push it; the restarted controller's reconcile loop (5 s) is what finishes the join.
   const bool by_clients = until(all_at, seconds(8), 50);
-  std::fprintf(stderr, "[MB11] case4 laggers caught up by client push without a controller: %s (%.2f s)\n", by_clients ? "yes" : "no, the controller finishes it",
+  std::fprintf(stderr, "[membership e2e] case4 laggers caught up by client push without a controller: %s (%.2f s)\n", by_clients ? "yes" : "no, the controller finishes it",
                std::chrono::duration<double>(Clk::now() - t_wait0).count());
   if (!by_clients) {
     ASSERT_TRUE(start_controller());
     ASSERT_TRUE(until(all_at, seconds(30), 50)) << "the restarted controller did not finish the join:" << dump_gens();
-    std::fprintf(stderr, "[MB11] case4 restarted controller finished the join after %.2f s\n", std::chrono::duration<double>(Clk::now() - t_wait0).count());
+    std::fprintf(stderr, "[membership e2e] case4 restarted controller finished the join after %.2f s\n", std::chrono::duration<double>(Clk::now() - t_wait0).count());
   }
   ASSERT_TRUE(until([&] { return cl_->membership_epoch() > e0 && cl_->node_count() == 4; }, seconds(30))) << "client never adopted the join";
   sleep_ms(3000);  // the restarted node 3 reconnects
@@ -841,7 +841,7 @@ TEST_P(MembershipE2e, ControllerKilledMidJoin) {
   if (ctl_ <= 0) ASSERT_TRUE(start_controller());
   sleep_ms(7000);  // one reconcile period (5 s) plus margin
   const std::string clog = slurp(tag("controller", 0, ctl_starts_));
-  std::fprintf(stderr, "[MB11] case4 after the controller restart:%s; controller log lines about the join: %s\n", dump_gens().c_str(),
+  std::fprintf(stderr, "[membership e2e] case4 after the controller restart:%s; controller log lines about the join: %s\n", dump_gens().c_str(),
                clog.find("alert") != std::string::npos || clog.find("ALERT") != std::string::npos ? "ALERT present" : "no alert");
   for (int i = 1; i < 4; ++i) EXPECT_GE(gen(i), g_new) << "node " << i + 1;
   EXPECT_EQ(cl_->node_count(), 4u);
@@ -858,7 +858,7 @@ TEST_P(MembershipE2e, ReplicasAcrossZones) {
   // Every scope has one replica per zone: a zone holds each scope at most once, so its open-scope total is <= the scopes stored
   // and (replicas are best effort) close to it.
   long za = scopes_open(0) + scopes_open(1), zb = scopes_open(2) + scopes_open(3);
-  std::fprintf(stderr, "[MB11] case5 scopes open per node: %ld %ld | %ld %ld (zone za=%ld, zone zb=%ld, scopes=%d)\n", scopes_open(0), scopes_open(1),
+  std::fprintf(stderr, "[membership e2e] case5 scopes open per node: %ld %ld | %ld %ld (zone za=%ld, zone zb=%ld, scopes=%d)\n", scopes_open(0), scopes_open(1),
                scopes_open(2), scopes_open(3), za, zb, kScopes);
   EXPECT_LE(za, kScopes) << "a scope has two replicas in zone za";
   EXPECT_LE(zb, kScopes) << "a scope has two replicas in zone zb";

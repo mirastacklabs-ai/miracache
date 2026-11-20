@@ -82,18 +82,18 @@ TEST(Config, KeepaliveMs) {
   auto d = load_config("[scope]\nsecret_file = \"/s\"\n[[nodes]]\nrails = [\"a:1\"]\n[lab]\nstatic_membership = true\n");
   ASSERT_TRUE(d.has_value());
   EXPECT_EQ(d->keepalive_ms, 1000u);
-  // R03: 0 would switch off PING and reconnect for a wire client.
+  // 0 would switch off PING and reconnect for a wire client.
   auto off = load_config(base + "keepalive_ms = 0\n");
   ASSERT_FALSE(off.has_value());
   EXPECT_NE(std::string(off.error().context).find("keepalive_ms = 0"), std::string::npos) << off.error().context;
-  // R01: reconnect connect timeout.
+  // Reconnect connect timeout.
   EXPECT_EQ(d->reconnect_connect_ms, 1000u);
   auto rc = load_config(base + "reconnect_connect_ms = 250\n");
   ASSERT_TRUE(rc.has_value());
   EXPECT_EQ(rc->reconnect_connect_ms, 250u);
   for (const char* bad : {"reconnect_connect_ms = 0\n", "reconnect_connect_ms = 60001\n"})
     EXPECT_FALSE(load_config(base + bad).has_value()) << bad;
-  // N04: watchdog grace override; unset (0) = derived from the QP retry exhaustion.
+  // Watchdog grace override; unset (0) = derived from the QP retry exhaustion.
   EXPECT_EQ(d->watchdog_grace_ms, 0u);
   auto wg = load_config(base + "watchdog_grace_ms = 30000\n");
   ASSERT_TRUE(wg.has_value());
@@ -324,7 +324,7 @@ TEST(ConfigFile, TomlTextSkipsFilesystemChecks) {
 }
 
 
-// A2.10 [placement]
+// [placement]
 std::string with_nodes(int n, const std::string& placement) {
   std::string s = "[scope]\nprovider = \"static\"\nsecret_file = \"/s\"\n";
   for (int i = 1; i <= n; ++i) s += "[[nodes]]\nrails = [\"10.0.0." + std::to_string(i) + ":7471\"]\n";

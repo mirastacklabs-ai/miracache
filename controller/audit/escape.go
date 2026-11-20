@@ -9,8 +9,8 @@ import (
 // unicode escape sequence.
 const bs = "\\"
 
-// appendString appends s as a JSON string (with quotes) in the canonical form of the RBAC/audit
-// plan decision 5, which is Go's encoding/json (v1 semantics) with SetEscapeHTML(false): the
+// appendString appends s as a JSON string (with quotes) in the canonical form, which is
+// Go's encoding/json (v1 semantics) with SetEscapeHTML(false): the
 // characters < > & and all non-ASCII stay raw, line and paragraph separator (U+2028, U+2029) are
 // escaped, each invalid UTF-8 byte becomes the ASCII escape for U+FFFD, control characters are
 // escaped as bs+u00xx (lower-case hex) or the short forms, and 0x7f stays raw.

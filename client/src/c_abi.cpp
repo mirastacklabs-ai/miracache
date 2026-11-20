@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// C ABI (A1.6 L4) over the L3 Client facade. Compiled WITH exceptions (unlike the rest of
+// C ABI over the Client facade. Compiled WITH exceptions (unlike the rest of
 // client/) only so every entry point can end in a catch-all: nothing throws across the ABI.
 #include "miracache/miracache.h"
 
@@ -104,7 +104,7 @@ struct mira_scope {
 
 struct mira_client {
   std::unique_ptr<LoopWorld> world;
-  std::unique_ptr<ReloadableEngineNativeProvider> provider;  // HR4: the credential watch swaps its kver
+  std::unique_ptr<ReloadableEngineNativeProvider> provider;  // The credential watch swaps its kver
   std::unique_ptr<Client> client;  // declared last: destroyed first
   std::mutex mu;
   bool closed = false;

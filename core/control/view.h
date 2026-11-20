@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// The placement View of a verified bundle body (W13). Lives in control (which links placement), so
+// The placement View of a verified bundle body. Lives in control (which links placement), so
 // placement never depends on the bundle parser.
 #pragma once
 

@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
-// Rate limit for a WARN line that can repeat on a hot path (review s9 K04/K10): the first event of a key is logged at
+// Rate limit for a WARN line that can repeat on a hot path: the first event of a key is logged at
 // once, then at most one line per `interval` per key; the events dropped in between are counted and handed to the next
 // line that passes (log them as "suppressed"). Time comes from the caller's Clock (spec 14.3). At most `max_keys` keys
 // are tracked; the events of further keys share one overflow key, so a flood of distinct keys stays bounded too.
-// L09 (review s9b): a new key that finds the table full first evicts the stale slots, so the keys of later principals
+// A new key that finds the table full first evicts the stale slots, so the keys of later principals
 // get their own slot again. Stale: the slot's interval is over and no dropped event is pending (forgetting it loses
 // nothing: its next event would pass with 0), or the key has been idle a whole further interval with dropped events
 // pending (a key that never comes back must not hold its slot forever). While the table stays full the sweep runs at
 // most once per earliest possible expiry, not per event.
-// R11 (review s11): the dropped count of an evicted slot is not lost: it moves to the overflow slot, whose next line
+// The dropped count of an evicted slot is not lost: it moves to the overflow slot, whose next line
 // carries it, so the "suppressed" counts the lines report add up to every dropped event. The overflow slot does not
 // count against `max_keys` (a new key that freed a slot gets it).
 // Not thread-safe: the owner serializes the calls (its event-loop thread or a mutex).
@@ -58,12 +58,12 @@ class LogLimiter {
   };
   Nanos stale_at(const Slot& s) const { return s.dropped == 0 ? s.next : s.next + interval_; }
   std::size_t own_keys() const { return slots_.size() - slots_.count(kOverflow); }
-  // L09. A slot's stale time only moves later (a drop: next + interval; a pass: next >= now + interval) and a new slot's
+  // A slot's stale time only moves later (a drop: next + interval; a pass: next >= now + interval) and a new slot's
   // is at least now + interval, so while the table stays full nothing turns stale before `sweep_at_`.
   void evict_stale(Nanos now) {
     if (now < sweep_at_) return;
     Nanos earliest = now + interval_;
-    std::uint64_t moved = 0;  // R11: the dropped events of the evicted slots
+    std::uint64_t moved = 0;  // the dropped events of the evicted slots
     for (auto it = slots_.begin(); it != slots_.end();) {
       const Nanos at = stale_at(it->second);
       if (now >= at) {

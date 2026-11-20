@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Rules aligned with the C++ parser (MB2): validation must be identical on both sides.
+// Rules aligned with the C++ parser: validation must be identical on both sides.
 
 func TestDropBeforeExactForm(t *testing.T) {
 	sec := string(mustSec(t, goldenSec()))

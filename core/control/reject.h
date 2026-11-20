@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Why a bundle (or a trust file) was refused. The reason strings are the values of the
-// miracache_bundle_reject_total{reason} label (membership plan decisions 2, 4 and 15).
-// This is THE canonical label set (W05, design spec 9.2): the Go controller (controller/bundle)
+// miracache_bundle_reject_total{reason} label.
+// This is THE canonical label set (design spec 9.2): the Go controller (controller/bundle)
 // uses exactly these strings, and looks up an unknown key (body key, then sec key) before the role.
 #pragma once
 

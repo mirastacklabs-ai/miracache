@@ -284,7 +284,7 @@ func (r *rig) report(identity string, seen map[uint64][]bool) {
 
 func u64(v uint64) *uint64 { return &v }
 
-// memAudit is the default test auditor (automatic actions need one, U2-12).
+// memAudit is the default test auditor (automatic actions need one).
 type memAudit struct {
 	mu sync.Mutex
 	es []string

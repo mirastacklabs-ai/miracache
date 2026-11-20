@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Scope table, block map, leases and LOOKUP/RENEW/RELEASE (A1.4 S3, design rev 5.1).
+// Scope table, block map, leases and LOOKUP/RENEW/RELEASE (design rev 5.1).
 //
 // Scopes are implicit and keyed by (principal, scope_id). One is created only by a root
 // PUT_BEGIN of an authenticated principal (ensure_scope_for_root_put); LOOKUP never creates
@@ -10,7 +10,7 @@
 // A block removed while leased turns ZOMBIE (memory intact, the seq check rejects the
 // read) and is freed at the last release. Leases: one per LOOKUP covering all its hits.
 //
-// The scope table lives in memory; A3.1 mirrors every implicit scope into the persisted scope
+// The scope table lives in memory; the persisted scope table mirrors every implicit scope into the persisted scope
 // table (store/scope_table.h, proto/scope_record.h) so the restart scan (store/restart.h) can
 // resume it. Single-threaded (store thread). All containers are ordered and keyed by value.
 //
@@ -66,7 +66,7 @@ struct LookupReq {
   std::vector<KeyHash> keys;
 };
 
-// All-zero entry (hit == false) is the MISS (D5).
+// All-zero entry (hit == false) is the MISS.
 struct LookupEntry {
   bool hit = false;
   std::uint32_t seg_id = 0;
@@ -89,7 +89,7 @@ class Store {
 
   // Overrides the config default for one principal. Takes effect on the next operation.
   void set_policy(PrincipalId p, const PrincipalPolicy& pol);
-  // HR1 (hot reload class A): the live limits, store thread only, effective on the next operation. Granted leases keep
+  // Hot reload class A: the live limits, store thread only, effective on the next operation. Granted leases keep
   // their expiry; the invariant check uses the highest lease_max ever set. `def` replaces the default principal policy
   // (principals with a bundle policy are re-derived by the caller through set_policy).
   struct Limits {
@@ -105,7 +105,7 @@ class Store {
   // Optional counters (null = none); the pointee must outlive the store.
   void set_metrics(const StoreMetrics* m) { mx_ = m; }
 
-  // Hook for the S4 put path: PUT_BEGIN at the chain root (parent_hash == 0). Creates the
+  // Hook for the put path: PUT_BEGIN at the chain root (parent_hash == 0). Creates the
   // scope if absent (evicting the principal's LRU scope at the cap) and renews it.
   // ResourceExhausted if max_scopes is 0.
   Status ensure_scope_for_root_put(PrincipalId p, const ScopeId& s, Nanos now);
@@ -125,12 +125,12 @@ class Store {
   // unknown key or scope is a no-op that still returns OK. ResourceExhausted when the
   // principal's token bucket (StoreConfig::invalidate_per_s, 0 = unlimited) is empty.
   Status invalidate(PrincipalId p, const ScopeId& s, const KeyHash& key, std::uint64_t gen);
-  // Drops one scope (at once, admin) / every scope of `p` OPENED before `drop_before` (P15: opened_at, not last_used).
+  // Drops one scope (at once, admin) / every scope of `p` OPENED before `drop_before` (opened_at, not last_used).
   // drop_principal is incremental: those scopes are unlinked at once (lookups miss, commits refuse) and their blocks
   // are freed under the sweep budget (leased blocks turn ZOMBIE). Returns the number of scopes marked.
   std::size_t drop_scope(PrincipalId p, const ScopeId& s);
   std::size_t drop_principal(PrincipalId p, Nanos drop_before);
-  // ---- QT1: retention and the one eviction budget (decision 3). Hot-reloadable; they take effect on the next turn. ----
+  // ---- retention and the one eviction budget. Hot-reloadable; they take effect on the next turn. ----
   // max_ttl 0 = none. A non-zero value shorter than the age of existing scopes expires them (bounded per turn).
   void set_retention(Nanos max_ttl);
   // Budget: bytes freed per second (burst = one second), blocks per turn, and the pressure watermarks in percent.
@@ -141,10 +141,10 @@ class Store {
   // Blocks still to be freed in expired or dropped scopes (doomed).
   std::uint64_t evict_backlog_blocks() const { return doomed_blocks_; }
   // Estimated ms until the draining scope (expired or dropped, still holding blocks) is empty at the sweep rate; 0 if
-  // the scope is not draining. A root put on it is refused with this retry_after (U2-08).
+  // the scope is not draining. A root put on it is refused with this retry_after.
   std::uint32_t drain_retry_ms(PrincipalId p, const ScopeId& s) const;
-  // ---- MB3b hooks, now the one budget: Store::tick calls sweep_step once per turn. ----
-  // `drop_before` (P15/C19), monotonic per principal and in the Clock domain: a scope whose `opened_ns` is below
+  // ---- Hooks, now the one budget: Store::tick calls sweep_step once per turn. ----
+  // `drop_before`, monotonic per principal and in the Clock domain: a scope whose `opened_ns` is below
   // the principal's cutoff is dead. Lookups of it miss at once, a root put refuses until it is empty, and its
   // blocks are freed incrementally by sweep_step(). The maximum only rises; calling again re-arms the sweep.
   void set_drop_cutoff(PrincipalId p, std::int64_t cutoff_ns);
@@ -163,7 +163,7 @@ class Store {
   // Evicts unleased leaf blocks, least recently used first, until at least `bytes_wanted`
   // extent bytes were freed or no candidate is left. Returns the bytes freed.
   std::uint64_t evict(std::uint64_t bytes_wanted);
-  // Evict-on-full (R05/R06): frees ONE slab run, the LRU-oldest (by its newest block) whose every
+  // Evict-on-full: frees ONE slab run, the LRU-oldest (by its newest block) whose every
   // allocated block is a committed, unleased, non-zombie block and whose chains lie wholly inside
   // the run, so the run returns to the pool and can be re-carved for any class. `protect` are keys
   // (or 16 B parent prefixes) of scope (p, s) that the running PUT_BEGIN depends on: a run holding
@@ -176,7 +176,7 @@ class Store {
   Expected<Nanos> renew(SessionId session, LeaseId lease);
   Status release(SessionId session, LeaseId lease);
 
-  // S4 hooks. has_key: a COMMITTED block with this key exists in a live scope (idempotent
+  // Put-path hooks. has_key: a COMMITTED block with this key exists in a live scope (idempotent
   // put SKIP). set_readable: lookups return a MISS for blocks whose segment fails the
   // predicate (outside the registered MR prefix). for_each_block visits every block,
   // zombies included.
@@ -208,12 +208,12 @@ class Store {
   std::uint64_t inflight_bytes(PrincipalId p) const;
   std::size_t n_session_leases(SessionId s) const;
 
-  // One quota (R13): committed + zombie + in-flight bytes <= max_bytes. A reservation that would
+  // One quota: committed + zombie + in-flight bytes <= max_bytes. A reservation that would
   // exceed it first evicts the principal's OWN unleased leaf blocks (LRU, never another
   // principal's, never `protect`ed ones of `scope`), then refuses (ResourceExhausted; blocks
   // already evicted stay evicted, except that bytes eviction can never reclaim (zombie + in-flight
   // + leased + protected) are summed first and a hopeless reservation is refused with NO
-  // evictions, T01). T03, known limitation: only the CURRENT put's keys/parents are protected;
+  // evictions). Known limitation: only the CURRENT put's keys/parents are protected;
   // a different put still in flight can lose its committed parents to this eviction and end
   // Doomed after writing all its bytes (the client recomputes). Released when the put ends or its digest finishes (commit then
   // charges the bytes as committed).
@@ -221,7 +221,7 @@ class Store {
                           std::span<const KeyHash> protect = {});
   void release_inflight(PrincipalId p, std::uint64_t bytes);
 
-  // ---- SC1 scrub pin hook (core/store/scrub.h). A pin is an internal lease owned by the scrubber (lease count + 1,
+  // ---- Scrub pin hook (core/store/scrub.h). A pin is an internal lease owned by the scrubber (lease count + 1,
   // no session, no expiry): drop/evict/INVALIDATE turn a pinned block ZOMBIE and it is freed at the last unpin.
   struct ScrubTarget {
     Extent e;
@@ -235,15 +235,15 @@ class Store {
   bool scrub_unpin(std::uint64_t gen_slot, std::uint64_t gen, bool corrupt);
   std::size_t n_scrub_pins() const { return scrub_pins_.size(); }
 
-  // QT2 (decision 4): PUT_BEGIN admission for ONE key of `bytes` stored bytes. The ops bucket takes 1, the bytes
-  // bucket admits while its balance is positive and may go into debt (P22). Returns 0 = admitted (charged), else the
+  // PUT_BEGIN admission for ONE key of `bytes` stored bytes. The ops bucket takes 1, the bytes
+  // bucket admits while its balance is positive and may go into debt. Returns 0 = admitted (charged), else the
   // retry_after_ms until it would be, and `*kind` (0 = ops, 1 = bytes) says which bucket said no; nothing is charged
   // then. put_unadmit returns the charge of admitted keys whose put was refused later. Limits come from the
   // principal's policy (0 = unlimited).
   std::uint32_t put_admit(PrincipalId p, std::uint64_t bytes, int* kind = nullptr);
   void put_unadmit(PrincipalId p, std::uint64_t ops, std::uint64_t bytes);
 
-  // ---- A3.1 warm restart. Scope records (arena_.scope_table(), when the store has one) carry wall-clock ms; the store
+  // ---- Warm restart. Scope records (arena_.scope_table(), when the store has one) carry wall-clock ms; the store
   // runs on Clock ns. wall_ns = clock_ns + wall_offset. The owner sets it once, before the restart scan (default 0: the
   // records then hold Clock ms, which is right for tests that keep one Clock across a restart).
   void set_wall_offset_ns(std::int64_t off) { wall_offset_ns_ = off; }
@@ -274,21 +274,21 @@ class Store {
     std::int64_t last_used_ns = 0;
     std::uint64_t seq = 0;    // key in the principal's LRU map
     std::uint64_t bytes = 0;
-    std::uint64_t leased_bytes = 0;  // mapped blocks of this scope with leases > 0, kept incrementally (QT2)
+    std::uint64_t leased_bytes = 0;  // mapped blocks of this scope with leases > 0, kept incrementally
     std::map<KeyHash, std::uint64_t> keys;  // key_hash -> gen_slot of the COMMITTED block
     std::map<KeyHash, std::set<KeyHash>> children;  // parent_prefix -> children (zero = roots)
     std::uint64_t epoch = 0;                         // creation order, for doomed puts
     std::int64_t opened_ns = 0;                      // Clock time of the implicit open (drop_before compares this)
     KeyHash drop_cursor{};                           // sweep_step resume point inside keys
-    std::size_t drop_noleaf = 0;                     // non-leaves scanned in a row since the last removal (Z08)
+    std::size_t drop_noleaf = 0;                     // non-leaves scanned in a row since the last removal
     bool doomed = false;  // expired or dropped: unlinked from the LRU and the open index, blocks freed by sweep_step
     EvictReason doom_why = EvictReason::Ttl;
-    std::uint32_t rec_slot = ~std::uint32_t{0};  // A3.1: scope table slot (none: in memory only)
+    std::uint32_t rec_slot = ~std::uint32_t{0};  // scope table slot (none: in memory only)
     std::int64_t rec_used_ns = 0;                // last_used_ns as last written to the record
   };
   struct PState {
     TokenBucket inval;
-    PutBucket put_ops, put_bytes;  // QT2: PUT_BEGIN admission
+    PutBucket put_ops, put_bytes;  // PUT_BEGIN admission
     std::map<ScopeId, ScopeRec> scopes;
     std::map<std::uint64_t, ScopeId> lru;  // seq -> scope, oldest first (live scopes only; doomed ones are out)
     std::map<std::uint64_t, ScopeId> by_open;  // epoch (= opened order) -> scope, live scopes only (max_ttl)
@@ -297,7 +297,7 @@ class Store {
     std::uint64_t next_seq = 1;
     std::uint64_t inflight = 0;      // reserved by live puts
     std::uint64_t zombie_bytes = 0;  // ZOMBIE blocks pinned by leases; count against max_bytes
-    std::uint64_t leased_bytes = 0;  // mapped (non-zombie) blocks with leases > 0; kept incrementally (S01)
+    std::uint64_t leased_bytes = 0;  // mapped (non-zombie) blocks with leases > 0; kept incrementally
     BlockLru ev;  // this principal's evictable leaves (see Store::ev_lru_)
   };
   struct BlockInfo {
@@ -317,7 +317,7 @@ class Store {
   };
 
   const PrincipalPolicy& policy_for(PrincipalId p) const;
-  // A3.1 scope record upkeep: written at open, rewritten when last_used moved by >= 1 s (or `force`), DRAINING when the
+  // Scope record upkeep: written at open, rewritten when last_used moved by >= 1 s (or `force`), DRAINING when the
   // scope is doomed, cleared when it is erased (its blocks are then never resumed after a crash).
   void persist_drain(PrincipalId p, const ScopeId& s, ScopeRec& r);
   void persist_touch(PrincipalId p, const ScopeId& s, ScopeRec& r, bool force = false);
@@ -342,7 +342,7 @@ class Store {
   // Unlinks a scope from the LRU and the open index and queues its blocks for sweep_step.
   void doom_scope(PrincipalId p, PState& ps, std::map<ScopeId, ScopeRec>::iterator it, EvictReason why);
   void refill_credit(Nanos now);
-  // QT2 (U2-09): evictions done inside a put-path call (commit_block, reserve_inflight, a reopen, max_scopes) are charged
+  // Evictions done inside a put-path call (commit_block, reserve_inflight, a reopen, max_scopes) are charged
   // to the same budget as the sweep: `n` blocks to the per-turn counter, `bytes` to the bytes credit. sweep_step gets
   // what is left of the turn.
   void charge_call(std::size_t n, std::uint64_t bytes) {
@@ -350,7 +350,7 @@ class Store {
     credit_ -= static_cast<std::int64_t>(std::min<std::uint64_t>(bytes, INT64_MAX / 2));
   }
   // Frees up to `budget` blocks of this principal's doomed (and drop_before-dead) scopes first, so a cap never costs a
-  // live scope while dead blocks wait (U2-04). Erasing an empty record counts as one unit (U2-16). Returns the units used.
+  // live scope while dead blocks wait. Erasing an empty record counts as one unit. Returns the units used.
   std::size_t drain_doomed(PrincipalId p, PState& ps, std::size_t budget);
   std::uint64_t total_used() const;
   void update_pressure();
@@ -358,7 +358,7 @@ class Store {
   std::size_t sweep_flagged(std::size_t max_blocks);
   std::size_t sweep_pressure(std::size_t max_blocks);
   void drop_lease(std::map<LeaseId, Lease>::iterator it);
-  // Evictable-leaf index (R14): committed, unleased, non-zombie blocks with no child, kept in the
+  // Evictable-leaf index: committed, unleased, non-zombie blocks with no child, kept in the
   // recency order of lru_ so the evictor never rescans. Call after any change to a block's
   // leases, zombie flag, or children.
   void refresh_evictable(std::uint64_t slot);
@@ -372,7 +372,7 @@ class Store {
   Random& rng_;
   std::map<PrincipalId, PState> principals_;
   std::map<PrincipalId, PrincipalPolicy> policies_;
-  std::map<PrincipalId, std::int64_t> drop_cutoff_;  // MB3b: drop_before in the Clock domain, max-only
+  std::map<PrincipalId, std::int64_t> drop_cutoff_;  // drop_before in the Clock domain, max-only
   bool sweep_pending_ = false;
   std::set<PrincipalId> doomed_principals_;  // principals that may hold doomed scopes (stale entries are dropped lazily)
   std::uint64_t doomed_blocks_ = 0;          // blocks still held by doomed scopes
@@ -394,7 +394,7 @@ class Store {
   std::optional<std::uint64_t> used_hint_;  // tick(): occupancy bytes computed once per tick
   std::map<std::uint64_t, BlockInfo> blocks_;  // by gen_slot; includes zombies
   std::map<LeaseId, Lease> leases_;
-  std::map<std::uint64_t, std::uint32_t> scrub_pins_;  // SC1: gen_slot -> pins (each counted in BlockInfo::leases)
+  std::map<std::uint64_t, std::uint32_t> scrub_pins_;  // gen_slot -> pins (each counted in BlockInfo::leases)
   std::map<SessionId, std::uint32_t> session_leases_;
   std::set<std::pair<std::int64_t, LeaseId>> lease_expiry_;
   BlockLru lru_;  // COMMITTED blocks only
@@ -405,7 +405,7 @@ class Store {
   bool tick_capped_ = false;  // the last tick left expired scopes unmarked (per-tick cap): the reap invariant is waived
   std::function<bool(std::uint32_t)> readable_;
   const StoreMetrics* mx_ = nullptr;
-  std::int64_t wall_offset_ns_ = 0;  // A3.1
+  std::int64_t wall_offset_ns_ = 0;
   void count_evict(EvictReason why, std::uint64_t bytes, std::uint64_t blocks) const {
     if (!mx_) return;
     bump(mx_->evict_bytes[static_cast<std::size_t>(why)], bytes);

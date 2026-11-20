@@ -52,7 +52,7 @@ bool write_all(int fd, std::string_view s) {
 // Whole file; `missing` when it does not exist. False on any other error or when larger than `cap`.
 bool read_file(const std::string& path, std::string& out, bool& missing, std::size_t cap) {
   missing = false;
-  Fd f(::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));  // never follows a symlink (X12)
+  Fd f(::open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));  // never follows a symlink
   if (f.fd < 0) {
     missing = errno == ENOENT;
     return missing;
@@ -136,11 +136,11 @@ bool matches_floor(const control::Floor& f, const control::BundleView& v) {
 
 struct Stored {
   std::shared_ptr<control::BundleView> view;  // null = not usable
-  bool alert = false;                         // applied although a key is gone (X03)
+  bool alert = false;                         // applied although a key is gone
   const char* why = "";
 };
 
-// Start-up judgement of stored bytes (X03, X04). `exact`: the bytes must match the floor exactly (a tmp file).
+// Start-up judgement of stored bytes. `exact`: the bytes must match the floor exactly (a tmp file).
 Stored judge_stored(std::string_view bytes, const control::TrustKeys& tk, const control::Floor& floor, bool exact) {
   Stored s;
   auto v = control::open_bundle(bytes, tk);
@@ -163,7 +163,7 @@ Stored judge_stored(std::string_view bytes, const control::TrustKeys& tk, const 
   auto env = control::parse_envelope(bytes);
   if (!env) return s;
   auto pv = control::parse_bundle(*env);
-  // Y03: the trust file's pin still applies (effective security floor = max(persisted, pinned)).
+  // The trust file's pin still applies (effective security floor = max(persisted, pinned)).
   if (!pv || !matches_floor(floor, *pv) || pv->sec.sec_generation < tk.min_sec_generation()) return s;
   s.view = std::make_shared<control::BundleView>(std::move(*pv));
   s.alert = true;
@@ -239,7 +239,7 @@ Expected<std::unique_ptr<BundleStore>> BundleStore::open(BundleStoreOptions o) {
   Stored st;
   bool existed = false;
 
-  // X02: a tmp left by a crash between the floor commit and the rename is promoted when it matches the floor exactly.
+  // A tmp left by a crash between the floor commit and the rename is promoted when it matches the floor exactly.
   {
     std::string tb;
     bool tmissing = false;
@@ -311,13 +311,13 @@ std::shared_ptr<const control::TrustKeys> BundleStore::trust() const {
 
 Status BundleStore::reload_trust() {
   std::int64_t m = 0, s = -1, i = 0;
-  stat_sig(opt_.trust_path, m, s, i);  // stat BEFORE the load: a change after it is seen by the next check (X13)
+  stat_sig(opt_.trust_path, m, s, i);  // stat BEFORE the load: a change after it is seen by the next check
   auto tk = control::load_trust_keys(opt_.trust_path);
   std::lock_guard<std::mutex> g(mu_);
   next_stat_ = opt_.clock->now() + kTrustStatInterval;
   stat_ = {m, s, i};
   if (!tk) {
-    // P39: a half-written trust file keeps the old keys, is counted, and is retried at the next tick (the failed
+    // A half-written trust file keeps the old keys, is counted, and is retried at the next tick (the failed
     // signature is not remembered).
     stat_ = StatSig{};
     stat_.size = -1;
@@ -348,7 +348,7 @@ void BundleStore::maybe_reload_trust() {
 
 Status BundleStore::write_tmp(std::string_view envelope) {
   const std::string tmp = opt_.state_dir + "/bundle.current.tmp";
-  ::unlink(tmp.c_str());  // a stale tmp (or a planted symlink) is removed, never followed (X12)
+  ::unlink(tmp.c_str());  // a stale tmp (or a planted symlink) is removed, never followed
   Fd out(::open(tmp.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600));
   if (out.fd < 0) return Error{ErrorCode::Aborted, "bundle: cannot create the temp file"};
   if (!write_all(out.fd, envelope) || ::fsync(out.fd) != 0) {
@@ -367,7 +367,7 @@ Status BundleStore::publish_tmp() {
 }
 
 void BundleStore::clear_startup_alert() {
-  if (startup_unverified_.exchange(false) && unverified_gauge_) unverified_gauge_->set(0);  // X11
+  if (startup_unverified_.exchange(false) && unverified_gauge_) unverified_gauge_->set(0);
 }
 
 void BundleStore::set_applied(const control::BundleView& v, std::shared_ptr<const std::string> envelope) {
@@ -381,7 +381,7 @@ void BundleStore::set_applied(const control::BundleView& v, std::shared_ptr<cons
   applied_.key_id = v.key_id;
   applied_.sec_key_id = v.sec_key_id;
   applied_.envelope = std::move(envelope);
-  std::vector<RbacBinding> rb;  // RB2: the bindings of the applied bundle (decision 3), live before a push replies
+  std::vector<RbacBinding> rb;  // the bindings of the applied bundle, live before a push replies
   for (const auto& r : v.sec.rbac) rb.push_back({r.identity, r.roles});
   rbac_.set(rb);
 }
@@ -395,14 +395,14 @@ std::string BundleStore::summary_json(const char* result) const {
 }
 
 // The ONLY place a push touches the floor: a check, or (when `commit`) the commit, which re-checks under the lock.
-// push() checks first, writes the fsynced tmp, commits, then renames (X02).
-// Review W06/W07: when FloorState::commit returns the verdict (or a reject) under its exclusive lock, replace the
+// push() checks first, writes the fsynced tmp, commits, then renames.
+// When FloorState::commit returns the verdict (or a reject) under its exclusive lock, replace the
 // two calls below by that one result; callers already treat a reject like a failed check (no ack, no swap).
 Expected<control::Verdict, control::BundleError> BundleStore::floor_admit(const control::BundleView& v,
                                                                           std::uint64_t pinned, bool commit,
                                                                           bool& io_failed) {
   io_failed = false;
-  if (commit) {  // W06: commit re-checks under the exclusive lock and returns the verdict or the reject
+  if (commit) {  // commit re-checks under the exclusive lock and returns the verdict or the reject
     auto r = floor_.commit(v, pinned);
     if (r) return *r;
     if (r.error().rejected) return r.error().reject;
@@ -420,7 +420,7 @@ Expected<control::Verdict, control::BundleError> BundleStore::floor_admit(const 
 }
 
 namespace {
-// RB2: what an apply changes in the security section, for the audit entry. Counts only (identities are not secret, but
+// What an apply changes in the security section, for the audit entry. Counts only (identities are not secret, but
 // the entry stays small and the diff is not a place for surprises).
 void diff_sec(const control::BundleView* old, const control::BundleView& nw, PushOutcome& o) {
   std::map<std::string, std::vector<std::string>> r0, r1;
@@ -459,10 +459,10 @@ HttpReply BundleStore::push(std::string_view bytes, bool dry_run, const StoreCal
   auto opened = control::open_bundle(bytes, *tk);
   if (!opened) return reject_reply(opened.error(), "bundle rejected");
   auto view = std::make_shared<control::BundleView>(std::move(*opened));
-  // U2-02: a drop_before ahead of the wall clock (+ 300 s skew) is refused before anything is written.
+  // A drop_before ahead of the wall clock (+ 300 s skew) is refused before anything is written.
   {
     const std::int64_t now_s = opt_.wall_unix_s ? opt_.wall_unix_s() : wall_unix_ns() / 1'000'000'000LL;
-    // J03/H09: a drop_before the floor already holds (not above its stored maximum) is exempt, so a cluster-wide clock
+    // A drop_before the floor already holds (not above its stored maximum) is exempt, so a cluster-wide clock
     // step back does not make every publish fail. An unreadable floor gives no exemption (fail-closed; floor_admit
     // reports the I/O failure below).
     auto stored = floor_.load();
@@ -472,7 +472,7 @@ HttpReply BundleStore::push(std::string_view bytes, bool dry_run, const StoreCal
       return reject_reply(*fut, "bundle rejected");
     }
   }
-  // HR1 (P13/P16): the memory-node part of config.* is validated here, pure, before anything is persisted or swapped
+  // The memory-node part of config.* is validated here, pure, before anything is persisted or swapped
   // (the dry run runs it too). A STATIC or stale key, a bad value or a broken cross-field rule rejects the bundle; unknown
   // keys do not (rolling upgrades).
   if (opt_.dyn_base) {
@@ -534,8 +534,8 @@ HttpReply BundleStore::push(std::string_view bytes, bool dry_run, const StoreCal
     return r;
   }
 
-  // X02: tmp written + fsynced, THEN the floor commit, THEN the rename. A crash between the last two leaves a tmp
-  // that matches the floor exactly; start-up promotes it. The commit's verdict (W06) is the one that counts.
+  // Tmp written + fsynced, THEN the floor commit, THEN the rename. A crash between the last two leaves a tmp
+  // that matches the floor exactly; start-up promotes it. The commit's verdict is the one that counts.
   auto envelope = std::make_shared<const std::string>(bytes);
   if (auto st = write_tmp(*envelope); !st) {
     count_result("persist_error");
@@ -642,7 +642,7 @@ HttpReply BundleStore::identity() {
   for (std::size_t i = 0; i < opt_.rails.size(); ++i) {
     const auto& rl = opt_.rails[i];
     if (!rails.empty()) rails += ',';
-    // RL1: real health from the server (port state, listener, fatal events); before the first reading, the flag main sets.
+    // real health from the server (port state, listener, fatal events); before the first reading, the flag main sets.
     const Server::RailHealth* h = i < snap.rails.size() ? &snap.rails[i] : nullptr;
     rails += "{\"addr\":\"" + json_escape(rl.addr) + "\",\"subnet\":\"" + json_escape(rl.subnet) + "\",\"protocol\":\"" +
              json_escape(rl.protocol) + "\",\"up\":" + ((h != nullptr ? h->up : rails_up_.load()) ? "true" : "false");

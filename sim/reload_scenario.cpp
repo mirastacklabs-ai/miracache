@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// HR6: hot reload under load, in the simulator (HR6).
+// Hot reload under load, in the simulator.
 //
 // One seed = one cluster of three real memory-node servers over SimFabric and one real bundle-mode Client (the rig of
 // tests/client/reload_test.cpp, reduced), pipelined put / get traffic (four lanes, as the four traffic threads of the
@@ -12,10 +12,10 @@
 //     time, while the traffic runs (leases held across the swap),
 //   * a memory-node table (config.cluster.memnode: lease ttl / max / put timeout, ticket ttl, retention, store max_bytes),
 //   * a new kver: from that op on every lane derives its scopes (and keys) under the new key version, so the old
-//     scopes are cold (the kver part of the M2 exit; the real secret-file and certificate rotation run on rxe0 in
+//     scopes are cold (the kver part of the rotation test; the real secret-file and certificate rotation run on rxe0 in
 //     tests/e2e/reload_rdma_test.cpp, the sim has no TLS and no files).
 // The servers apply the bundle on their own thread-of-control turn (drive), the client through apply_membership.
-// HR7 (QPs per rail, live): odd seeds run every memory node with two rails (two devices, distinct rkeys) and every client
+// QPs per rail, live: odd seeds run every memory node with two rails (two devices, distinct rkeys) and every client
 // pair with two NICs; their first three reloads set fabric.fetch_qps 2, 4, 2, and after each the run waits (traffic
 // running) until miracache_client_rail_fetch_qps shows that count on every rail of every node. A fetch_qps change is
 // applied by the planned rebuild: the new pair opens rails x (1 + fetch_qps + 1) endpoints.
@@ -89,7 +89,7 @@ constexpr std::uint64_t kSpinCap = 20'000'000;  // idle polls (each yields the C
 constexpr std::size_t kBaseSubpool = 16u << 20;  // ClientCoreOptions default
 constexpr std::uint32_t kBaseMtu = 4096, kBaseQps = 1;  // the open-time values (WireOptions defaults: one fetch QP per rail)
 
-// s12 (#322): evidence for a lost job. The image has no debugger, so every thread of the process prints its own stack:
+// Evidence for a lost job. The image has no debugger, so every thread of the process prints its own stack:
 // SIGUSR2 to one thread at a time, whose handler prints with backtrace_symbols_fd (no malloc once primed). Frames print
 // as `sim_reload(+0xOFF)`; the first 2-3 are the handler and the signal trampoline. Resolve the others with
 // `addr2line -i -f -C -e build/<preset>/sim/sim_reload <OFF-1>` (they are return addresses; OFF itself is the line
@@ -266,7 +266,7 @@ server::ServerConfig server_cfg() {
   return sc;
 }
 
-// Three running memory nodes (ids 1..3), a client NIC per node and spare NICs for planned rebuilds. HR7: with `rails`
+// Three running memory nodes (ids 1..3), a client NIC per node and spare NICs for planned rebuilds. With `rails`
 // = 2 every node has two devices, one rail each (distinct rkeys per device), and every client pair two NICs (one per
 // rail, distinct lkeys), both fresh for each rebuild.
 struct World {
@@ -289,7 +289,7 @@ struct World {
     for (unsigned i = 1; i <= kServers; ++i) {
       auto sc = server_cfg();
       sc.store.node_id = i;
-      if (rails != 2) sc.rails = {fabric::RailAddr{"sim", static_cast<std::uint16_t>(7000 + i)}};  // the single-rail client dials this (G08)
+      if (rails != 2) sc.rails = {fabric::RailAddr{"sim", static_cast<std::uint16_t>(7000 + i)}};  // the single-rail client dials this
       auto s = [&]() -> Expected<std::unique_ptr<server::Server>> {
         if (rails != 2) return server::Server::create(sc, *sfab[i - 1], clock, rng, sex);
         sc.rails = {rail_addr(i, 0), rail_addr(i, 1)};
@@ -335,7 +335,7 @@ struct World {
     }
     ns.fab = f;
     if (rails == 2) {
-      // RL2: one endpoint set per rail in one session; rail 1 goes through its own client NIC (fresh per rebuild).
+      // one endpoint set per rail in one session; rail 1 goes through its own client NIC (fresh per rebuild).
       WireOptions::RailOpt r0, r1;
       r0.index = 0, r0.addr = rail_addr(i, 0), r0.route = i, r0.device = "cdev0";
       r1.index = 1, r1.addr = rail_addr(i, 1), r1.route = 20 + i, r1.device = "cdev1";
@@ -376,7 +376,7 @@ struct World {
     }
     return n;
   }
-  unsigned rails = 1;  // rails per memory node (HR7: 2 on odd seeds)
+  unsigned rails = 1;  // rails per memory node (2 on odd seeds)
   bool ok = true;
   std::string err;
   SimClock clock;
@@ -457,7 +457,7 @@ T pick(Random& r, std::initializer_list<T> v) {
   return *(v.begin() + r.below(v.size()));
 }
 
-// A random valid reload. `force_qps` (HR7): this reload sets fabric.fetch_qps to that value (the draws stay the same).
+// A random valid reload. `force_qps`: this reload sets fabric.fetch_qps to that value (the draws stay the same).
 Reload make_reload(Random& r, std::uint64_t gen, std::optional<std::uint32_t> force_qps = std::nullopt) {
   Reload rl;
   rl.gen = gen;
@@ -478,7 +478,7 @@ Reload make_reload(Random& r, std::uint64_t gen, std::optional<std::uint32_t> fo
   if (r.below(3) == 0) fab << "watchdog_grace_ms = " << 5000 + r.below(15000) << "\n";
   if (r.below(3) == 0) fab << "ticket_batch = " << 1 + r.below(16) << "\n";
   if (r.below(2)) fab << "slice_bytes = " << pick<unsigned>(r, {4096, 8192, 65536, 1048576}) << "\n";
-  unsigned put_max_chosen = 0;  // G06: a bundle that sets put_max_ms must also carry put_timeout_s >= 4 x it
+  unsigned put_max_chosen = 0;  // a bundle that sets put_max_ms must also carry put_timeout_s >= 4 x it
   if (r.below(2)) dl << "put_max_ms = " << (put_max_chosen = 60000 + static_cast<unsigned>(r.below(540000))) << "\n";
   if (r.below(2)) pl << "replica_mode = \"" << (r.below(2) ? "sync" : "async") << "\"\n";
   if (r.below(3) == 0) pl << "replica_buffer_bytes = " << pick<std::uint64_t>(r, {1, 65536, 1u << 20, 8u << 20}) << "\n";
@@ -496,7 +496,7 @@ Reload make_reload(Random& r, std::uint64_t gen, std::optional<std::uint32_t> fo
   }
   const bool qps_drawn = r.below(3) == 0;
   const std::uint32_t qps_pick = pick<std::uint32_t>(r, {2, 4});
-  if (qps_drawn || force_qps) {  // HR7: the real per-rail fetch QP count changes at the planned rebuild
+  if (qps_drawn || force_qps) {  // the real per-rail fetch QP count changes at the planned rebuild
     w.qps = force_qps.value_or(qps_pick);
     fab << "fetch_qps = " << w.qps << "\n";
   }
@@ -522,7 +522,7 @@ Reload make_reload(Random& r, std::uint64_t gen, std::optional<std::uint32_t> fo
   rl.toml = t.str();
   std::ostringstream wh;
   wh << "R=" << w.replicas << (rl.class_b ? " classB(pool=" + std::to_string(w.subpool >> 20) + "M mtu=" + std::to_string(w.mtu) + " qps=" + std::to_string(w.qps) + ")" : "")
-     << (w.has_lease ? " lease=" + std::to_string(w.lease_ttl) + "/" + std::to_string(w.lease_max) : "") << (rl.new_kver ? " +kver" : "") << (rl.hr7 ? " (HR7 step)" : "");
+     << (w.has_lease ? " lease=" + std::to_string(w.lease_ttl) + "/" + std::to_string(w.lease_max) : "") << (rl.new_kver ? " +kver" : "") << (rl.hr7 ? " (rail-count step)" : "");
   rl.what = wh.str();
   return rl;
 }
@@ -542,7 +542,7 @@ struct Run {
     env.salts = &w.salts;
     env.drive = [this] { w.drive(); };
     env.replica_buffer_bytes = 8u << 20;
-    // HR2: store deadlines are clamped to put_max_ms of SIM time, which a waiting caller burns in milliseconds of real time.
+    // Store deadlines are clamped to put_max_ms of SIM time, which a waiting caller burns in milliseconds of real time.
     env.put_max_ms = 600000;
     env.set_crypto_workers = [](unsigned) {};
     Client::BundleOpen bo;
@@ -574,7 +574,7 @@ struct Run {
     for (auto& t : ts) want.insert(t.id);
     for (std::uint64_t spin = 0; got.size() < want.size(); ++spin) {
       if (spin > kSpinCap) {
-        // Evidence for a lost job, lock-free facts first (s12, #322): the metrics below take the registry lock and run
+        // Evidence for a lost job, lock-free facts first: the metrics below take the registry lock and run
         // callback gauges, so a lost job that is a lock deadlock could hang there; everything else is printed by then.
         std::fprintf(stderr, "seed %llu LOST JOB: sim_now=%lld ms rebuilding_slot=%ld rebuilds_done=%llu rebuild_failures=%llu waiting=%zu got=%zu\n",
                      (unsigned long long)seed, (long long)(w.clock.now().count() / 1'000'000), cl->rebuilding_slot(),
@@ -654,7 +654,7 @@ struct Run {
     std::vector<Get> gets;
     for (unsigned l = 0; l < kLanes; ++l) {
       gets.push_back(Get{l, puts[l].key, kver, false, nullptr, nullptr, {}, {}});
-      // Y19: also re-read an OLDER committed key of this lane (R or the owner may have changed since): Miss or the exact bytes.
+      // Also re-read an OLDER committed key of this lane (R or the owner may have changed since): Miss or the exact bytes.
       if (ver[l] > 4) gets.push_back(Get{l, "k" + std::to_string(l) + "_" + std::to_string(kver) + "_" + std::to_string(ver[l] - 3), kver, false, nullptr, nullptr, {}, {}});
     }
     // The cold-scope probe: a key stored under the previous kver, read under the current one, must Miss.
@@ -727,7 +727,7 @@ struct Run {
     return true;
   }
 
-  // HR7: the fetch QPs connected on every rail of every node (miracache_client_rail_fetch_qps, the active pairs'), or
+  // The fetch QPs connected on every rail of every node (miracache_client_rail_fetch_qps, the active pairs'), or
   // nullopt when they differ or a series is missing.
   std::optional<long> rail_qps() const {
     const std::string m = cl->metrics_text();
@@ -759,7 +759,7 @@ struct Run {
     SeededRandom pr(seed * 0x9E3779B97F4A7C15ull + 1);  // the plan is a pure function of the seed
     const unsigned n_cycles = 24 + static_cast<unsigned>(pr.below(40));
     unsigned n_events = 2 + static_cast<unsigned>(pr.below(6));  // at most 7: fewer spare NICs than that per node
-    // HR7 (2-rail seeds): the first three reloads in time carry fabric.fetch_qps 2, 4, 2 (QPs per rail, live); the run
+    // 2-rail seeds: the first three reloads in time carry fabric.fetch_qps 2, 4, 2 (QPs per rail, live); the run
     // waits after each until every rail of every node shows that many fetch QPs, traffic running throughout.
     static constexpr std::uint32_t kHr7[] = {2, 4, 2};
     if (w.rails == 2) n_events = std::max(n_events, 3u);
@@ -783,7 +783,7 @@ struct Run {
       if (alive && it != plan.end() && it->second.hr7) {
         for (unsigned extra = 0; alive && extra < 4000 && !settled(); ++extra) alive = cycle();
         if (alive && !settled()) {
-          fail("HR7: fetch_qps " + std::to_string(expect.qps) + " never showed on every rail");
+          fail("fetch_qps " + std::to_string(expect.qps) + " never showed on every rail");
           return finish();
         }
         if (alive) qps_seen.push_back(*rail_qps());
@@ -804,7 +804,7 @@ struct Run {
     if (!cl->dyn() || cl->dyn()->generation != expect_gen) fail("client dyn generation " + std::to_string(cl->dyn() ? cl->dyn()->generation : 0) + " != " + std::to_string(expect_gen));
     if (cl->rebuilding_slot() >= 0 || !slots_run(expect)) fail("rebuilds did not settle to the final class B values");
     if (rail_qps() != static_cast<long>(expect.qps)) fail("the rails do not all show " + std::to_string(expect.qps) + " fetch QPs");
-    if (w.rails == 2 && qps_seen != std::vector<long>{2, 4, 2}) fail("HR7: the 2 -> 4 -> 2 fetch QPs per rail were not all seen");
+    if (w.rails == 2 && qps_seen != std::vector<long>{2, 4, 2}) fail("the 2 -> 4 -> 2 fetch QPs per rail were not all seen");
     if (pending_keys() != 0) fail("class B keys still pending: " + std::to_string(pending_keys()));
     if (cl->rebuild_failures() != 0) fail("rebuild_failures=" + std::to_string(cl->rebuild_failures()));
     if (cl->config_rejected() != 0) fail("a valid reload was rejected: " + cl->config_last_error());
@@ -844,7 +844,7 @@ struct Run {
   Want expect;
   std::uint64_t expect_gen = 1, pub_gen = 1;  // generations are numbered in publish order
   std::vector<std::shared_ptr<Bytes>> quarantine;  // buffers of lost jobs: the client may still hold them
-  std::vector<long> qps_seen;  // HR7: fetch QPs per rail shown after each 2 -> 4 -> 2 step (2-rail seeds)
+  std::vector<long> qps_seen;  // fetch QPs per rail shown after each 2 -> 4 -> 2 step (2-rail seeds)
 };
 
 }  // namespace
@@ -881,7 +881,7 @@ int main(int argc, char** argv) {
   }
   if (!verbose) miracache::log::set_sink_fd(::open("/dev/null", O_WRONLY));  // the nodes' and the client's reload log lines
   std::uint64_t bad = 0, ops = 0, hits = 0, misses = 0, committed = 0, skipped = 0, cycles = 0, oracle_failed = 0;
-  std::uint64_t two_rail = 0, hr7_walked = 0;  // HR7: 2-rail seeds, and those whose every rail showed 2 -> 4 -> 2 fetch QPs
+  std::uint64_t two_rail = 0, hr7_walked = 0;  // 2-rail seeds, and those whose every rail showed 2 -> 4 -> 2 fetch QPs
   for (std::uint64_t s = first; s < first + n; ++s) {
     Run r(s, verbose);
     const bool ok = r.go();
@@ -901,7 +901,7 @@ int main(int argc, char** argv) {
       if (bad >= 5) break;
     }
   }
-  std::printf("[HR7] 2-rail seeds=%llu, fetch QPs per rail seen 2 -> 4 -> 2 on every node and rail: %llu\n", (unsigned long long)two_rail,
+  std::printf("2-rail seeds=%llu, fetch QPs per rail seen 2 -> 4 -> 2 on every node and rail: %llu\n", (unsigned long long)two_rail,
               (unsigned long long)hr7_walked);
   std::printf("%s: seeds=%llu failed=%llu ops=%llu hit=%llu miss=%llu committed=%llu skipped=%llu cycles=%llu failed_ops_by_oracle=%llu\n",
               bad == 0 ? "OK" : "FAIL", (unsigned long long)n, (unsigned long long)bad, (unsigned long long)ops, (unsigned long long)hits,

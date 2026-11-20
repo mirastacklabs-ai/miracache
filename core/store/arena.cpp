@@ -41,7 +41,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
   if (auto s = cfg.validate(); !s) return s.error();
   auto seg_layout = compute_segment_layout(cfg.segment_bytes, cfg.run_bytes);
   if (!seg_layout) return seg_layout.error();
-  // A3.1: the persisted scope region. Auto: none for the volatile Anon backing, else one record per min_block of data
+  // The persisted scope region. Auto: none for the volatile Anon backing, else one record per min_block of data
   // (a scope holds at least one block), capped at the spec's 4 Mi.
   std::uint32_t scope_records = cfg.scope_records;
   if (scope_records == 0 && cfg.backing != BackingKind::Anon) {
@@ -52,13 +52,13 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
   auto scope_layout = compute_scope_region(*seg_layout, scope_records);
   if (!scope_layout) return scope_layout.error();
 
-  // r9b T02/T03: the state_dir is checked and locked before the store is mapped or touched: a second memory node on
+  // The state_dir is checked and locked before the store is mapped or touched: a second memory node on
   // the same state_dir stops here, before it can reformat anything.
   const bool use_file = !cfg.state_dir.empty();
   StateDirLock lock;
   if (use_file) {
-    if (auto s = prepare_state_dir(cfg.state_dir); !s) return s.error();  // T03: our own dir, not group/world-writable
-    auto lk = StateDirLock::acquire(cfg.state_dir);                        // T02: one memory node per state_dir
+    if (auto s = prepare_state_dir(cfg.state_dir); !s) return s.error();  // our own dir, not group/world-writable
+    auto lk = StateDirLock::acquire(cfg.state_dir);                        // one memory node per state_dir
     if (!lk) return lk.error();
     lock = std::move(*lk);
   }
@@ -78,8 +78,8 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
   const auto seg0 = a->segs_[0];
   const auto& l = a->layout_.seg;
 
-  // r9b T11: every segment's metadata is written by a format, so every segment is synced (seg 0 whole: superblocks).
-  // r9c U03: segments 1..n first, segment 0 (the superblocks) last, so a power loss in between never leaves a valid
+  // Every segment's metadata is written by a format, so every segment is synced (seg 0 whole: superblocks).
+  // Segments 1..n first, segment 0 (the superblocks) last, so a power loss in between never leaves a valid
   // superblock over metadata that was not written yet.
   auto sync_meta = [&]() -> Status {
     for (std::uint32_t k = 1; k <= cfg.n_segments; ++k) {
@@ -99,13 +99,13 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
     return sync_meta();
   };
 
-  // Review r9 S04 + r9b T01/T02: with a state_dir the node ID lives in <state_dir>/node-id, so a wiped or volatile store
+  // With a state_dir the node ID lives in <state_dir>/node-id, so a wiped or volatile store
   // keeps its identity. Without one (tests) it lives in the superblock only, as in plan 2C.
   //   node-id present                    -> that ID;
   //   node-id missing, `initialised` set -> the node was replaced: a new ID, the store is reformatted;
   //   node-id missing, never initialised -> upgrade path: adopt a persistent superblock ID if any, else draw.
   std::uint32_t file_id = 0;
-  bool initialised = false, file_invalid = false;  // file_invalid: node-id existed but held no valid ID (r9c U04)
+  bool initialised = false, file_invalid = false;  // file_invalid: node-id existed but held no valid ID
   if (use_file) {
     auto r = read_node_id_file(cfg.state_dir, &file_invalid);
     if (!r) return r.error();
@@ -114,7 +114,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
     if (!ini) return ini.error();
     initialised = *ini;
   }
-  // A replaced node (T01): draws its new ID and writes it before the store is touched; a crash in between leaves
+  // A replaced node: draws its new ID and writes it before the store is touched; a crash in between leaves
   // node-id holding the new ID, so the next start sees a store of another identity and reformats it.
   auto replace_id = [&](std::uint32_t prev_store_id) -> Status {
     auto id = random_nonzero_u32();
@@ -142,7 +142,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
                    {{"id", std::to_string(file_id)}});
       } else if (file_id == 0 || sb->node_id != file_id) {
         if (file_id == 0) {
-          // T01: node-id was deleted in an initialised dir = replacing the node. The old cache belongs to the old
+          // Node-id was deleted in an initialised dir = replacing the node. The old cache belongs to the old
           // identity: reformat under the new one.
           if (auto s = replace_id(sb->node_id); !s) return s.error();
         } else {
@@ -157,7 +157,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
       }
     }
   }
-  // r9c U03: a valid superblock over a segment meta that does not decode (zeroed or torn: a reformat that lost power
+  // A valid superblock over a segment meta that does not decode (zeroed or torn: a reformat that lost power
   // between the syncs) is a half-formatted store, i.e. blank. A meta that decodes but differs from the config is
   // still refused below.
   if (!blank) {
@@ -173,14 +173,14 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
       }
     }
   }
-  // s12 (tpu-sync cross-check C2): the restart scan infers each run's block size from min_block_bytes, so the value the
-  // store was formatted with must be the one in force. A store from before s12 has 0 there (unknown): re-formatted
+  // The restart scan infers each run's block size from min_block_bytes, so the value the
+  // store was formatted with must be the one in force. A store from an earlier release has 0 there (unknown): re-formatted
   // once, like a store without a scope region. Another value is a STATIC change: refused. Checked before the scope
   // region, whose computed default size depends on min_block_bytes (so the refusal names the real cause).
   const auto min_log2 = static_cast<std::uint8_t>(std::countr_zero(static_cast<std::uint64_t>(cfg.min_block_bytes)));
   if (!blank && found && found->min_block_log2 != min_log2) {
     if (found->min_block_log2 == 0) {
-      log::write(log::Level::Warn, "store", "store does not record its minimum block size (written before s12); reformatting the store",
+      log::write(log::Level::Warn, "store", "store does not record its minimum block size (written by an earlier release); reformatting the store",
                  {{"state_dir", cfg.state_dir}});
       if (auto e = wipe_meta(); !e) return e.error();
       blank = true;
@@ -190,7 +190,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
                                                "drain and re-format the node)"};
     }
   }
-  // A3.1: the scope region must be where this config puts it. A store without one (written before A3.1) cannot resume
+  // The scope region must be where this config puts it. A store without one (written before scope records existed) cannot resume
   // its scopes, so it is re-formatted (a cold start, once); a region of another size is a STATIC change (refused,
   // like the geometry); a region header that does not decode loses every scope, so the store is blank.
   const auto& sl = a->layout_.scope;
@@ -214,7 +214,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
   }
   if (blank) {
     a->fresh_ = true;
-    // A3.1: a blank store holds no block header and no scope record (a header slot is valid only from commit to
+    // A blank store holds no block header and no scope record (a header slot is valid only from commit to
     // free, which is what the restart scan relies on), whatever the media held before. Check-before-write.
     for (std::uint32_t s = 0; s < cfg.n_segments; ++s) {
       auto bytes = a->segs_[s];
@@ -229,7 +229,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
     a->sb_.scope_len = sl.len;
     a->sb_.format_epoch = 1;
     // Plan 2C: the ID is drawn here, once, for a blank store (cfg.node_id is only a test hook).
-    // With a state file (S04) a blank store takes the file's ID, so a wiped hugetlbfs or a volatile (Anon)
+    // With a state file a blank store takes the file's ID, so a wiped hugetlbfs or a volatile (Anon)
     // store keeps its identity; a new ID is drawn only when node-id is missing (first start, or a replacement).
     // Without a state file (tests) a blank store gets a new ID: its cache is gone too.
     if (use_file) {
@@ -253,7 +253,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
     }
     a->sb_.segment_size = cfg.segment_bytes;
     a->sb_.n_segments = cfg.n_segments;
-    a->sb_.min_block_log2 = min_log2;  // s12 C2
+    a->sb_.min_block_log2 = min_log2;
     a->sb_.sg_off = 0;  // the array is volatile heap memory, not part of the media
     a->sb_.sg_slots = a->layout_.sg_slots();
     // Two copies: seq 0 in copy 0, seq 1 in copy 1; later writes alternate (seq & 1).
@@ -288,7 +288,7 @@ Expected<std::unique_ptr<Arena>> Arena::open(const StoreConfig& cfg, std::unique
     }
     a->was_clean_ = a->sb_.clean_shutdown == 1;
   }
-  // T01: the directory holds an ID now; from here on a missing node-id means the node was replaced. Written after
+  // The directory holds an ID now; from here on a missing node-id means the node was replaced. Written after
   // node-id, so a crash in between only repeats the upgrade path with the ID that is already in the file.
   if (use_file && !initialised)
     if (auto m = mark_state_dir_initialised(cfg.state_dir); !m) return m.error();

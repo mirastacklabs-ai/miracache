@@ -99,7 +99,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
   auto& s = c.server;
   s.store.backing = store::BackingKind::File;
   s.store.production = true;
-  // Review r9 S04 + r9b T02/T03: the node ID file and its marker; [node] state_dir overrides. One memory node per
+  // The node ID file and its marker; [node] state_dir overrides. One memory node per
   // state_dir (locked for the process lifetime); it must be owned by this user and not group/world-writable.
   s.store.state_dir = "/var/lib/miracache";
   s.store.segment_bytes = std::size_t{4} << 30;
@@ -107,13 +107,13 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
   s.store.min_block_bytes = std::size_t{64} << 10;
   s.store.n_segments = 1;
   // store.max_bytes absent = 0 = "computed": Server::create / dyn_from_server_config resolve it to this node's
-  // n_segments x segment_bytes (one rule, one place; K02). An explicit value wins.
+  // n_segments x segment_bytes (one rule, one place). An explicit value wins.
   s.store.principal_default.max_bytes = 0;
   bool ok = true;
 
   if (const auto* t = section(root, "node", ok)) {
     static constexpr const char* k[] = {"device", "protocol", "listen", "drain_ms", "state_dir", "rails"};
-    // Plan 2C + review r9 S04: the ID is drawn at random once and kept in <state_dir>/node-id (mode 0600). There is no
+    // The ID is drawn at random once and kept in <state_dir>/node-id (mode 0600). There is no
     // way to set it by hand: state_dir is a path.
     if (t->contains("id")) return bad("config: node id was removed; node IDs are assigned automatically");
     if (!keys_ok(*t, k)) return bad("config: unknown key in [node]");
@@ -140,7 +140,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
         s.rails.push_back(fabric::RailAddr{str->substr(0, colon), *port});
       }
     }
-    // RL1 (multi-rail plan decisions 1 and 2): [[node.rails]] device, listen, subnet, 1..4 entries, STATIC (changing
+    // [[node.rails]] device, listen, subnet, 1..4 entries, STATIC (changing
     // them needs a rolling restart). The legacy form (node.device + node.listen) means every rail on that one device.
     if (const auto* rn = t->get("rails")) {
       if (t->contains("listen") || t->contains("device"))
@@ -181,7 +181,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
                                         "n_segments", "require_1g", "invalidate_per_s", "max_scopes",
                                         "max_bytes", "max_exact_classes_per_owner",
                                         "max_puts_per_endpoint", "max_leases_per_session", "scope_records"};
-    // HR1: the QT1/QT2 knobs moved out of [store] (they were never released): a stale name is an error that says where
+    // The retention, eviction and quota knobs moved out of [store] (they were never released): a stale name is an error that says where
     // the key lives now.
     static constexpr std::pair<const char*, const char*> kStale[] = {
         {"scope_idle_ttl_s", "retention.idle_ttl_s"},         {"max_ttl_s", "retention.max_ttl_s"},
@@ -217,9 +217,9 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
     ok = ok && GET_U32(*t, "max_exact_classes_per_owner", s.store.max_exact_classes_per_owner);
     ok = ok && GET_U32(*t, "max_puts_per_endpoint", s.store.max_puts_per_endpoint);
     ok = ok && GET_U32(*t, "max_leases_per_session", s.store.max_leases_per_session);
-    ok = ok && GET_U32(*t, "scope_records", s.store.scope_records);  // STATIC; 0 = auto (G06)
+    ok = ok && GET_U32(*t, "scope_records", s.store.scope_records);  // STATIC; 0 = auto
   }
-  // HR1: [retention] (QT1 decision 1), [evict] (QT1 decision 3), [quota] (QT2 decision 4): class A.
+  // [retention], [evict], [quota]: class A.
   if (const auto* t = section(root, "retention", ok)) {
     static constexpr const char* k[] = {"idle_ttl_s", "max_ttl_s"};
     if (!keys_ok(*t, k)) return bad("config: unknown key in [retention]");
@@ -271,7 +271,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
     if (!keys_ok(*t, k)) return bad("config: unknown key in [limits]");
     for (const auto& [kk, vv] : *t) { (void)vv; c.dyn_keys_present.push_back("limits." + std::string(kk.str())); }
     ok = ok && GET_U32(*t, "ticket_max_per_identity", s.ticket_max_per_identity) &&
-         (!t->contains("ticket_max_per_identity") || s.ticket_max_per_identity >= 1);  // unset = 0 = computed (H07)
+         (!t->contains("ticket_max_per_identity") || s.ticket_max_per_identity >= 1);  // unset = 0 = computed
     ok = ok && get_secs(*t, "admit_timeout_s", s.admit_timeout) && get_secs(*t, "hello_deadline_s", s.hello_deadline) &&
          get_secs(*t, "idle_timeout_s", s.idle_timeout);
     ok = ok && GET_U32(*t, "max_conns_per_principal", s.max_conns_per_principal) &&
@@ -299,7 +299,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
   if (const auto* t = section(root, "admin", ok)) {
     static constexpr const char* k[] = {"listen", "cert", "key", "ca", "max_conns", "rbac"};
     if (!keys_ok(*t, k)) return bad("config: unknown key in [admin]");
-    // RB2: [[admin.rbac]] identity = "spiffe://...", roles = ["operator", ...] (lab mode; bundle mode reads the bundle's).
+    // [[admin.rbac]] identity = "spiffe://...", roles = ["operator", ...] (lab mode; bundle mode reads the bundle's).
     if (const auto* rn = t->get("rbac")) {
       const auto* arr = rn->as_array();
       if (!arr || !arr->is_homogeneous(toml::node_type::table)) return bad("config: admin.rbac must be an array of tables");
@@ -337,7 +337,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
         return bad("config: admin.listen needs admin.cert, admin.key and admin.ca");
     }
   }
-  // [nic] (A3.3): the NIC profile registry and explicit operating-point keys. Precedence: config > profile > default.
+  // [nic]: the NIC profile registry and explicit operating-point keys. Precedence: config > profile > default.
   if (const auto* t = section(root, "nic", ok)) {
     static constexpr const char* k[] = {"profiles_file", "mtu", "inline_bytes", "ack_timeout_exp", "retry_count", "rnr_retry_count"};
     if (!keys_ok(*t, k)) return bad("config: unknown key in [nic]");
@@ -370,7 +370,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
         return bad("config: telemetry.listen port must be a number in 0..65535");
     }
   }
-  // [control] (membership plan decision 4): trust_keys switches bundle mode on. STATIC: read at start-up; the file's
+  // [control]: trust_keys switches bundle mode on. STATIC: read at start-up; the file's
   // contents reload on SIGHUP and on a 10 s stat check.
   if (const auto* t = section(root, "control", ok)) {
     static constexpr const char* k[] = {"trust_keys"};
@@ -378,7 +378,7 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
     ok = ok && get(*t, "trust_keys", c.trust_keys);
     if (ok && t->contains("trust_keys") && c.trust_keys.empty()) return bad("config: control.trust_keys must not be empty");
   }
-  // [audit] (RB2, node-local): dir (default <state_dir>/audit in bundle mode; empty and no bundle mode = no audit log),
+  // [audit] (node-local): dir (default <state_dir>/audit in bundle mode; empty and no bundle mode = no audit log),
   // max_bytes (rotation, default 64 MiB), max_total_bytes (default 1 GiB; never more than 10 % of the free space).
   if (const auto* t = section(root, "audit", ok)) {
     static constexpr const char* k[] = {"dir", "max_bytes", "max_total_bytes"};
@@ -396,19 +396,19 @@ Expected<NodeConfig> parse_node_config(std::string_view text) {
     c.workers = w;
   }
   if (!ok) return bad(g_why ? g_why : "config: wrong type or value");
-  {  // max_bytes unset (0) is resolved at Server::create (K02): validate the resolved store
+  {  // max_bytes unset (0) is resolved at Server::create: validate the resolved store
     store::StoreConfig resolved_store = s.store;
     if (resolved_store.principal_default.max_bytes == 0) resolved_store.principal_default.max_bytes = backing_bytes(resolved_store);
     if (auto st = resolved_store.validate(); !st) return st.error();
   }
   // The lab refresh runs at ttl/2, so up to two rounds of 3 classes are live at once.
-  // H07: unset (0) is computed at Server::create, never below kTicketMaxFloor: check against the floor.
+  // Unset (0) is computed at Server::create, never below kTicketMaxFloor: check against the floor.
   if (!c.lab_ticket_file.empty() &&
       std::uint64_t{c.lab_tickets} * 6 > (s.ticket_max_per_identity != 0 ? s.ticket_max_per_identity : kTicketMaxFloor))
     return bad("config: lab.tickets x 6 (3 classes, 2 live rounds) exceeds limits.ticket_max_per_identity");
   if (!c.lab_ticket_file.empty() && s.lab_identity.empty()) return bad("config: lab.ticket_file needs lab.principal");
   if (!c.trust_keys.empty() && c.admin_listen.empty()) return bad("config: control.trust_keys needs admin.listen (bundles arrive over the admin API)");
-  // HR1 decision 1: one source per mode. In bundle mode every class A key comes from the bundle's config.cluster.memnode.
+  // one source per mode. In bundle mode every class A key comes from the bundle's config.cluster.memnode.
   if (!c.trust_keys.empty() && !c.dyn_keys_present.empty())
     return bad_named("config: " + c.dyn_keys_present.front() + " is cluster config in bundle mode (set it in the bundle's config.cluster.memnode)");
   if (auto st = validate_dyn(dyn_from_server_config(s)); !st) return st.error();

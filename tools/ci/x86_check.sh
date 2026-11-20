@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# x86_64 build + unit-test check from the aarch64 dev VM (pre-hardware gate item A4). Run from the Mac:
+# x86_64 build + unit-test check from the aarch64 dev VM (pre-hardware gate item). Run from the Mac:
 #   tools/ci/x86_check.sh            default: CROSS-compile natively, run the tests under qemu emulation (minutes)
 #   tools/ci/x86_check.sh --emulate  compile too under qemu (build/x86-release; >8 h on a busy VM, last resort)
 # Default path: native clang-18 + lld (native dev image, run.sh) cross-compile the release preset for
@@ -13,7 +13,7 @@
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
-# L10: whatever fails (set -e, a bad variable, ^C), the last line is "FAIL: x86 check (...)" and the temporary
+# Whatever fails (set -e, a bad variable, ^C), the last line is "FAIL: x86 check (...)" and the temporary
 # sysroot container of make_sysroot goes. A step that already printed its own FAIL still gets this closing line.
 cid=""          # the temporary sysroot container, while it exists
 check_ok=0      # set at the very end of a successful run

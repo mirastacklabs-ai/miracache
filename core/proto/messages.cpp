@@ -567,7 +567,7 @@ WireResult<Lookup> decode_lookup(const FrameHeader& h, std::span<const std::byte
 
 // ---- LOOKUP_ACK -----------------------------------------------------------------------
 namespace {
-// MISS entries are all-zero (D5); HIT carries a valid generation (D14).
+// MISS entries are all-zero; HIT carries a valid generation.
 WireStatusResult check_lookup_ack_entry(const LookupAckEntry& e) {
   if (e.status > 1) return malformed("lookup_ack: status");
   if (e.status == 0) {

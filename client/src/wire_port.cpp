@@ -31,7 +31,7 @@ using proto::WireStatus;
 
 namespace {
 // Sim (a drive hook): a wait ends on its Clock deadline, as in production; the drive hook advances the sim clock when
-// the network is idle. Review w5 U2-26: the guard is in sim time, not a call budget: only a sim clock that stands still
+// the network is idle. The guard is in sim time, not a call budget: only a sim clock that stands still
 // for kMaxStillSpins drive calls in a row ends the wait (as a full timeout). A frozen server therefore holds a job until
 // the job's deadline on every build, fast or slow.
 constexpr unsigned kMaxStillSpins = 200000;
@@ -68,7 +68,7 @@ bool parse_hex16(const std::string& s, std::array<std::uint8_t, 16>& out) {
 }  // namespace
 
 namespace {
-// `want_rail` < 0: any rail (the single-rail source); else only lines of that rail (RL2).
+// `want_rail` < 0: any rail (the single-rail source); else only lines of that rail.
 Expected<proto::Ticket> lab_draw(const std::string& path, std::set<std::array<std::uint8_t, 16>>& used, fabric::EpClass cls,
                                  int want_rail) {
   static const char* names[] = {"control", "fetch", "ingest"};
@@ -90,7 +90,7 @@ Expected<proto::Ticket> lab_draw(const std::string& path, std::set<std::array<st
   }
   return err(ErrorCode::NotFound, "wire: no unused ticket in ticket file");
 }
-// J01 (review s8 wave15): paths under the client lock that touched a device fabric lent to build_rails(), process-wide
+// Paths under the client lock that touched a device fabric lent to build_rails(), process-wide
 // (WirePort::lend_violations(); the tests assert it stays 0).
 std::atomic<std::uint64_t> g_lend_violations{0};
 }  // namespace
@@ -113,17 +113,17 @@ struct WirePort::Impl {
     bool hello = false;
     bool dead = false;
     bool zombie = false;  // torn down: aborted, waiting to be released once drained; frames ignored
-    std::uint64_t down_at = 0;  // Q01: the down count whose go_down tore it down (0 = not a session end)
-    // RL2: the key of this endpoint in `eps` (the fabric's id, made unique across local devices), its rail position and
+    std::uint64_t down_at = 0;  // The down count whose go_down tore it down (0 = not a session end)
+    // The key of this endpoint in `eps` (the fabric's id, made unique across local devices), its rail position and
     // its device. `ops` / `op_bytes`: READ/WRITE work requests posted through the mux and not completed yet (RC
-    // completes one QP's requests in post order, flushes included), the "outstanding bytes" of decisions 7 and 8.
+    // completes one QP's requests in post order, flushes included), the "outstanding bytes" of the fetch mux and the put picker.
     fabric::EndpointId key = 0;
     std::size_t rail = 0;
     std::size_t dev = 0;
     std::deque<std::uint32_t> ops;
     std::uint64_t op_bytes = 0;
   };
-  // RL2: one node rail and its endpoint set (see wire_port.h). Without WireOptions::rails there is one, built from the
+  // One node rail and its endpoint set (see wire_port.h). Without WireOptions::rails there is one, built from the
   // single-rail options, and the session logic is exactly the single-rail one.
   struct Rail {
     WireOptions::RailOpt o;
@@ -133,47 +133,47 @@ struct WirePort::Impl {
     fabric::EndpointId ctl = 0, ing = 0;
     std::vector<fabric::EndpointId> fet;
     bool dead = false;  // one of its endpoints died: give it up at the next check_down
-    // W01 suspect (per rail): a control RPC on it timed out, or (several rails) three PINGs went unanswered.
+    // Suspect (per rail): a control RPC on it timed out, or (several rails) three PINGs went unanswered.
     bool suspect = false;
     Nanos suspect_since{0};
     Nanos last_probe{-1};
     Nanos last_frame{0};  // the last intact frame on any of its endpoints
     unsigned unanswered = 0;  // keepalive PINGs sent on its control QP since its last frame (missed-PING detection)
     Nanos last_ping{std::numeric_limits<std::int64_t>::min() / 2};  // when the last of those PINGs went out
-    // F04: a SEG_TABLE at least as new as the session's arrived on this rail since its HELLO (the rail may take work)
+    // A SEG_TABLE at least as new as the session's arrived on this rail since its HELLO (the rail may take work)
     bool have_table = false;
-    // F04: only tables older than the session's arrived on it (a joining rail: the node may have restarted)
+    // Only tables older than the session's arrived on it (a joining rail: the node may have restarted)
     bool stale_table = false;
-    // H02: a HELLO_ACK on this rail carried another boot nonce than the session's: a new process (its tables are ignored)
+    // A HELLO_ACK on this rail carried another boot nonce than the session's: a new process (its tables are ignored)
     bool boot_mismatch = false;
-    std::optional<std::uint64_t> seen_nonce;  // J07: the other nonce that rail's HELLO_ACK carried (for the log line)
+    std::optional<std::uint64_t> seen_nonce;  // The other nonce that rail's HELLO_ACK carried (for the log line)
     unsigned fail_streak = 0;
     Nanos next_attempt{0};
     std::uint64_t put_bytes = 0;  // outstanding put bytes (begun, not done or cancelled)
     std::uint64_t reads = 0, puts = 0, reconnects = 0;
-    // RL2 follow-up B: a reconnect in a live session in progress (join_start .. join_step): its HELLOs awaited, by
+    // A reconnect in a live session in progress (join_start .. join_step): its HELLOs awaited, by
     // (endpoint key, request id). The rail is not up (takes no work) until every HELLO_ACK and its SEG_TABLE are in.
     bool joining = false;
     Nanos join_deadline{0};
     std::vector<std::pair<fabric::EndpointId, std::uint64_t>> join;
-    bool inlock_logged = false;  // J06b / RL3: the in-lock connect fallback was logged for this rail (once per port)
+    bool inlock_logged = false;  // The in-lock connect fallback was logged for this rail (once per port)
     bool unpaired_logged = false;
     telemetry::Gauge* g_state = nullptr;
     std::uint32_t g_node = ~0u;  // the node ID g_state was made for (goal 10: the series carries it)
     std::string g_host;          // and the hostname ("unknown" when empty)
-    // RL3: READ bytes outstanding on its fetch QPs (miracache_read_window) and landed on it (the rail-labelled fetch
+    // READ bytes outstanding on its fetch QPs (miracache_read_window) and landed on it (the rail-labelled fetch
     // byte counter); both series carry the node ID, hostname and the rail's address (goal 10).
     std::uint64_t read_out = 0, read_bytes = 0;
     telemetry::Gauge* g_window = nullptr;
     telemetry::Counter* c_read = nullptr;
-    // R16: READs/WRITEs that found this rail's QP send queue full (sq_depth) and waited (miracache_client_sq_full_total).
+    // READs/WRITEs that found this rail's QP send queue full (sq_depth) and waited (miracache_client_sq_full_total).
     std::uint64_t sq_full = 0;
     telemetry::Counter* c_sqfull = nullptr;
-    // HR7: miracache_client_rail_fetch_qps, the fetch QPs connected on this rail now (fetch_qps while it is up, 0 down):
+    // miracache_client_rail_fetch_qps, the fetch QPs connected on this rail now (fetch_qps while it is up, 0 down):
     // the "QPs per rail" a planned rebuild changes. Same labels as the rail state.
     telemetry::Gauge* g_qps = nullptr;
   };
-  // RL2: a put's rail and the remote ranges its WRITEs go to (the mux routes a WRITE by its remote address).
+  // A put's rail and the remote ranges its WRITEs go to (the mux routes a WRITE by its remote address).
   struct PutRec {
     fabric::EndpointId ep = 0;
     std::size_t rail = 0;
@@ -215,7 +215,7 @@ struct WirePort::Impl {
       r->o = std::move(o2);
       rails.push_back(std::move(r));
     }
-    MIRACACHE_CHECK(!rails.empty());  // R10: an empty opts.rails is rail 0 = opts.rail; code below indexes rails[0]
+    MIRACACHE_CHECK(!rails.empty());  // An empty opts.rails is rail 0 = opts.rail; code below indexes rails[0]
     mux = rails.size() > 1 || opts.fetch_qps > 1;
   }
 
@@ -225,7 +225,7 @@ struct WirePort::Impl {
   WireOptions opts;
 
   std::map<fabric::EndpointId, Ep> eps;
-  // RL2: rails in node rail order, the distinct local devices ([0] = inner), and whether ClientCore sees the
+  // Rails in node rail order, the distinct local devices ([0] = inner), and whether ClientCore sees the
   // multiplexing endpoints (several rails or fetch QPs) or the single rail's raw endpoints (the unchanged path).
   std::vector<std::unique_ptr<Rail>> rails;
   std::vector<fabric::Fabric*> devs;
@@ -243,11 +243,11 @@ struct WirePort::Impl {
   telemetry::Gauge* g_unpaired = nullptr;
   std::uint32_t g_unpaired_node = ~0u;  // the node ID its labels carry
   std::string g_unpaired_host;          // and the hostname ("unknown" when empty)
-  telemetry::Counter* c_reissued = nullptr;  // RL3: miracache_client_slices_reissued_total of this node
+  telemetry::Counter* c_reissued = nullptr;  // miracache_client_slices_reissued_total of this node
   std::uint32_t c_reissued_node = ~0u;
   std::string c_reissued_host;
   std::atomic<std::uint64_t> reissued{0};
-  // RL3: RENEWs sent and not yet answered, by request id (lease, send time); bounded. A RENEW_ACK OK of one gives
+  // RENEWs sent and not yet answered, by request id (lease, send time); bounded. A RENEW_ACK OK of one gives
   // (lease, send time + ttl) to take_renewed.
   std::map<std::uint64_t, std::pair<store::LeaseId, Nanos>> renew_sent;
   std::vector<ServerPort::Renewed> renewed;
@@ -255,17 +255,17 @@ struct WirePort::Impl {
   std::uint64_t next_rid = 1;
   std::array<std::uint8_t, 16> conn_id{};
   bool have_conn_id = false;
-  // H02: the boot nonce of the session's first HELLO_ACK (nullopt: a node that sends none). Reset with the conn_id.
+  // The boot nonce of the session's first HELLO_ACK (nullopt: a node that sends none). Reset with the conn_id.
   bool have_boot = false;
   std::optional<std::uint64_t> boot_nonce;
-  // K03: HELLO_ACK kTlvTagMaxStoredBlock of the session's first HELLO_ACK (0 = unknown: an older node). Atomic: the
+  // HELLO_ACK kTlvTagMaxStoredBlock of the session's first HELLO_ACK (0 = unknown: an older node). Atomic: the
   // adapters' start-up check (Client::block_size_problem) reads it off the core lock.
   std::atomic<std::uint64_t> max_stored{0};
-  // K04: PUT_BEGINs refused locally (too large) or by an error reply the job cannot act on: one WARN per reason per
+  // PUT_BEGINs refused locally (too large) or by an error reply the job cannot act on: one WARN per reason per
   // minute (with the count dropped in between) and miracache_client_put_refused_total{reason}. Own mutex: rare path.
   std::mutex refuse_mu;
   LogLimiter refuse_log{std::chrono::seconds(60)};
-  // L05: the put_refused counters by (ID label, hostname label, reason): no registry lookup per refusal. Under
+  // The put_refused counters by (ID label, hostname label, reason): no registry lookup per refusal. Under
   // refuse_mu; cleared when the metrics are rebound (the pointers live in the old registry).
   std::map<std::tuple<std::string, std::string, std::string>, telemetry::Counter*> refuse_ctr;
   std::atomic<std::uint64_t> refusals{0};
@@ -275,13 +275,13 @@ struct WirePort::Impl {
   ServerInfo info;
   bool info_dirty = false;
   bool goaway = false;
-  // Review w4 V08: the last GOAWAY said Epoch (the node left the membership, MB4). Sticky until a session is Up again,
+  // The last GOAWAY said Epoch (the node left the membership). Sticky until a session is Up again,
   // so a store routed there is a per-key skip (BeginSkip::Draining), not a failure. Read without the core lock.
   std::atomic<bool> removed{false};
   bool any_dead = false;
-  // W01 (per rail since RL2, Rail::suspect): set when a control RPC times out; control RPCs then fail fast (miss) until
+  // Per-rail suspect flag (Rail::suspect): set when a control RPC times out; control RPCs then fail fast (miss) until
   // any frame arrives on that rail. A fail-fast call sends a rate-limited PING so the state clears without keepalive.
-  bool full_timeout = false;  // the last wait_until timeout used the whole rpc_timeout (R02)
+  bool full_timeout = false;  // the last wait_until timeout used the whole rpc_timeout
 
   // ---- session state machine (see wire_port.h) ----
   enum class Reason { Goaway = 0, EpError = 1, Suspect = 2 };
@@ -289,14 +289,14 @@ struct WirePort::Impl {
   std::atomic<std::uint64_t> down_count{0};
   std::atomic<std::uint64_t> attempts_total{0};
   std::atomic<bool> aborting{false};  // Client shutdown: Connecting gives up
-  std::atomic<std::uint64_t> restarts_seen{0};  // F04: sessions ended because a rejoining rail found a restarted node (test hook)
-  bool drained_by_retire = false;  // HR3b: drain_session took the session Down (not a lost session: not counted)
-  Nanos goaway_until{0};              // GOAWAY drain deadline (receipt + drain_ms); 0 = none (r6 A1)
+  std::atomic<std::uint64_t> restarts_seen{0};  // Sessions ended because a rejoining rail found a restarted node (test hook)
+  bool drained_by_retire = false;  // drain_session took the session Down (not a lost session: not counted)
+  Nanos goaway_until{0};              // GOAWAY drain deadline (receipt + drain_ms); 0 = none
   unsigned fail_streak = 0;           // consecutive failed attempts
   bool config_error = false;          // the last failure was a node_id mismatch or a refused (duplicate) ID
-  std::vector<unsigned> rails_connected;  // Q03: node rail indices the last connect_all connected (reconnecting thread)
+  std::vector<unsigned> rails_connected;  // Node rail indices the last connect_all connected (reconnecting thread)
   std::atomic<std::uint32_t> node_now{0};  // the node ID (opts.node, or learned from HELLO_ACK)
-  // F5: the node's hostname from HELLO_ACK (TLV 0x0004; empty = unknown). The caller's own source (opts.hostname: the
+  // The node's hostname from HELLO_ACK (TLV 0x0004; empty = unknown). The caller's own source (opts.hostname: the
   // admin ticket answer or the bundle) has priority; this is the fallback of static/lab mode.
   mutable std::mutex wire_host_mu;
   std::string wire_host;
@@ -306,9 +306,9 @@ struct WirePort::Impl {
     std::lock_guard lk(wire_host_mu);
     return wire_host;
   }
-  // Q03: atomic, and always written BEFORE the Down that makes it readable is published.
+  // Atomic, and always written BEFORE the Down that makes it readable is published.
   std::atomic<Nanos> next_attempt{Nanos{0}};
-  // Q01/Q02: true only while a build or reconnect runs on the Client keepalive thread (set through
+  // True only while a build or reconnect runs on the Client keepalive thread (set through
   // WirePort::set_background / reconnect_step). Then connect uses reconnect_connect_ms on every endpoint
   // and HELLO / SEG_TABLE use the short RPC cap. Written by the keepalive thread only; atomic because job
   // threads read it in wait_until (they run no RPC while the session is not Up, so they see false).
@@ -319,9 +319,9 @@ struct WirePort::Impl {
     bool prev;
     explicit BackgroundScope(std::atomic<bool>& f) : flag(f), prev(f.exchange(true)) {}
     ~BackgroundScope() { end(); }
-    void end() { flag = prev; }  // N06: before the flip to Up, so no job RPC sees the short cap
+    void end() { flag = prev; }  // Before the flip to Up, so no job RPC sees the short cap
   };
-  // N02/Q01: the down counts whose go_down tore down endpoints that are not all released yet (see
+  // The down counts whose go_down tore down endpoints that are not all released yet (see
   // ServerPort::session_reaped). Per session, so one endpoint that never drains holds back only its own
   // session's quarantine, not every later one. reap_mu: reap() may run on the keepalive thread off the
   // client lock while the core reads this from a job thread.
@@ -337,13 +337,13 @@ struct WirePort::Impl {
   }
   Nanos op_deadline = Nanos::max();  // absolute; see ServerPort::set_op_deadline
   std::atomic<std::uint64_t> pings{0}, pongs{0};  // read by tests from other threads
-  std::atomic<std::uint64_t> late_acks_released{0};  // R04: unmatched LOOKUP_ACK leases given back
+  std::atomic<std::uint64_t> late_acks_released{0};  // Unmatched LOOKUP_ACK leases given back
 
   std::map<store::PutId, PendingCommit> commits;
   std::vector<std::function<void()>> ready;
   std::deque<fabric::Completion> stash;
 
-  // Run #233 (RL3 leftover): a rejoining rail's endpoint set, connected OFF the client lock on the rail's own device
+  // A rejoining rail's endpoint set, connected OFF the client lock on the rail's own device
   // fabric (see wire_port.h). Only the keepalive thread touches `rbuild` (keepalive(), build_rails(), reconnect_step(),
   // release_all()); `lent_dev` is written by it under the caller's lock (keepalive) or with no job inside (reconnect,
   // close), and read by service() under the lock. At most one build at a time.
@@ -354,7 +354,7 @@ struct WirePort::Impl {
     bool built = false;      // build_rails() ran
     Status result;
     std::vector<std::pair<fabric::EpClass, fabric::Endpoint*>> made;  // connected, no HELLO yet; not in `eps`
-    // J06a (review s8 wave15): a device-level CqError release_made() polled off the lent fabric. It belongs to
+    // A device-level CqError release_made() polled off the lent fabric. It belongs to
     // ClientCore (as absorb() hands it under the lock): take_back() puts it in `stash`.
     std::optional<fabric::Completion> cq_error;
   };
@@ -366,7 +366,7 @@ struct WirePort::Impl {
   std::size_t lent_dev = kNoDev;  // devs[] index lent to build_rails (service() does not poll it)
   std::atomic<std::uint64_t> off_lock_builds{0};  // build_rails() runs that connected a whole set (tests)
 
-  // J01 (review s8 wave15): while devs[lent_dev] is lent, nothing under the client lock may touch it (no endpoint of
+  // While devs[lent_dev] is lent, nothing under the client lock may touch it (no endpoint of
   // ours is on it, nothing polls, posts on, registers on or releases into it). Every under-lock entry that reaches a
   // device fabric calls this with the device it is about to touch (kNoDev: every device, e.g. a landing registration).
   // A violation is logged (node ID, hostname, the rail's address), counted (WirePort::lend_violations()) and traps in
@@ -378,7 +378,7 @@ struct WirePort::Impl {
     const Rail& r = *rails[rbuild ? rbuild->rail : 0];
     rail_log(log::Level::Error, r, "device fabric lent to the off-lock rail build touched under the client lock", where);
 #ifndef NDEBUG
-    ::miracache::check_failed("J01: lent device fabric touched under the client lock", __FILE__, __LINE__);
+    ::miracache::check_failed("Lent device fabric touched under the client lock", __FILE__, __LINE__);
 #endif
   }
 
@@ -387,7 +387,7 @@ struct WirePort::Impl {
     auto it = eps.find(id);
     return it == eps.end() ? nullptr : &it->second;
   }
-  // RL2: endpoint ids are per fabric; with several local devices the key carries the device (device 0 keeps the id).
+  // Endpoint ids are per fabric; with several local devices the key carries the device (device 0 keeps the id).
   static fabric::EndpointId key_of(std::size_t dev, fabric::EndpointId id) {
     return dev == 0 ? id : (static_cast<fabric::EndpointId>(dev) << 56) | id;
   }
@@ -406,9 +406,9 @@ struct WirePort::Impl {
     return rails[0]->o.addr.host + ":" + std::to_string(rails[0]->o.addr.port);
   }
   // Goal 10: every rail series and log line carries the node ID, hostname and the rail's IP.
-  // F3 (K09): an unknown ID (0, learn mode before the first HELLO_ACK) or hostname (empty) is labelled "unknown", never
-  // "0" or "". H08: the series carrying "unknown" are hidden once the identity is learned (they would stay at 0 for
-  // ever); the series of a previous real ID (a replaced node) go to 0 as before (F08).
+  // An unknown ID (0, learn mode before the first HELLO_ACK) or hostname (empty) is labelled "unknown", never
+  // "0" or "". The series carrying "unknown" are hidden once the identity is learned (they would stay at 0 for
+  // ever); the series of a previous real ID (a replaced node) go to 0 as before.
   static std::string id_label(std::uint32_t id) { return id ? std::to_string(id) : std::string("unknown"); }
   std::string host_label() const {
     std::string h = host_now();
@@ -439,14 +439,14 @@ struct WirePort::Impl {
                                   {"rail", std::to_string(r.o.index)},
                                   {"addr", r.o.addr.host + ":" + std::to_string(r.o.addr.port)}};
         r.g_state = &mx->reg.gauge("miracache_client_rail_state", "Client view of one memory-node rail: 0 down, 1 suspect, 2 up.", l);
-        r.g_window = &mx->reg.gauge("miracache_read_window", "READ bytes outstanding on one memory-node rail's fetch QPs (RL3).", l);
+        r.g_window = &mx->reg.gauge("miracache_read_window", "READ bytes outstanding on one memory-node rail's fetch QPs.", l);
         r.g_qps = &mx->reg.gauge("miracache_client_rail_fetch_qps",
-                                 "Fetch QPs connected on one memory-node rail (fabric.fetch_qps per rail while it is up; HR7).", l);
+                                 "Fetch QPs connected on one memory-node rail (fabric.fetch_qps per rail while it is up).", l);
         r.c_read = &mx->reg.counter("miracache_client_fetch_rail_bytes_total",
-                                    "RDMA READ bytes of fetches that landed, by memory-node rail (RL3).", l);
+                                    "RDMA READ bytes of fetches that landed, by memory-node rail.", l);
         r.c_sqfull = &mx->reg.counter("miracache_client_sq_full_total",
                                       "READs/WRITEs that found a QP send queue full (sq_depth) on one memory-node rail and "
-                                      "waited for room instead of failing (R16).",
+                                      "waited for room instead of failing.",
                                       l);
         r.g_node = id;
         r.g_host = host;
@@ -457,9 +457,9 @@ struct WirePort::Impl {
     }
     if (!c_reissued || c_reissued_node != id || c_reissued_host != host) {
       if (c_reissued && unk(c_reissued_node, c_reissued_host) && (id != 0 || host != "unknown"))
-        mx->reg.hide(c_reissued);  // H08
+        mx->reg.hide(c_reissued);
       c_reissued = &mx->reg.counter("miracache_client_slices_reissued_total",
-                                    "Fetch slices re-issued on another rail after their own failed or flushed completion (RL3).",
+                                    "Fetch slices re-issued on another rail after their own failed or flushed completion.",
                                     {{"node", node_label()},
                                      {"node_id", ids},
                                      {"hostname", host},
@@ -467,9 +467,9 @@ struct WirePort::Impl {
       c_reissued_node = id;
       c_reissued_host = host;
     }
-    // F08 (goal 10): node_id, hostname and addr as the rail series; the series of a previous ID goes to 0.
+    // Goal 10: node_id, hostname and addr as the rail series; the series of a previous ID goes to 0.
     if ((mux || opts.unpaired_rails > 0) && (!g_unpaired || g_unpaired_node != id || g_unpaired_host != host)) {
-      retire(g_unpaired, g_unpaired_node, g_unpaired_host);  // H08: hidden when it carried the unknown ID
+      retire(g_unpaired, g_unpaired_node, g_unpaired_host);  // Hidden when it carried the unknown ID
       g_unpaired = &mx->reg.gauge("miracache_client_rail_unpaired",
                                   "Node rails with no local device of their subnet nor a wildcard device, or of another "
                                   "protocol (unused).",
@@ -482,7 +482,7 @@ struct WirePort::Impl {
       g_unpaired_host = host;
     }
   }
-  // RL3: the rail's outstanding READ bytes changed (a READ posted or completed).
+  // The rail's outstanding READ bytes changed (a READ posted or completed).
   void read_window_moved(Rail& r, std::int64_t d) {
     r.read_out = d < 0 ? r.read_out - std::min<std::uint64_t>(r.read_out, static_cast<std::uint64_t>(-d))
                        : r.read_out + static_cast<std::uint64_t>(d);
@@ -490,7 +490,7 @@ struct WirePort::Impl {
   }
   void rail_log(log::Level lvl, const Rail& r, std::string_view msg, std::string_view why = {},
                 std::initializer_list<log::Field> extra = {}) {
-    // L05: "unknown" for an ID not learned yet or an empty hostname, never "0" or "" (as the series).
+    // "unknown" for an ID not learned yet or an empty hostname, never "0" or "" (as the series).
     std::vector<log::Field> f{{"node_id", id_label(node_now.load(std::memory_order_acquire))},
                               {"hostname", host_label()},
                               {"addr", r.o.addr.host + ":" + std::to_string(r.o.addr.port)},
@@ -500,14 +500,14 @@ struct WirePort::Impl {
     for (const auto& e : extra) f.push_back(e);
     log::write(lvl, "client", msg, std::span<const log::Field>(f));
   }
-  // J07: a boot nonce as logged ("none": a node that sends none), to match a client line to the node's start line.
+  // A boot nonce as logged ("none": a node that sends none), to match a client line to the node's start line.
   static std::string nonce_text(const std::optional<std::uint64_t>& n) {
     if (!n) return "none";
     char b[24];
     std::snprintf(b, sizeof b, "%016llx", static_cast<unsigned long long>(*n));
     return b;
   }
-  // K04: a PUT_BEGIN on rail `r` that failed for `reason` ("too_large" = refused here before sending, else the wire status
+  // A PUT_BEGIN on rail `r` that failed for `reason` ("too_large" = refused here before sending, else the wire status
   // of the node's error reply): counted per reason (with the node's ID, hostname and address) and logged, rate-limited.
   void put_refused(const Rail& r, const char* reason, int wire_status, const store::PutBeginReq& q) {
     refusals.fetch_add(1, std::memory_order_relaxed);
@@ -519,10 +519,10 @@ struct WirePort::Impl {
     std::optional<std::uint64_t> dropped;
     {
       std::lock_guard lk(refuse_mu);
-      if (mx) {  // L05: one registry lookup per (ID, hostname, reason), then the cached pointer
+      if (mx) {  // One registry lookup per (ID, hostname, reason), then the cached pointer
         auto& slot = refuse_ctr[{ids, host, reason}];
         if (!slot) {
-          for (auto& [k, c] : refuse_ctr)  // the series made while the identity was unknown go quiet (H08)
+          for (auto& [k, c] : refuse_ctr)  // the series made while the identity was unknown go quiet
             if (c && std::get<2>(k) == reason && (std::get<0>(k) == "unknown" || std::get<1>(k) == "unknown") &&
                 ids != "unknown" && host != "unknown")
               mx->reg.hide(c);
@@ -612,7 +612,7 @@ struct WirePort::Impl {
     if (e.dead || e.zombie) return;
     e.dead = true;
     any_dead = true;
-    rails[e.rail]->dead = true;  // RL2: the rail is given up at the next check_down (the session, if it was the last)
+    rails[e.rail]->dead = true;  // The rail is given up at the next check_down (the session, if it was the last)
     if (e.cls == fabric::EpClass::Ingest) {
       std::vector<store::PutId> ids;
       for (auto& [id, pc] : commits)
@@ -642,7 +642,7 @@ struct WirePort::Impl {
     const FrameHeader& h = fr->h;
     const bool is_err = (h.flags & proto::flag::ERROR) != 0;
     const auto type = static_cast<Op>(h.type);
-    if (opts.on_reply) {  // MB6b: the node's epoch and generation, from any intact frame
+    if (opts.on_reply) {  // The node's epoch and generation, from any intact frame
       WireOptions::ReplyNote note;
       note.epoch = h.epoch;
       note.bundle_gen_lo = h.bundle_gen_lo;
@@ -652,7 +652,7 @@ struct WirePort::Impl {
       }
       opts.on_reply(note);
     }
-    // H02: a HELLO_ACK with another boot nonce than the session's comes from a new process. Marked as it arrives, before
+    // A HELLO_ACK with another boot nonce than the session's comes from a new process. Marked as it arrives, before
     // the SEG_TABLE behind it on the same QP, so that table never replaces the session's (join_step ends the session).
     if (!is_err && type == Op::HELLO_ACK && have_boot) {
       if (auto a = proto::decode_hello_ack(h, fr->body); a && proto::find_boot_nonce(a->tlvs) != boot_nonce) {
@@ -663,7 +663,7 @@ struct WirePort::Impl {
     if (!is_err) {
       switch (type) {
         case Op::SEG_TABLE: {
-          if (rl.boot_mismatch) return;  // H02: the new process's table; the session still runs on the old one
+          if (rl.boot_mismatch) return;  // The new process's table; the session still runs on the old one
           auto t = std::make_unique<proto::SegTable>();
           auto d = proto::decode_seg_table(h, fr->body);
           if (!d) return;
@@ -672,7 +672,7 @@ struct WirePort::Impl {
             auto i = WirePort::info_from_seg_table(*t, node_now.load(std::memory_order_acquire));
             if (i) {  // malformed table: keep the old one
               rebuild_info(std::move(*i), t->table_gen);
-              // RL2: every rail's rkeys (one table carries all of them); the mux puts rkey[r] on a READ of rail r.
+              // Every rail's rkeys (one table carries all of them); the mux puts rkey[r] on a READ of rail r.
               seg_keys.clear();
               for (std::size_t k = 0; k < t->n; ++k) {
                 const auto& s = t->e[k];
@@ -687,7 +687,7 @@ struct WirePort::Impl {
               for (std::size_t q = 0; q < 4; ++q) sg_rkey[q] = t->sg_rkey[q];
             }
           }
-          // F04: a rail takes work only on a table at least as new as the session's (an accepted one). A rejoining
+          // A rail takes work only on a table at least as new as the session's (an accepted one). A rejoining
           // rail that sees only older ones reached a restarted node (table_gen restarts from zero): join_step ends it.
           if (have_table && t->table_gen >= table_gen) rl.have_table = true;
           else if (have_table) rl.stale_table = true;
@@ -697,7 +697,7 @@ struct WirePort::Impl {
           ++pongs;
           return;
         }
-        case Op::RENEW_ACK: {  // RL3: an OK moves the lease's re-issue deadline (ClientCore, take_renewed)
+        case Op::RENEW_ACK: {  // An OK moves the lease's re-issue deadline (ClientCore, take_renewed)
           auto it = renew_sent.find(h.request_id);
           if (it == renew_sent.end()) return;
           const auto [lease, sent] = it->second;
@@ -710,7 +710,7 @@ struct WirePort::Impl {
         case Op::GOAWAY: {
           if (!goaway) {
             auto g = proto::decode_goaway(h, fr->body);
-            // The drain deadline: the old node is gone by then. A deadline, not a delay (r6 A1).
+            // The drain deadline: the old node is gone by then. A deadline, not a delay.
             goaway_until = g && g->drain_ms > 0 ? clock.now() + std::chrono::milliseconds(g->drain_ms) : Nanos{0};
             if (g && g->reason == static_cast<std::uint32_t>(proto::GoawayReason::Epoch))
               removed.store(true, std::memory_order_release);
@@ -719,7 +719,7 @@ struct WirePort::Impl {
           return;
         }
         case Op::PUT_DONE: {
-          // Only the ingest QP carries PUT_DONE (W07): a control/fetch PUT_DONE is not ours.
+          // Only the ingest QP carries PUT_DONE: a control/fetch PUT_DONE is not ours.
           if (e.cls != fabric::EpClass::Ingest) return;
           auto d = proto::decode_put_done(h, fr->body);
           if (!d) return;
@@ -752,12 +752,12 @@ struct WirePort::Impl {
       // A Draining refusal of a PUT_BEGIN is the node's member state (bundle mode): a per-key skip, the session stays
       // up (reads and continuations still work). Any other Draining reply is the SIGTERM latch: go Down.
       if (er && er->status == static_cast<std::uint16_t>(WireStatus::Draining) && type != Op::PUT_BEGIN) goaway = true;
-      // J04: a refused RENEW (an error reply keeps the request type) is answered: it no longer waits in renew_sent.
+      // A refused RENEW (an error reply keeps the request type) is answered: it no longer waits in renew_sent.
       if (type == Op::RENEW || type == Op::RENEW_ACK) renew_sent.erase(h.request_id);
     }
     auto it = awaiting.find({c.endpoint, h.request_id});
     if (it == awaiting.end()) {
-      // R04: a LOOKUP_ACK whose waiter already gave up still carries a lease the server counts
+      // A LOOKUP_ACK whose waiter already gave up still carries a lease the server counts
       // against the caps until its TTL: hand it back (fire-and-forget RELEASE on control).
       if (!is_err && type == Op::LOOKUP_ACK) {
         auto a = proto::decode_lookup_ack(h, fr->body);
@@ -785,7 +785,7 @@ struct WirePort::Impl {
       const std::uint32_t len = e->ops.front();
       e->op_bytes -= std::min<std::uint64_t>(e->op_bytes, len);  // RC: this QP's oldest request
       e->ops.pop_front();
-      if (c.op == fabric::CompletionOp::Read) {  // RL3 telemetry: the rail's window and its landed READ bytes
+      if (c.op == fabric::CompletionOp::Read) {  // Telemetry: the rail's window and its landed READ bytes
         Rail& r = *rails[e->rail];
         read_window_moved(r, -static_cast<std::int64_t>(len));
         if (c.status) {
@@ -794,13 +794,13 @@ struct WirePort::Impl {
         }
       }
     } else if (e && !mux && !wire_op && c.op == fabric::CompletionOp::Read && c.status) {
-      // F3 (K06): the single-rail path posts READs straight on the endpoint (no mux bookkeeping): count the landed bytes
+      // The single-rail path posts READs straight on the endpoint (no mux bookkeeping): count the landed bytes
       // from the completion, so fetch_rail_bytes_total moves with one rail and fetch_qps = 1 too.
       Rail& r = *rails[e->rail];
       r.read_bytes += c.bytes;
       if (r.c_read) r.c_read->inc(c.bytes);
     }
-    // RL2 decision 9: a CQE error on any QP of a rail makes it suspect and gives it up (ERR + flush of all its QPs).
+    // A CQE error on any QP of a rail makes it suspect and gives it up (ERR + flush of all its QPs).
     // Single rail: unchanged (the ERR state check below takes the session Down).
     if (mux && e && !wire_op && !c.status && c.op != fabric::CompletionOp::CqError) mark_dead(*e);
     if (!e || !wire_op) {
@@ -809,7 +809,7 @@ struct WirePort::Impl {
     }
     if (!c.status) {
       // The core only counts the completions it sees (READ/WRITE/CqError); count the control
-      // endpoint's failed SEND/RECV here (M2: rdma_errors_total{kind}).
+      // endpoint's failed SEND/RECV here (rdma_errors_total{kind}).
       if (mx && e->cls == fabric::EpClass::Control) mx->rdma[ClientMetrics::rdma_kind(c.status.error().code)]->inc();
       mark_dead(*e);
       return;
@@ -819,8 +819,8 @@ struct WirePort::Impl {
 
   void service(fabric::PollBudget budget = {}) {
     for (std::size_t d = 0; d < devs.size(); ++d) {
-      if (d == lent_dev) continue;  // run #233: build_rails() owns that fabric now (it has no endpoint of ours in eps)
-      lend_check(d, "service_poll");  // J01: states the skip above (a poll of the lent device fires it)
+      if (d == lent_dev) continue;  // build_rails() owns that fabric now (it has no endpoint of ours in eps)
+      lend_check(d, "service_poll");  // States the skip above (a poll of the lent device fires it)
       for (;;) {
         std::array<fabric::Completion, 32> buf;
         const std::size_t n = devs[d]->poll(buf, budget);
@@ -832,7 +832,7 @@ struct WirePort::Impl {
       }
     }
     for (auto& [id, e] : eps) {
-      lend_check(e.dev, "service");  // J01: no endpoint of ours (live or zombie) is on a lent device
+      lend_check(e.dev, "service");  // No endpoint of ours (live or zombie) is on a lent device
       if (!e.dead && !e.zombie && e.ep->state() == fabric::EpState::Error) mark_dead(e);
     }
     const Nanos now = clock.now();
@@ -863,7 +863,7 @@ struct WirePort::Impl {
     }
   }
 
-  // RL2: gives up rail `i` (decision 9): every QP of the rail goes to ERR, its in-flight work flushes to the core (each
+  // Gives up rail `i`: every QP of the rail goes to ERR, its in-flight work flushes to the core (each
   // completion arrives before the endpoint is released), its puts fail, and it reconnects on its own backoff. The last
   // rail standing takes the session Down instead (the single-rail path: exactly the old go_down).
   void give_up(std::size_t i, Reason why) {
@@ -883,7 +883,7 @@ struct WirePort::Impl {
     for (auto& [id, pr] : puts)
       if (pr.rail == i) rest.push_back(id);
     for (auto id : rest) finish_put(id);
-    teardown_rail(i, down_count.load() + 1);  // Q01: held until the session end after it has them released
+    teardown_rail(i, down_count.load() + 1);  // Held until the session end after it has them released
     r.up = false;
     r.dead = false;
     r.suspect = false;
@@ -923,7 +923,7 @@ struct WirePort::Impl {
 
   // Aborts every live endpoint (in-flight work flushes with Aborted and still reaches the core
   // through the stash); they are released by reap() once drained. Local session state is dropped.
-  // `down_at` (Q01): the down count go_down is publishing; 0 for endpoints that never carried a live
+  // `down_at`: the down count go_down is publishing; 0 for endpoints that never carried a live
   // session (a failed attempt, the final release_all).
   void teardown_endpoints(std::uint64_t down_at = 0) {
     for (auto& [id, e] : eps) {
@@ -944,7 +944,7 @@ struct WirePort::Impl {
     std::set<std::uint64_t> left;  // down_at of the zombies still held by the fabric
     std::size_t undrained = 0;
     for (auto it = eps.begin(); it != eps.end();) {
-      lend_check(it->second.dev, "reap");  // J01: releases go to the endpoint's own device, never a lent one
+      lend_check(it->second.dev, "reap");  // Releases go to the endpoint's own device, never a lent one
       if (it->second.zombie && it->second.ep->drained() && devs[it->second.dev]->release(it->second.ep)) {
         it = eps.erase(it);
       } else {
@@ -955,12 +955,12 @@ struct WirePort::Impl {
         ++it;
       }
     }
-    // r7 R05: visible, not force-destroyed. A QP whose flush never completed may still have CQEs coming
+    // Visible, not force-destroyed. A QP whose flush never completed may still have CQEs coming
     // on the shared CQ that name it; destroying it (and its Ep) first would turn those into use-after-free
     // in the fabric's poll on verbs, and the sim has no such operation. It is in ERR (no new DMA), so
     // holding it costs one QP and its eps entry; the gauge makes a leak alertable.
     if (mx) mx->undrained_zombies->set(static_cast<double>(undrained));
-    // N02/Q01: a session end with no zombie left has every endpoint it tore down released. A zombie that
+    // A session end with no zombie left has every endpoint it tore down released. A zombie that
     // never drains (a lost flush) keeps only its own session end listed: the safe direction, and later
     // trips still get their spans back.
     std::lock_guard g(reap_mu);
@@ -973,14 +973,14 @@ struct WirePort::Impl {
     return !unreaped.count(down);
   }
 
-  // r6 A1: a GOAWAY's drain_ms is a deadline, not the first delay. Waiting it out kept clients away
+  // A GOAWAY's drain_ms is a deadline, not the first delay. Waiting it out kept clients away
   // for the whole window (5 s by default, up to 10 min) although the node usually exits as soon as
   // its sessions leave and may be back long before. So backoff runs as usual (a draining node
   // refuses the connect without spending the ticket, and fail_streak grows), and no attempt is
   // scheduled after the deadline, by when the old process is gone. (The other option, clamping the
   // first delay to min(hint, reconnect_max_ms), still waits 5 s with the defaults.)
   void schedule_next(Nanos now) {
-    const ClientDynPtr dy = opts.dyn ? opts.dyn->load() : nullptr;  // HR2: class A, read at each attempt
+    const ClientDynPtr dy = opts.dyn ? opts.dyn->load() : nullptr;  // Class A, read at each attempt
     const std::uint64_t lo = std::max(1u, dy ? dy->reconnect_min_ms : opts.reconnect_min_ms),
                         hi = std::max<std::uint64_t>(lo, dy ? dy->reconnect_max_ms : opts.reconnect_max_ms);
     std::uint64_t d;
@@ -1005,20 +1005,20 @@ struct WirePort::Impl {
       r->stale_table = false;
       r->boot_mismatch = false;
       r->put_bytes = 0;
-      for (const auto& k : r->join) awaiting.erase(k);  // RL2 follow-up B: a join of the ended session is over
+      for (const auto& k : r->join) awaiting.erase(k);  // A join of the ended session is over
       r->join.clear();
       r->joining = false;
     }
     puts.clear();
     put_ranges.clear();
-    renew_sent.clear();  // RL3: acks of the ended session move no deadline
-    renewed.clear();     // J04: nor do the ones it filed and the core has not taken yet (a new session may reuse the ID)
+    renew_sent.clear();  // Acks of the ended session move no deadline
+    renewed.clear();     // Nor do the ones it filed and the core has not taken yet (a new session may reuse the ID)
   }
 
   void go_down(Reason r) {
     if (session() != WirePort::Session::Up) return;
     const std::uint64_t ending = down_count.load() + 1;
-    {  // Q01: listed BEFORE the down count moves, so session_reaped(ending) can never be true early
+    {  // Listed BEFORE the down count moves, so session_reaped(ending) can never be true early
       std::lock_guard g(reap_mu);
       unreaped.insert(ending);
     }
@@ -1033,7 +1033,7 @@ struct WirePort::Impl {
     info_dirty = false;
     fail_streak = 0;
     config_error = false;
-    schedule_next(clock.now());                // Q03: next_attempt is final before Down becomes visible
+    schedule_next(clock.now());                // next_attempt is final before Down becomes visible
     set_session(WirePort::Session::Down);
     if (opts.on_down_tickets) opts.on_down_tickets();
     if (opts.on_down) opts.on_down();
@@ -1041,34 +1041,34 @@ struct WirePort::Impl {
 
   // One attempt: three fresh tickets, HELLO x3, SEG_TABLE on control (open() waits for it).
   //
-  // R01: with `hooks` (real time, Client keepalive thread) the attempt runs WITHOUT the client
+  // With `hooks` (real time, Client keepalive thread) the attempt runs WITHOUT the client
   // lock. Exclusivity instead comes from the session state: once Connecting is published every
   // job fails fast before touching the port, and hooks->quiesced() waits for the jobs that were
   // already inside to leave. Only the final flip to Up runs under the lock (hooks->install).
   //
-  // Q08 precondition: the null-hooks form (no quiesced callback) reaps without checking that no job is
+  // Precondition: the null-hooks form (no quiesced callback) reaps without checking that no job is
   // inside the shared fabric; it is only correct when the caller serialises it with every job (the
   // caller holds the client lock, or there is no other thread: sim and unit tests).
   void reconnect_step(const WirePort::ReconnectHooks* hooks = nullptr) {
     if (session() != WirePort::Session::Down || aborting) return;
-    BackgroundScope bg(background);  // Q01: reconnect_step only ever runs on the keepalive thread
+    BackgroundScope bg(background);  // reconnect_step only ever runs on the keepalive thread
     if (clock.now() < next_attempt.load()) {
       // Off the core lock (hooks) a job admitted while the session was still Up may be pumping the
       // shared fabric right now; releasing endpoints (eps_ erase) under it is a data race that
       // crashed in VerbsCmFabric::poll under live traffic. Reap only once no job is inside.
       if (!hooks || !hooks->quiesced || hooks->quiesced()) {
-        drop_build();  // run #233: a rail build of the ended session (eps is touched only once no job is inside)
+        drop_build();  // A rail build of the ended session (eps is touched only once no job is inside)
         reap();
       }
       if (opts.drive) opts.drive();  // sim: lets virtual time pass while nothing else runs
       return;
     }
-    ++attempts_total;  // r9c U02: before Connecting, so a HELLO of the previous attempt never counts as current
+    ++attempts_total;  // Before Connecting, so a HELLO of the previous attempt never counts as current
     set_session(WirePort::Session::Connecting);
     if (hooks && hooks->quiesced) {
       for (unsigned waited = 0; !hooks->quiesced(); ++waited) {
         if (aborting || waited > 200) {  // about 200 ms wall; the sim clock may stand still
-          next_attempt.store(clock.now() + std::chrono::milliseconds(20));  // Q03: before Down is published
+          next_attempt.store(clock.now() + std::chrono::milliseconds(20));  // Before Down is published
           set_session(WirePort::Session::Down);  // a job is still winding down: retry shortly
           return;
         }
@@ -1076,17 +1076,17 @@ struct WirePort::Impl {
         else pause_ms(1);
       }
     }
-    drop_build();  // run #233: the device a rail build of the ended session borrowed comes back first
+    drop_build();  // The device a rail build of the ended session borrowed comes back first
     reap();
     goaway = false;
     reset_rails();
     any_dead = false;
     have_table = false;
     have_conn_id = false;  // a new session: a new conn_id
-    have_boot = false;  // H02: and the boot nonce of the process it reaches
+    have_boot = false;  // And the boot nonce of the process it reaches
     boot_nonce.reset();
     Status s = connect_all(/*report_local=*/true);
-    // r6 A3: a GOAWAY (or a Draining reply) while connecting means the node is draining. Going Up
+    // A GOAWAY (or a Draining reply) while connecting means the node is draining. Going Up
     // would only flip Down again at once with the streak reset (retry at reconnect_min_ms, three
     // tickets per cycle): fail the attempt instead, keeping the drain deadline and the streak.
     if (s && !aborting && !goaway) {
@@ -1094,13 +1094,13 @@ struct WirePort::Impl {
       config_error = false;
       goaway_until = Nanos{0};
       removed.store(false, std::memory_order_release);  // the node takes sessions again
-      bg.end();  // N06: a job admitted right after the flip uses the full rpc_timeout
+      bg.end();  // A job admitted right after the flip uses the full rpc_timeout
       if (hooks && hooks->install) hooks->install([this] { set_session(WirePort::Session::Up); });
       else set_session(WirePort::Session::Up);
-      // Q03 (review s10): the rails that came up close their endpoint-failure entries (one recovery line); a rail that
+      // The rails that came up close their endpoint-failure entries (one recovery line); a rail that
       // stayed down keeps its entry until it rejoins.
       if (opts.on_rails_up && !rails_connected.empty()) opts.on_rails_up(rails_connected, /*rejoin=*/false);
-      // J07: every rail reached one process. R22: so did every rail that connected when no rail was refused for another
+      // Every rail reached one process. so did every rail that connected when no rail was refused for another
       // boot nonce (a rail that is merely dead, e.g. a cut link, must not keep the damping count of real restarts).
       if (rails_connected.size() == rails.size() || !connect_other_nonce) nonce_restarts = 0;
       return;
@@ -1108,16 +1108,16 @@ struct WirePort::Impl {
     teardown_endpoints();
     if (mx) mx->reconnect_fail->inc();
     ++fail_streak;
-    schedule_next(clock.now());  // Q03: before Down is published
+    schedule_next(clock.now());  // Before Down is published
     set_session(WirePort::Session::Down);
   }
 
-  // Q04: gives back every endpoint of a port that is about to be destroyed (a failed first build).
+  // Gives back every endpoint of a port that is about to be destroyed (a failed first build).
   // Aborts them, then waits (bounded, real time) for the fabric to drain so release() succeeds.
-  // r7 R04: without `drive` the wait is bounded by real time (`real_until`; 500 ms from now when 0), so a
+  // Without `drive` the wait is bounded by real time (`real_until`; 500 ms from now when 0), so a
   // frozen injected clock no longer spins ~200 s. A Client passes one shared deadline to all its nodes.
   void release_all(Nanos real_until = Nanos{0}) {
-    drop_build();  // run #233: a staged or built rail set goes back with the rest (as zombies, released below)
+    drop_build();  // A staged or built rail set goes back with the rest (as zombies, released below)
     teardown_endpoints();
     const Nanos until = clock.now() + std::chrono::milliseconds(500);
     const RealClock real;
@@ -1134,7 +1134,7 @@ struct WirePort::Impl {
     stash.clear();
   }
 
-  // L13 (review s9b): after a node restart the session reconnects here (Down -> Connecting -> Up), not through the
+  // After a node restart the session reconnects here (Down -> Connecting -> Up), not through the
   // Client's build() or a rail rejoin. `report_local` (reconnect_step only: the open is reported by Client::build) hands
   // a refusal of the LOCAL device to opts.on_local_failure, so it is counted and logged once, like a join failure.
   void report_local_failure(const Rail& r, const Error& e) {
@@ -1146,7 +1146,7 @@ struct WirePort::Impl {
     rails_connected.clear();
     connect_other_nonce = false;
     if (mux) {
-      // RL2: every rail gets its own endpoint set; the session comes up with the rails that connect, the others retry
+      // Every rail gets its own endpoint set; the session comes up with the rails that connect, the others retry
       // on their own backoff (keepalive) while the session is Up.
       Status last = err(ErrorCode::LinkDown, "wire: no rail connected");
       unsigned ok = 0;
@@ -1160,7 +1160,7 @@ struct WirePort::Impl {
           rails_connected.push_back(rails[i]->o.index);
           continue;
         }
-        if (rails[i]->boot_mismatch) connect_other_nonce = true;  // R22: this rail reached another process
+        if (rails[i]->boot_mismatch) connect_other_nonce = true;  // This rail reached another process
         if (report_local) report_local_failure(*rails[i], s.error());
         if (config_error) return s;  // a node ID mismatch is not a rail fault
         last = s;
@@ -1182,11 +1182,11 @@ struct WirePort::Impl {
         return r.error();
       }
     }
-    rails_connected.push_back(rails[0]->o.index);  // R10: never empty (constructor), so on_rails_up fires after a reconnect
+    rails_connected.push_back(rails[0]->o.index);  // Never empty (constructor), so on_rails_up fires after a reconnect
     return {};
   }
 
-  // RL2: one rail's endpoint set (1 control + SEG_TABLE, fetch_qps fetch, 1 ingest), in the session's conn_id. On a
+  // One rail's endpoint set (1 control + SEG_TABLE, fetch_qps fetch, 1 ingest), in the session's conn_id. On a
   // failure the endpoints it opened are torn down and the rail stays down.
   Status connect_rail(std::size_t i) {
     Rail& r = *rails[i];
@@ -1237,7 +1237,7 @@ struct WirePort::Impl {
   Status post_frame(fabric::Endpoint& ep, Op op, std::uint64_t rid, std::span<const std::byte> body) const {
     std::array<std::byte, proto::kMaxFrameSize> buf{};
     FrameHeader fh = proto::header_for(op, rid);
-    if (opts.stamp) {  // MB6b: the client's epoch and the low 32 bits of its bundle generation
+    if (opts.stamp) {  // The client's epoch and the low 32 bits of its bundle generation
       const std::uint64_t s = opts.stamp->load(std::memory_order_acquire);
       fh.epoch = static_cast<std::uint32_t>(s >> 32);
       fh.bundle_gen_lo = static_cast<std::uint32_t>(s);
@@ -1251,9 +1251,9 @@ struct WirePort::Impl {
 
   template <class Pred>
   Status wait_until(Pred done, Ep* watch) {
-    // min(rpc_timeout, job deadline - now): a job's deadline bounds every RPC it makes (W01).
+    // min(rpc_timeout, job deadline - now): a job's deadline bounds every RPC it makes.
     const Nanos t0 = clock.now();
-    // Q02: a background build or reconnect (keepalive thread) must not sit out a full rpc_timeout per HELLO.
+    // A background build or reconnect (keepalive thread) must not sit out a full rpc_timeout per HELLO.
     const Nanos rpc_to = background ? std::min<Nanos>(opts.rpc_timeout, kBackgroundRpcCap) : opts.rpc_timeout;
     const Nanos deadline = std::min(t0 + rpc_to, op_deadline);
     full_timeout = false;
@@ -1271,7 +1271,7 @@ struct WirePort::Impl {
         // No driver: block on the fabric's completion fd (bounded) instead of spinning on poll().
         // Protocol: arm (wait_fd), poll once more to close the race, then sleep on the fd.
         if (devs.size() == 1) lend_check(0, "wait_until");
-        const int fd = devs.size() == 1 ? inner.wait_fd() : -1;  // RL2: several devices: no single fd
+        const int fd = devs.size() == 1 ? inner.wait_fd() : -1;  // Several devices: no single fd
         if (fd < 0) {
           service(fabric::PollBudget{std::chrono::microseconds(50)});
         } else {
@@ -1291,16 +1291,16 @@ struct WirePort::Impl {
       if (opts.drive) opts.drive();
       const bool stuck = opts.drive && still.stuck(clock.now());
       if (clock.now() >= deadline || stuck) {
-        // Q15 (B): one last non-blocking poll before the timeout. The slice above may end with the awaited frame in
+        // one last non-blocking poll before the timeout. The slice above may end with the awaited frame in
         // the CQ but not filed (the fd poll woke on it, or the sim's drive delivered it in the deadline tick): take it
         // rather than drop it as late. service() with the default budget never waits, runs under the same caller's
         // lock as every slice above, and files each frame once (on_frame), so no extra wait and no double dispatch.
         // Only `done` decides: everything else (stopped, full_timeout, the suspect mark) is as before.
         service();
         if (done()) return {};
-        // s11c review P3-5: the endpoint died in that last poll: an abort, not a timeout (no suspect mark).
+        // The endpoint died in that last poll: an abort, not a timeout (no suspect mark).
         if (stopped()) return err(ErrorCode::Aborted, "wire: endpoint down");
-        // R02: only a wait that used up the whole rpc_timeout says anything about the server;
+        // Only a wait that used up the whole rpc_timeout says anything about the server;
         // one cut short by the job's own (shorter) deadline does not.
         full_timeout = clock.now() >= t0 + rpc_to || stuck;
         return err(ErrorCode::Timeout, "wire: no reply");
@@ -1352,7 +1352,7 @@ struct WirePort::Impl {
     return rpc(e, op, std::span<const std::byte>(body.data(), *n));
   }
 
-  // Control goes on the lowest-index healthy rail (RL2 decision 7); with one rail this is the old single control QP.
+  // Control goes on the lowest-index healthy rail; with one rail this is the old single control QP.
   Ep* ctl_pick() {
     for (auto& rp : rails) {
       Rail& r = *rp;
@@ -1367,7 +1367,7 @@ struct WirePort::Impl {
     bool any_suspect = false;
     for (auto& rp : rails) any_suspect = any_suspect || (rp->up && rp->suspect && live(rp->ctl));
     if (!any_suspect) return nullptr;
-    // R02: read what has arrived first - a late reply (any frame) clears the suspicion.
+    // Read what has arrived first - a late reply (any frame) clears the suspicion.
     service();
     if (goaway || session() != WirePort::Session::Up) return nullptr;
     if (Ep* e = ctl_pick()) return e;
@@ -1387,7 +1387,7 @@ struct WirePort::Impl {
   Ep* ing_ep() {
     if (session() != WirePort::Session::Up) return nullptr;
     if (!mux) return live(rails[0]->ing);
-    // RL2 decision 7: a put picks the healthy rail with the fewest outstanding put bytes and stays on its ingest QP.
+    // A put picks the healthy rail with the fewest outstanding put bytes and stays on its ingest QP.
     Ep* best = nullptr;
     std::uint64_t bb = 0;
     for (auto& rp : rails) {
@@ -1398,7 +1398,7 @@ struct WirePort::Impl {
     }
     return best;
   }
-  // The ingest QP a begun put stays on (RL2); single rail: the one ingest QP.
+  // The ingest QP a begun put stays on; single rail: the one ingest QP.
   Ep* put_ep(store::PutId id) {
     if (!mux) return session() == WirePort::Session::Up ? live(rails[0]->ing) : nullptr;
     auto it = puts.find(id);
@@ -1412,13 +1412,13 @@ struct WirePort::Impl {
     return nullptr;
   }
 
-  // RL2: the mux's READ: the healthy rail's fetch QP with the fewest outstanding bytes, that rail's rkey and lkey.
-  // RL3 decision 8: weighted least outstanding bytes (op_bytes / weight, weight = link speed) among the fetch QPs of
+  // The mux's READ: the healthy rail's fetch QP with the fewest outstanding bytes, that rail's rkey and lkey.
+  // Weighted least outstanding bytes (op_bytes / weight, weight = link speed) among the fetch QPs of
   // healthy rails whose window has room for this READ (an idle QP always has). None with room: Busy (the core waits).
   Status mux_read(fabric::RemoteRef remote, fabric::LocalRef local, fabric::WrTag tag) {
     if (session() != WirePort::Session::Up) return err(ErrorCode::Aborted, "wire: session down");
     Ep* best = nullptr;
-    Rail* sq_rail = nullptr;  // R16: a rail whose fetch QP was skipped for a full send queue
+    Rail* sq_rail = nullptr;  // A rail whose fetch QP was skipped for a full send queue
     std::uint64_t bw = 1;
     bool any = false;
     const std::uint64_t win = opts.window_bytes;
@@ -1431,7 +1431,7 @@ struct WirePort::Impl {
         if (!e) continue;
         any = true;
         if (win != 0 && e->op_bytes != 0 && e->op_bytes + remote.len > win) continue;  // its window is full
-        if (e->ops.size() >= cap) {  // R16: its send queue is full (the 8-byte seq READ counts as one entry too)
+        if (e->ops.size() >= cap) {  // Its send queue is full (the 8-byte seq READ counts as one entry too)
           if (!sq_rail) sq_rail = rp.get();
           continue;
         }
@@ -1454,14 +1454,14 @@ struct WirePort::Impl {
       ++r.reads;
       read_window_moved(r, static_cast<std::int64_t>(remote.len));
     } else if (s.error().code == ErrorCode::ResourceExhausted && !best->ops.empty()) {
-      note_sq_full(r);  // R16: the provider's send queue is fuller than sq_depth says: backpressure, it waits
+      note_sq_full(r);  // The provider's send queue is fuller than sq_depth says: backpressure, it waits
       s = err(ErrorCode::Busy, "wire: fetch QP send queue full");
     } else if (s.error().code == ErrorCode::Busy) {
       s = err(ErrorCode::Aborted, "wire: fetch QP refused the READ");  // Busy means "every window full" to the core
     }
     return s;
   }
-  // RL2: the mux's WRITE: the ingest QP its put began on (found by the remote address PUT_BEGIN handed out).
+  // The mux's WRITE: the ingest QP its put began on (found by the remote address PUT_BEGIN handed out).
   Status mux_write(fabric::LocalRef local, fabric::RemoteRef remote, fabric::WrTag tag) {
     if (session() != WirePort::Session::Up) return err(ErrorCode::Aborted, "wire: session down");
     auto it = put_ranges.upper_bound(remote.addr);
@@ -1472,7 +1472,7 @@ struct WirePort::Impl {
     Ep* e = pr == puts.end() ? nullptr : live(pr->second.ep);
     if (!e) return err(ErrorCode::Aborted, "wire: the put's rail is down");
     Rail& r = *rails[e->rail];
-    if (e->ops.size() >= wr_cap()) {  // R16: the put's ingest QP has a full send queue: the WRITE waits in ClientCore
+    if (e->ops.size() >= wr_cap()) {  // The put's ingest QP has a full send queue: the WRITE waits in ClientCore
       note_sq_full(r);
       return err(ErrorCode::Busy, "wire: ingest QP send queue full");
     }
@@ -1490,7 +1490,7 @@ struct WirePort::Impl {
     }
     return s;
   }
-  // R16: READs/WRITEs one QP carries at most (its send queue less the frame reserve; at least 1).
+  // READs/WRITEs one QP carries at most (its send queue less the frame reserve; at least 1).
   std::size_t wr_cap() const {
     const std::uint32_t d = opts.sq_depth;
     if (d == 0) return static_cast<std::size_t>(-1);
@@ -1525,7 +1525,7 @@ struct WirePort::Impl {
     const auto rd = ep.read_depth();
     h.ird = rd.ird;
     h.ord = rd.ord;
-    h.rail = index;  // RL2: must equal the ticket's rail
+    h.rail = index;  // Must equal the ticket's rail
     h.proto = opts.wire_proto;
     h.mtu = opts.mtu;
     std::memcpy(h.conn_id, conn_id.data(), 16);
@@ -1537,17 +1537,17 @@ struct WirePort::Impl {
     auto a = proto::decode_hello_ack(r.h, r.body);
     if (!a || a->cls != h.cls || std::memcmp(a->conn_id, h.conn_id, 16) != 0)
       return err(ErrorCode::Corrupt, "wire: bad HELLO_ACK");
-    // H02: every HELLO_ACK of a session must carry the boot nonce of its first one (or none, as that one). Checked before
+    // Every HELLO_ACK of a session must carry the boot nonce of its first one (or none, as that one). Checked before
     // the node ID: a restarted node with a wiped store is a restart, not an ID fault.
     const std::optional<std::uint64_t> bn = proto::find_boot_nonce(a->tlvs);
     if (!have_boot) {
       have_boot = true;
       boot_nonce = bn;
-      // K03: the node's largest stored block, per session (same process as the boot nonce; 0 = the node did not say).
+      // The node's largest stored block, per session (same process as the boot nonce; 0 = the node did not say).
       max_stored.store(proto::find_max_stored_block(a->tlvs).value_or(0), std::memory_order_release);
     } else if (bn != boot_nonce) {
       rails[e.rail]->boot_mismatch = true;
-      rails[e.rail]->seen_nonce = bn;  // J07
+      rails[e.rail]->seen_nonce = bn;
       return err(ErrorCode::Corrupt, "wire: HELLO_ACK boot nonce differs (memory node restarted)");
     }
     if (opts.node != 0) {  // fixed expectation (sim and tests)
@@ -1564,7 +1564,7 @@ struct WirePort::Impl {
       }
       node_now.store(a->node_id, std::memory_order_release);
     }
-    // F5/L03: the node's own hostname (absent or invalid = unknown), learned only now that the boot nonce and the node ID
+    // The node's own hostname (absent or invalid = unknown), learned only now that the boot nonce and the node ID
     // accepted this HELLO_ACK: a rejected one (restarted node, wrong or duplicate ID) must not relabel the node. The
     // rails publish with it after this HELLO (publish_rails); the identity series made by the ID above are relabelled
     // by the client's learn_hostname.
@@ -1596,11 +1596,11 @@ struct WirePort::Impl {
       for (std::size_t i = 0; i < 16; ++i) conn_id[i] = static_cast<std::uint8_t>(s->b[i]);
       have_conn_id = true;
     }
-    // R01/Q01: a build or reconnect that runs on the keepalive thread (`background`, an explicit flag) gives up on a
+    // A build or reconnect that runs on the keepalive thread (`background`, an explicit flag) gives up on a
     // dead or blackholed peer after reconnect_connect_ms on all three endpoints. The first Client::open build keeps the
     // fabric default connect timeout.
-    lend_check(rails[ri]->dev, "connect_ep");  // J01: an under-lock connect never runs on a lent device
-    // R14 (review s11): a background build with an op deadline (the open's settle) also ends its connect by then.
+    lend_check(rails[ri]->dev, "connect_ep");  // An under-lock connect never runs on a lent device
+    // A background build with an op deadline (the open's settle) also ends its connect by then.
     unsigned conn_ms = background ? connect_ms_now() : 0;
     if (background && op_deadline != Nanos::max()) {
       const Nanos left = op_deadline - clock.now();
@@ -1622,7 +1622,7 @@ struct WirePort::Impl {
     fabric::Endpoint* ep = nullptr;
     Error last = err(ErrorCode::NotFound, "wire: no ticket");
     for (unsigned a = 0; a < std::max(1u, opts.ticket_attempts) && !ep; ++a) {
-      // RL2: the node admits a ticket only on its own rail, so each rail draws its own.
+      // The node admits a ticket only on its own rail, so each rail draws its own.
       auto t = opts.rail_tickets ? opts.rail_tickets(cp0.cls, rl.o.index) : opts.tickets(cp0.cls);
       if (!t) return t.error();
       if (aborting) return err(ErrorCode::Aborted, "wire: shutting down");
@@ -1638,7 +1638,7 @@ struct WirePort::Impl {
         ep = *r;
       } else {
         last = r.error();
-        // a used/forged ticket (CM reject byte kRejectAdmit only, r8 N01): try the next. Anything else,
+        // a used/forged ticket (CM reject byte kRejectAdmit only): try the next. Anything else,
         // e.g. LinkDown for a kernel REJ with no miracache byte (no node listening), ends this attempt.
         if (last.code != ErrorCode::AccessDenied) return last;
       }
@@ -1649,7 +1649,7 @@ struct WirePort::Impl {
   // Registers a connected endpoint in `eps` and rail `ri`'s slots (no HELLO yet).
   Ep& adopt_ep(fabric::Endpoint* ep, fabric::EpClass cls, std::size_t ri) {
     Rail& rl = *rails[ri];
-    lend_check(rl.dev, "adopt_ep");  // J01: finish_build takes the device back before it adopts the built set
+    lend_check(rl.dev, "adopt_ep");  // finish_build takes the device back before it adopts the built set
     const fabric::EndpointId key = key_of(rl.dev, ep->id());
     Ep& e = eps[key];
     e.ep = ep;
@@ -1691,10 +1691,10 @@ struct WirePort::Impl {
     return e.ep;
   }
 
-  // ---- RL2 follow-up B: a rail's reconnect inside a live session never waits under the caller's (client) lock -------
+  // ---- A rail's reconnect inside a live session never waits under the caller's (client) lock -------
   // join_start connects the rail's endpoint set and sends every HELLO without waiting; join_step (each keepalive tick)
   // takes the HELLO_ACKs and the SEG_TABLE as service() files them, and the rail takes work (up) only once all are in.
-  // Run #233: the connects (and HELLO sends) run off the lock in build_rails() on the rail's lent device fabric; join_start
+  // The connects (and HELLO sends) run off the lock in build_rails() on the rail's lent device fabric; join_start
   // (under the lock) is left for a rail that cannot lend its device (shared with another rail, or a zombie still on it).
   void join_reset(Rail& r) {
     r.dead = false;
@@ -1763,7 +1763,7 @@ struct WirePort::Impl {
     return {};
   }
 
-  // ---- run #233: the rail's connects off the client lock (see wire_port.h and RailBuild) ----
+  // ---- The rail's connects off the client lock (see wire_port.h and RailBuild) ----
   // Rail `i` may lend its device: no other rail of this port is on it and no endpoint of ours (live or zombie) is left
   // on it, so nothing under the lock polls, posts on or releases into that fabric while build_rails() connects there.
   bool can_lend(std::size_t i) const {
@@ -1775,13 +1775,13 @@ struct WirePort::Impl {
       if (e.dev == d) return false;
     return true;
   }
-  // J06b / RL3: rail `r` connects under the caller's lock (it cannot lend its device). Counted in
+  // Rail `r` connects under the caller's lock (it cannot lend its device). Counted in
   // miracache_client_rail_connect_inlock_total{node, node_id, hostname, rail, addr}; logged once per rail and port.
   std::uint64_t inlock_connects = 0;  // test hook
-  // J07: sessions a rejoining rail ended by another boot nonce since the last session that came up with every rail.
+  // Sessions a rejoining rail ended by another boot nonce since the last session that came up with every rail.
   static constexpr unsigned kNonceDamp = 3;
   unsigned nonce_restarts = 0;
-  bool connect_other_nonce = false;  // R22: the last connect_all had a rail refused for another boot nonce
+  bool connect_other_nonce = false;  // The last connect_all had a rail refused for another boot nonce
   void note_inlock(Rail& r) {
     ++inlock_connects;
     bool shared = false;
@@ -1791,7 +1791,7 @@ struct WirePort::Impl {
       mx->reg
           .counter("miracache_client_rail_connect_inlock_total",
                    "Rail reconnects that connected under the client lock because the rail's device is shared with "
-                   "another rail of the node, or holds an endpoint not released yet (RL3; the node's jobs wait meanwhile).",
+                   "another rail of the node, or holds an endpoint not released yet (the node's jobs wait meanwhile).",
                    {{"node", node_label()},
                     {"node_id", id_label(node_now.load(std::memory_order_acquire))},
                     {"hostname", host_label()},
@@ -1818,7 +1818,7 @@ struct WirePort::Impl {
     if (!rbuild || rbuild->built) return false;
     RailBuild& b = *rbuild;
     const Rail& rl = *rails[b.rail];
-    fabric::clear_local_failure();  // G09 (Q6): a CQ/QP the local device refuses is reported with its call and errno
+    fabric::clear_local_failure();  // A CQ/QP the local device refuses is reported with its call and errno
     Status s;
     for (unsigned k = 0; k < set_size() && s; ++k) {
       if (aborting) {
@@ -1842,7 +1842,7 @@ struct WirePort::Impl {
     }
     if (s && aborting) s = err(ErrorCode::Aborted, "wire: shutting down");  // a stop during the last connect
     if (!s) {
-      // G09 (review G07, Q6): counted by the Client in miracache_client_endpoint_build_failures_total (thread-local
+      // Counted by the Client in miracache_client_endpoint_build_failures_total (thread-local
       // failure record: this thread, before anything else runs on it).
       if (fabric::last_local_failure().call && opts.on_local_failure) {
         if (fabric::last_local_failure().rail < 0) fabric::last_local_failure().rail = rl.o.index;
@@ -1868,7 +1868,7 @@ struct WirePort::Impl {
       std::array<fabric::Completion, 32> buf;
       for (std::size_t got; (got = f.poll(buf)) > 0;)
         for (std::size_t k = 0; k < got; ++k)
-          if (buf[k].op == fabric::CompletionOp::CqError && !b.cq_error) b.cq_error = std::move(buf[k]);  // J06a
+          if (buf[k].op == fabric::CompletionOp::CqError && !b.cq_error) b.cq_error = std::move(buf[k]);
       std::erase_if(b.made, [&](const auto& m) { return m.second->drained() && static_cast<bool>(f.release(m.second)); });
       if (b.made.empty() || clock.now() >= until || (opts.drive && still.stuck(clock.now()))) break;
       if (!opts.drive && real.now() >= real_until) break;
@@ -1883,7 +1883,7 @@ struct WirePort::Impl {
     std::optional<RailBuild> b = std::move(rbuild);
     rbuild.reset();
     lent_dev = kNoDev;
-    if (b->cq_error) {  // J06a: the core sees the device's CqError, as if service() had polled it
+    if (b->cq_error) {  // The core sees the device's CqError, as if service() had polled it
       stash.push_back(std::move(*b->cq_error));
       b->cq_error.reset();
     }
@@ -1908,7 +1908,7 @@ struct WirePort::Impl {
   void drop_build() {
     if (auto b = take_back()) zombify(*b);
   }
-  // keepalive() (caller's lock): a built set joins (HELLOs, then join_step as RL2 follow-up B) if the session it was
+  // keepalive() (caller's lock): a built set joins (HELLOs, then join_step) if the session it was
   // lent in is still Up; else it is given back. A failed build backs off on the rail's own schedule.
   void finish_build() {
     if (!rbuild || !rbuild->built) return;
@@ -1934,13 +1934,13 @@ struct WirePort::Impl {
     r.joining = true;
     r.join_deadline = clock.now() + std::min<Nanos>(opts.rpc_timeout, kBackgroundRpcCap);
   }
-  // F04: Restarted = the rail's HELLOs were answered but every SEG_TABLE on it was older than the session's by the
+  // Restarted = the rail's HELLOs were answered but every SEG_TABLE on it was older than the session's by the
   // join deadline: the node behind it is a new process (its table_gen restarted). A table pushed after the HELLO (a
   // registration racing the join) reaches the rail too, so a live node never ends here.
   enum class Join { Pending, Up, Failed, Restarted };
   Join join_step(std::size_t i, Status& why) {
     Rail& r = *rails[i];
-    if (r.boot_mismatch) {  // H02: a HELLO_ACK on the rail named another process (on_frame or hello_ack marked it)
+    if (r.boot_mismatch) {  // A HELLO_ACK on the rail named another process (on_frame or hello_ack marked it)
       why = err(ErrorCode::Corrupt, "wire: HELLO_ACK boot nonce differs (memory node restarted)");
       return Join::Restarted;
     }
@@ -1986,7 +1986,7 @@ struct WirePort::Impl {
   }
 };
 
-// ---- RL2: the multiplexing endpoints ClientCore sees (several rails or fetch QPs) ----------------------------------
+// ---- The multiplexing endpoints ClientCore sees (several rails or fetch QPs) ----------------------------------
 class WirePort::Impl::Mux final : public fabric::Endpoint {
  public:
   Mux(Impl& p, fabric::EpClass cls) : p_(p), cls_(cls) {}
@@ -2034,7 +2034,7 @@ class WirePort::Impl::Mux final : public fabric::Endpoint {
 class WireFabric final : public fabric::Fabric {
  public:
   explicit WireFabric(WirePort::Impl& p) : p_(p) {}
-  // J01: every entry below runs under the client lock (ClientCore's caller) and reaches devs[0] (`inner`) or every
+  // Every entry below runs under the client lock (ClientCore's caller) and reaches devs[0] (`inner`) or every
   // device: none may run while that device is lent to build_rails() (lend_check traps in debug builds).
   static constexpr std::size_t kAll = WirePort::Impl::kNoDev;
   Expected<fabric::DeviceCaps> probe() override {
@@ -2049,10 +2049,10 @@ class WireFabric final : public fabric::Fabric {
     p_.lend_check(0, "free_pd");
     return p_.inner.free_pd(pd);
   }
-  // RL2 (decision 6: one PD per (node, local device)): with several local devices the landing sub-pool is registered on
+  // One PD per (node, local device): with several local devices the landing sub-pool is registered on
   // each of them, so a READ on any rail lands in it with that device's lkey (the mux swaps it in).
   Expected<fabric::MemRegion> reg(std::span<std::byte> buf, fabric::Access a, fabric::PdId pd) override {
-    p_.lend_check(kAll, "reg");  // J01: the landing pool registers on every device (LandingPool::resize_subpool too)
+    p_.lend_check(kAll, "reg");  // The landing pool registers on every device (LandingPool::resize_subpool too)
     auto r = p_.inner.reg(buf, a, pd);
     if (!r || p_.devs.size() == 1) return r;
     std::vector<fabric::MemRegion> al;
@@ -2082,7 +2082,7 @@ class WireFabric final : public fabric::Fabric {
   // The Peer and ticket of the caller are ignored: the wire port owns identity and routing.
   Expected<fabric::Endpoint*> connect(const fabric::Peer&, const fabric::ConnParams& cp) override {
     if (cp.cls == fabric::EpClass::Control) return err(ErrorCode::InvalidArgument, "wire: control is opened by the port");
-    if (p_.mux) {  // RL2: hello() connected every rail's endpoint set; the core gets the mux of the class
+    if (p_.mux) {  // hello() connected every rail's endpoint set; the core gets the mux of the class
       WirePort::Impl::Mux* m = cp.cls == fabric::EpClass::Fetch ? p_.mux_fetch.get() : p_.mux_ingest.get();
       if (!m->usable()) return err(ErrorCode::LinkDown, "wire: no healthy rail");
       return m;
@@ -2144,7 +2144,7 @@ Expected<ServerInfo> WirePort::hello() {
     bool any = false;
     for (auto& r : p_->rails) any = any || r->up;
     if (!any) {
-      p_->have_boot = false;  // H02: no rail up: no state of an earlier process is kept, take the nonce of this one
+      p_->have_boot = false;  // No rail up: no state of an earlier process is kept, take the nonce of this one
       p_->boot_nonce.reset();
       if (Status s = p_->connect_all(); !s) return s.error();
     }
@@ -2166,7 +2166,7 @@ std::uint64_t WirePort::connect_attempts() const { return p_->attempts_total.loa
 void WirePort::abort_connect() { p_->aborting = true; }
 void WirePort::set_background(bool on) { p_->background = on; }
 void WirePort::release_endpoints(Nanos real_until) { p_->release_all(real_until); }
-// J10: a staged or built rail set is aborted with the rest (its device comes back first; the keepalive threads are joined).
+// A staged or built rail set is aborted with the rest (its device comes back first; the keepalive threads are joined).
 void WirePort::abort_endpoints() {
   p_->drop_build();
   p_->teardown_endpoints();
@@ -2181,10 +2181,10 @@ void WirePort::drain_session() {
   if (p_->session() == Session::Up) p_->go_down(Impl::Reason::EpError);
 }
 void WirePort::bind_metrics(ClientMetrics* m) {
-  // F3 (K09): the series live in the old registry. Hide those still carrying an unknown identity before the pointers go
+  // The series live in the old registry. Hide those still carrying an unknown identity before the pointers go
   // (a rebind to another registry must not leave an "unknown" series behind), and forget the identity they were made
   // for so the next publish_rails() builds them afresh.
-  // L02: only in a PRIVATE registry. A series is keyed by its labels, so in the Client's shared registry the successor
+  // Only in a PRIVATE registry. A series is keyed by its labels, so in the Client's shared registry the successor
   // core of a planned rebuild owns the very same "unknown" series (same pointer) and hiding it here would blank the
   // live one. A shared "unknown" series is hidden by the pair that publishes the real identity (publish_rails), and a
   // series of a build that never got an identity comes back when the next build registers its labels again.
@@ -2204,9 +2204,9 @@ void WirePort::bind_metrics(ClientMetrics* m) {
   {
     std::lock_guard lk(p_->refuse_mu);
     p_->mx = m;
-    p_->refuse_ctr.clear();  // L05: the cached counters live in the old registry
+    p_->refuse_ctr.clear();  // The cached counters live in the old registry
   }
-  if (p_->opts.on_metrics) p_->opts.on_metrics(m);  // N01: forwards nullptr too (the ticket source unbinds)
+  if (p_->opts.on_metrics) p_->opts.on_metrics(m);  // Forwards nullptr too (the ticket source unbinds)
   for (auto& r : p_->rails) {
     r->g_state = nullptr, r->g_window = nullptr, r->c_read = nullptr, r->g_qps = nullptr;  // the series live in m's registry
     r->c_sqfull = nullptr;
@@ -2220,12 +2220,12 @@ void WirePort::bind_metrics(ClientMetrics* m) {
   p_->g_unpaired_node = ~0u;
   p_->g_unpaired_host.clear();
   if (!m) return;
-  // F3 (K20): the release lend_check only logs and counts; the count is a client metric (read at scrape time).
+  // The release lend_check only logs and counts; the count is a client metric (read at scrape time).
   m->reg.callback_gauge("miracache_client_lend_violations_total",
-                        "Times a device fabric lent to the off-lock rail build was touched under the client lock (J01; must stay 0).",
+                        "Times a device fabric lent to the off-lock rail build was touched under the client lock (must stay 0).",
                         {}, [] { return static_cast<std::int64_t>(g_lend_violations.load(std::memory_order_relaxed)); });
   m->session_up->set(p_->session() == Session::Up ? 1 : 0);
-  p_->publish_rails();  // F08: miracache_client_rail_unpaired too (node_id, hostname, addr as the rail series)
+  p_->publish_rails();  // miracache_client_rail_unpaired too (node_id, hostname, addr as the rail series)
 }
 void WirePort::endpoint_wedged(fabric::EpClass cls) {
   if (p_->mux) {  // the lost completion's rail is unknown: every endpoint of the class (the old single-rail rule)
@@ -2254,7 +2254,7 @@ fabric::Endpoint* WirePort::endpoint(fabric::EpClass cls) {
   return e ? e->ep : nullptr;
 }
 void WirePort::prepare_tickets() {
-  if (p_->opts.ticket_need) p_->opts.ticket_need(std::max(1u, p_->opts.fetch_qps));  // G01: this port's builds
+  if (p_->opts.ticket_need) p_->opts.ticket_need(std::max(1u, p_->opts.fetch_qps));  // This port's builds
   if (p_->opts.prepare) p_->opts.prepare();
 }
 unsigned WirePort::reconnect_wait_ms() const {
@@ -2279,7 +2279,7 @@ void WirePort::keepalive() {
   }
   p_->reap();
   if (!p_->mux) {
-    // G12: one PING per keepalive period, as the mux path (HR7): the node's thread ticks every 5 ms while it waits on a
+    // One PING per keepalive period, as the mux path: the node's thread ticks every 5 ms while it waits on a
     // planned rebuild (tick_soon), and each tick used to PING (about 200 PINGs/s to the node during a 30 s drain).
     Impl::Rail& r0 = *p_->rails[0];
     const unsigned per_ms = p_->opts.dyn ? p_->opts.dyn->load()->keepalive_ms : p_->opts.keepalive_ms;  // 0: every tick
@@ -2290,13 +2290,13 @@ void WirePort::keepalive() {
       r0.last_ping = ping_now;
     }
     p_->service();
-    p_->publish_rails();  // HR7: as the mux path, so the node's rail series show the active pair after a rebuild
+    p_->publish_rails();  // As the mux path, so the node's rail series show the active pair after a rebuild
     return;
   }
-  // RL2: PING on every rail's control QP (decision 7), then the per-rail reconnects that are due (decision 9: own
+  // PING on every rail's control QP, then the per-rail reconnects that are due (own
   // backoff, own tickets; the rail takes work again only after its HELLOs and SEG_TABLE). Under the caller's lock, with
   // the background (short) connect and RPC caps.
-  // HR7 fix: at most one PING per rail per keepalive period (the client's live keepalive_ms). A node's keepalive thread
+  // At most one PING per rail per keepalive period (the client's live keepalive_ms). A node's keepalive thread
   // also ticks every few milliseconds while it waits on a planned rebuild (jitter, token, retire: tick_soon), and every
   // such tick used to send a PING and count it as a period, so three fast ticks made a healthy rail suspect before its
   // PONG could arrive (2-rail sim seeds then saw puts end Aborted).
@@ -2317,12 +2317,12 @@ void WirePort::keepalive() {
     }
   }
   p_->service();
-  p_->finish_build();  // run #233: the set build_rails() connected off the lock joins now (HELLOs), or goes back
+  p_->finish_build();  // The set build_rails() connected off the lock joins now (HELLOs), or goes back
   const Nanos now = p_->clock.now();
   for (std::size_t i = 0; i < p_->rails.size(); ++i) {
     Impl::Rail& r = *p_->rails[i];
     if (p_->rbuild && p_->rbuild->rail == i) continue;  // its device is lent: build_rails() connects it
-    // RL2 follow-up B: a rail rejoins in steps that never wait under the caller's lock (the other rails keep their
+    // A rail rejoins in steps that never wait under the caller's lock (the other rails keep their
     // traffic): one tick connects and sends the HELLOs, later ticks take the replies service() has filed.
     if (r.joining) {
       if (p_->aborting || p_->goaway || p_->session() != Session::Up) continue;
@@ -2335,17 +2335,17 @@ void WirePort::keepalive() {
         r.unanswered = 0;
         r.fail_streak = 0;
         ++r.reconnects;
-        p_->nonce_restarts = 0;  // J07: the rail reached the session's process
+        p_->nonce_restarts = 0;  // The rail reached the session's process
         p_->rail_log(log::Level::Info, r, "rail up again: takes work after HELLO and SEG_TABLE");
-        if (p_->opts.on_rails_up) p_->opts.on_rails_up({r.o.index}, /*rejoin=*/true);  // Q03: closes its failure entries
+        if (p_->opts.on_rails_up) p_->opts.on_rails_up({r.o.index}, /*rejoin=*/true);  // Closes its failure entries
       } else if (js == Impl::Join::Restarted) {
-        // F04: the other rails still talk to the old process (they have not noticed yet) and the session's segment
+        // The other rails still talk to the old process (they have not noticed yet) and the session's segment
         // table is that process's: the rail must not take work on it. The session goes Down and reconnects every rail
         // to the new process (fresh conn_id, its SEG_TABLE), instead of flapping until the last old rail dies.
-        const bool by_nonce = r.boot_mismatch;  // H02: another boot nonce (any table_gen); else F04: only older tables
+        const bool by_nonce = r.boot_mismatch;  // Another boot nonce (any table_gen); else only older tables
         const std::string sess_nonce = Impl::nonce_text(p_->boot_nonce), rail_nonce = Impl::nonce_text(r.seen_nonce);
         p_->join_abort(i);
-        // J07 (review s8 wave15): rails of one node ID that reach two processes (a mis-wired node) would end the session
+        // Rails of one node ID that reach two processes (a mis-wired node) would end the session
         // at every rejoin, for ever, failing every job in flight. After kNonceDamp such ends in a row (no session since
         // with every rail on one process), the session stays and the odd rail stays down on the long backoff.
         if (by_nonce && p_->nonce_restarts >= Impl::kNonceDamp) {
@@ -2376,20 +2376,20 @@ void WirePort::keepalive() {
       continue;
     }
     if (r.up || now < r.next_attempt || p_->aborting || p_->goaway || p_->session() != Session::Up) continue;
-    // Run #233: a rail alone on its device connects off the lock (build_rails); one build at a time, the others wait.
+    // A rail alone on its device connects off the lock (build_rails); one build at a time, the others wait.
     if (p_->can_lend(i)) {
       if (!p_->rbuild) p_->lend(i);
       continue;
     }
     // A rail that shares its device with another rail, or with a zombie not released yet: connects here, under the lock.
-    // RL3 / J06b (review s8 wave15): a design limit, not a bug. The other rail's endpoints on that device fabric are
+    // A design limit, not a bug. The other rail's endpoints on that device fabric are
     // polled and posted under the lock, and VerbsCmFabric is single-threaded (connect pumps the device's CM channel
     // and posts receives into the shared CQ), so the device cannot be lent while another rail uses it. The connect is
     // bounded by reconnect_connect_ms per endpoint and stalls only this node's jobs. It is counted and logged once per
     // rail so a shared-device layout (lab rails, or a zombie that never drains) is visible.
     p_->note_inlock(r);
     Impl::BackgroundScope bg(p_->background);  // the short connect cap (reconnect_connect_ms)
-    fabric::clear_local_failure();  // G09: a CQ/QP the local device refuses is reported with its call and errno
+    fabric::clear_local_failure();  // A CQ/QP the local device refuses is reported with its call and errno
     Status s = p_->join_start(i);
     bg.end();
     if (!s) {
@@ -2460,7 +2460,7 @@ Expected<ServerInfo> WirePort::info_from_seg_table(const proto::SegTable& t, fab
   std::size_t max_id = 0;
   for (std::size_t k = 0; k < t.n; ++k) {
     // The server never announces more than ~200 segments; a larger id would make us allocate
-    // a huge region vector (W04). Reject the whole table.
+    // a huge region vector. Reject the whole table.
     if (t.e[k].seg_id >= kMaxSegId) return err(ErrorCode::Corrupt, "wire: SEG_TABLE seg_id out of range");
     max_id = std::max<std::size_t>(max_id, t.e[k].seg_id + 1);
   }
@@ -2490,7 +2490,7 @@ store::LookupAck WirePort::lookup_impl(const store::LookupReq& q, bool lease) {
   if (!c || q.keys.empty()) return out;
   auto m = std::make_unique<proto::Lookup>();
   std::memcpy(m->scope_id, q.scope.data(), 32);
-  m->flags = lease ? 1 : 0;  // bit0 LEASE; 0 = PROBE (presence checks take no lease, W06)
+  m->flags = lease ? 1 : 0;  // bit0 LEASE; 0 = PROBE (presence checks take no lease)
   // ClientCore splits larger batches (max_lookup_keys()); a direct caller's tail is a MISS.
   m->n = static_cast<std::uint16_t>(std::min<std::size_t>(q.keys.size(), proto::kMaxLookupKeys));
   for (std::size_t i = 0; i < m->n; ++i) std::memcpy(m->key_hash[i].data(), q.keys[i].data(), 32);
@@ -2498,10 +2498,10 @@ store::LookupAck WirePort::lookup_impl(const store::LookupReq& q, bool lease) {
   if (!r || (r->h.flags & proto::flag::ERROR)) return out;
   auto a = proto::decode_lookup_ack(r->h, r->body);
   if (!a) return out;
-  // A decoded ack may carry a lease even when we reject it: give it back (W03).
+  // A decoded ack may carry a lease even when we reject it: give it back.
   bool bad = a->n != m->n;
   for (std::size_t i = 0; !bad && i < a->n; ++i)
-    bad = a->e[i].status == 1 && a->e[i].stored_len > UINT32_MAX;  // W05: lengths go into u32 READs
+    bad = a->e[i].status == 1 && a->e[i].stored_len > UINT32_MAX;  // Lengths go into u32 READs
   if (bad) {
     if (a->lease_id != 0) (void)release(a->lease_id);
     return out;
@@ -2522,7 +2522,7 @@ Status WirePort::renew(store::LeaseId lease) {
   if (!c) return err(ErrorCode::LinkDown, "wire: control endpoint down");
   proto::Renew m;
   m.lease_id = lease;
-  // Fire-and-forget (W01): the RENEW_ACK matches nothing and is dropped in on_frame (it still
+  // Fire-and-forget: the RENEW_ACK matches nothing and is dropped in on_frame (it still
   // counts as proof of life). A lost renewal is harmless: the seq check rejects stale reads.
   std::array<std::byte, proto::kMaxBodyLen> body{};
   auto n = proto::encode_renew(m, body);
@@ -2557,14 +2557,14 @@ store::PutBeginAck WirePort::put_begin(const store::PutBeginReq& q) {
   out.status = store::BeginStatus::Malformed;
   if (p_->session() != Session::Up || p_->goaway) {
     out.status = store::BeginStatus::Refused;  // retry 0: the client drops the store and recomputes later
-    // Review w4 V08: a node that left the membership (GOAWAY reason Epoch) skips the store, as a Draining refusal
+    // A node that left the membership (GOAWAY reason Epoch) skips the store, as a Draining refusal
     // does; a shutdown or a node that is down stays a refusal.
     if (p_->removed.load(std::memory_order_acquire)) out.skip = store::BeginSkip::Draining;
     return out;
   }
   Impl::Ep* c = p_->ing_ep();
   if (!c || q.keys.empty() || q.keys.size() > proto::kMaxPutKeys) return out;
-  // K03: a key longer than the node's largest stored block is refused by the node anyway (Malformed); refuse it here,
+  // A key longer than the node's largest stored block is refused by the node anyway (Malformed); refuse it here,
   // with the same outcome (the batch is aborted) and no round trip.
   if (const std::uint64_t lim = p_->max_stored.load(std::memory_order_acquire); lim != 0) {
     for (const auto& k : q.keys)
@@ -2573,7 +2573,7 @@ store::PutBeginAck WirePort::put_begin(const store::PutBeginReq& q) {
         return out;
       }
   }
-  const std::size_t ri = c->rail;  // K04: kept for the refusal log after the RPC
+  const std::size_t ri = c->rail;  // Kept for the refusal log after the RPC
   ++p_->rails[ri]->puts;
   auto m = std::make_unique<proto::PutBegin>();
   std::memcpy(m->scope_id, q.scope.data(), 32);
@@ -2585,12 +2585,12 @@ store::PutBeginAck WirePort::put_begin(const store::PutBeginReq& q) {
     e.chain_pos = q.keys[i].chain_pos;
     e.stored_len = q.keys[i].stored_len;
   }
-  // PUT_BEGIN timeout caveat (W03): if the ack is lost or late the server still holds the
+  // PUT_BEGIN timeout caveat: if the ack is lost or late the server still holds the
   // reservation (MRs + bytes) for a put we never learn the id of, so it cannot be cancelled;
   // it is reclaimed by the server's put_timeout TTL. The job just aborts (the engine recomputes).
   auto r = p_->rpc_msg(*c, Op::PUT_BEGIN, *m, [](const proto::PutBegin& x, std::span<std::byte> o) { return proto::encode_put_begin(x, o); });
   if (!r) {
-    // V08: the GOAWAY(Epoch) arrived while this PUT_BEGIN waited (its endpoint went down under it): a skip as well.
+    // The GOAWAY(Epoch) arrived while this PUT_BEGIN waited (its endpoint went down under it): a skip as well.
     if (p_->removed.load(std::memory_order_acquire)) {
       out.status = store::BeginStatus::Refused;
       out.skip = store::BeginSkip::Draining;
@@ -2604,12 +2604,12 @@ store::PutBeginAck WirePort::put_begin(const store::PutBeginReq& q) {
       out.retry_after_ms = std::max<std::uint32_t>(er->retry_after_ms, 1);
     } else if (er && er->status == static_cast<std::uint16_t>(WireStatus::Draining)) {
       out.status = store::BeginStatus::Refused;
-      out.skip = store::BeginSkip::Draining;  // MB6b: skipped, not failed
+      out.skip = store::BeginSkip::Draining;  // Skipped, not failed
     } else if (er && er->status == static_cast<std::uint16_t>(WireStatus::StaleEpoch)) {
       out.status = store::BeginStatus::Refused;  // no in-job retry whatever the node's retry hint says
       out.retry_after_ms = 0;
       out.skip = store::BeginSkip::StaleEpoch;
-    } else {  // K04: Malformed (a block too large for an older node), Unsupported, or an undecodable reply: loud, counted
+    } else {  // Malformed (a block too large for an older node), Unsupported, or an undecodable reply: loud, counted
       const char* why = !er                                                                 ? "bad_reply"
                         : er->status == static_cast<std::uint16_t>(WireStatus::Malformed)   ? "malformed"
                         : er->status == static_cast<std::uint16_t>(WireStatus::Unsupported) ? "unsupported"
@@ -2635,7 +2635,7 @@ store::PutBeginAck WirePort::put_begin(const store::PutBeginReq& q) {
     if (e.status != 1) continue;
     out.entries[i] = store::BeginEntry{true, e.mr_index, e.offset};
   }
-  if (p_->mux) {  // RL2: the put stays on this rail's ingest QP; its WRITEs are routed by their remote address
+  if (p_->mux) {  // The put stays on this rail's ingest QP; its WRITEs are routed by their remote address
     Impl::PutRec pr;
     pr.ep = c->key;
     pr.rail = c->rail;
@@ -2661,9 +2661,9 @@ void WirePort::put_commit(const store::PutCommitReq& q, store::PutDoneFn done) {
     r.status = st;
     p_->ready.push_back([done = std::move(done), r = std::move(r)] { done(r); });
   };
-  Impl::Ep* c = p_->put_ep(q.put_id);  // RL2: the ingest QP the put began on
+  Impl::Ep* c = p_->put_ep(q.put_id);  // The ingest QP the put began on
   if (!c || q.e.empty() || q.e.size() > proto::kMaxPutKeys) return fail(store::CommitStatus::UnknownPut);
-  // A live commit with the same put_id keeps its slot (W07): the duplicate fails, never overwrites.
+  // A live commit with the same put_id keeps its slot: the duplicate fails, never overwrites.
   if (p_->commits.count(q.put_id)) return fail(store::CommitStatus::UnknownPut);
   auto m = std::make_unique<proto::PutCommit>();
   m->put_id = q.put_id;
@@ -2710,7 +2710,7 @@ Status WirePort::invalidate(const store::ScopeId& scope, const store::KeyHash& k
   std::memcpy(m.scope_id, scope.data(), 32);
   std::memcpy(m.key_hash, key.data(), 32);
   m.gen = gen;
-  // Fire-and-forget (W01): best effort, the reply is dropped in on_frame.
+  // Fire-and-forget: best effort, the reply is dropped in on_frame.
   std::array<std::byte, proto::kMaxBodyLen> body{};
   auto n = proto::encode_invalidate(m, body);
   if (!n) return err(ErrorCode::InvalidArgument, "wire: invalidate encode");

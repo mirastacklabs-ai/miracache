@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// W13: the placement View of a bundle body.
+// The placement View of a bundle body.
 #include <gtest/gtest.h>
 
 #include <array>

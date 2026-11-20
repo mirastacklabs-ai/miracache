@@ -61,7 +61,7 @@ class TestCheck(unittest.TestCase):
     def test_no_mira_tier_is_ok(self):
         self.assertEqual(self.run_main("--kv-transfer-config", '{"kv_connector":"X"}'), 0)
 
-    def test_secondary_tier_would_be_ignored_fails(self):  # research/19 1d
+    def test_secondary_tier_would_be_ignored_fails(self):
         for kv in (kv_json(spec_name=None),  # default CPUOffloadingSpec ignores secondary_tiers
                    kv_json(spec_name="CPUOffloadingSpec"),
                    kv_json(cpu_bytes_to_use=None),
@@ -73,7 +73,7 @@ class TestCheck(unittest.TestCase):
         kv = kv_json(secondary_tiers=[{**TIER, "config": {"path": "/x"}}])
         self.assertEqual(self.run_main("--kv-transfer-config", kv, *GOOD), 1)
 
-    def test_tier_must_repeat_the_recompute_policy(self):  # s12 C3
+    def test_tier_must_repeat_the_recompute_policy(self):
         missing = {k: v for k, v in TIER.items() if k != "kv_load_failure_policy"}
         for tier in (missing, {**TIER, "kv_load_failure_policy": "fail"}):
             kv = kv_json(secondary_tiers=[tier])

@@ -144,7 +144,7 @@ Bytes lookup_ack_hand2() {
               bytes({0, 0x20, 0, 0, 0, 0, 0, 0}),                      // stored_len
               bytes({5, 4, 3, 2, 1, 0, 0, 0}),                         // gen
               bytes({0x77, 0, 0, 0, 0, 0, 0, 0}),                      // gen_slot
-              zeros(40)});                                             // MISS: all zero (D5)
+              zeros(40)});                                             // MISS: all zero
 }
 LookupAck lookup_ack_msg2() {
   LookupAck m;
@@ -222,7 +222,7 @@ TEST(MessagesB, HelloAckPlacementAndGolden) {
   EXPECT_EQ(run(got), WireStatus::Ok);
 }
 
-// H02: the boot nonce is a non-critical TLV behind the fixed 48 B (tag 0x0002, u64 LE, padded to 16 B). The old frame
+// The boot nonce is a non-critical TLV behind the fixed 48 B (tag 0x0002, u64 LE, padded to 16 B). The old frame
 // (no TLV) decodes with no nonce; the new one decodes with it, and its tail passes the generic TLV rule an older peer
 // applies (unknown non-critical tag skipped, CRITICAL_EXT clear).
 TEST(MessagesB, HelloAckBootNonceTlvOldAndNewFrames) {
@@ -257,7 +257,7 @@ TEST(MessagesB, HelloAckBootNonceTlvOldAndNewFrames) {
   EXPECT_FALSE(find_boot_nonce(bad).has_value());
 }
 
-// Review s9 K03: the max-stored-block TLV (tag 0x0003, u64 LE, 16 B with padding) after the boot nonce. The old frame
+// The max-stored-block TLV (tag 0x0003, u64 LE, 16 B with padding) after the boot nonce. The old frame
 // and the boot-nonce-only frame have none (unknown); the new frame passes the generic TLV rule an older peer applies;
 // 0 and a wrong length are unknown too.
 TEST(MessagesB, HelloAckMaxStoredBlockTlvOldAndNewFrames) {
@@ -304,7 +304,7 @@ TEST(MessagesB, HelloAckMaxStoredBlockTlvOldAndNewFrames) {
   EXPECT_FALSE(find_max_stored_block(bad).has_value());
 }
 
-// Review s9 F5: the hostname TLV (tag 0x0004, 1..255 printable bytes, padded to 8 B) after the boot nonce and the max
+// The hostname TLV (tag 0x0004, 1..255 printable bytes, padded to 8 B) after the boot nonce and the max
 // stored block. Old frames have none (unknown); the new frame passes the generic TLV rule an older peer applies; an empty,
 // too long or non-printable name is refused by the encoder and read as unknown by the finder.
 TEST(MessagesB, HelloAckHostnameTlvOldAndNewFrames) {
@@ -717,7 +717,7 @@ TEST(MessagesBErrors, PingGoawayStats) {
   EXPECT_EQ(run(resize_body(stats, 7)), M);
   const Bytes sack = cat({hand_header(0x08, 1, 8), bytes({4, 3, 2, 1}), zeros(4)});
   check_cases(sack, {{"z", {{37, 1}}, M}, {"no RESPONSE", {{8, 0}}, M}}, "STATS_ACK");
-  // Counter TLV: critical unknown -> Unsupported; truncated -> Malformed; D11 mismatch.
+  // Counter TLV: critical unknown -> Unsupported; truncated -> Malformed; critical-flag mismatch.
   auto with = [&](const Bytes& tlv, int flags) {
     Bytes b = sack;
     b.insert(b.end(), tlv.begin(), tlv.end());
@@ -725,7 +725,7 @@ TEST(MessagesBErrors, PingGoawayStats) {
   };
   EXPECT_EQ(run(with(bytes({1, 0x80, 0, 0, 0, 0, 0, 0}), 1 | flag::CRITICAL_EXT)), WireStatus::Unsupported);
   EXPECT_EQ(run(with(bytes({0x10, 0, 8, 0}), 1)), M) << "truncated TLV";
-  EXPECT_EQ(run(with(bytes({1, 0x80, 0, 0, 0, 0, 0, 0}), 1)), M) << "D11";
+  EXPECT_EQ(run(with(bytes({1, 0x80, 0, 0, 0, 0, 0, 0}), 1)), M) << "critical TLV whose critical flag mismatches";
   EXPECT_EQ(run(with(bytes({0x10, 0, 4, 0, 1, 2, 3, 4}), 1)), WireStatus::Ok);
 }
 

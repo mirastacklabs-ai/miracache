@@ -87,7 +87,7 @@ WireStatusResult check_tlv_tail(std::uint16_t frame_flags, std::span<const std::
     critical = critical || t->critical();
   }
   const bool flagged = (frame_flags & flag::CRITICAL_EXT) != 0;
-  if (flagged != critical) return err(WireStatus::Malformed, "tlv: CRITICAL_EXT mismatch (D11)");
+  if (flagged != critical) return err(WireStatus::Malformed, "tlv: CRITICAL_EXT mismatch");
   if (critical) return err(WireStatus::Unsupported, "tlv: unknown critical tag");
   return {};
 }

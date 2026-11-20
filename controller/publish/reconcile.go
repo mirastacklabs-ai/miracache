@@ -15,16 +15,16 @@ import (
 type ReconcileReport struct {
 	Repushed    []string // lagging nodes that were re-pushed
 	Republished bool     // a hash mismatch (second writer or store behind) triggered a republish
-	SecBehind   []string // nodes below the highest sec_generation seen (Q07); alerted
+	SecBehind   []string // nodes below the highest sec_generation seen; alerted
 	Unreachable []string
 }
 
-// ReconcileOnce is one pass of the reconcile loop (decision 12):
+// ReconcileOnce is one pass of the reconcile loop:
 //   - a node whose applied_generation is lower gets a re-push;
 //   - a node at the same generation with another applied_hash, or ahead of the store (a second
 //     writer), triggers a republish of the controller's content under a new generation, plus an alert;
-//   - a node whose sec_generation is below the highest seen anywhere raises an alert (Q07);
-//   - a push rejected for its sec section stops publishing and names --recover-from (Q06).
+//   - a node whose sec_generation is below the highest seen anywhere raises an alert;
+//   - a push rejected for its sec section stops publishing and names --recover-from.
 func (p *Publisher) ReconcileOnce(ctx context.Context) (*ReconcileReport, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -35,8 +35,8 @@ func (p *Publisher) ReconcileOnce(ctx context.Context) (*ReconcileReport, error)
 	if err != nil {
 		return nil, err
 	}
-	if st.Pending != nil { // Y13: settle the intent record of a publish that was cut short
-		// Unresolved (a node unreachable): the pass goes on with the committed state (Z03).
+	if st.Pending != nil { // settle the intent record of a publish that was cut short
+		// Unresolved (a node unreachable): the pass goes on with the committed state.
 		if _, err := p.resolvePending(ctx, &st); err != nil {
 			return &ReconcileReport{}, err
 		}
@@ -140,7 +140,7 @@ func (p *Publisher) RunReconcile(ctx context.Context, every time.Duration) {
 }
 
 // reconcileRetiring keeps pushing the removing bundle to nodes the last bundle dropped, for
-// store.RetirePasses passes (Y10). A node that holds the current generation, or acks the push, is done.
+// store.RetirePasses passes. A node that holds the current generation, or acks the push, is done.
 func (p *Publisher) reconcileRetiring(ctx context.Context, st *store.State) {
 	if len(st.Retiring) == 0 || len(st.LastEnvelope) == 0 {
 		return

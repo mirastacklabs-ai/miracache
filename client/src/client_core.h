@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// ClientCore (A1.6 L3): the deterministic fetch / put / probe state machines. No threads,
+// ClientCore: the deterministic fetch / put / probe state machines. No threads,
 // no blocking: submit_* never waits, everything advances in pump(), which polls the fabric
 // and runs due timeouts. Not thread-safe (the facade serialises access).
 //
@@ -61,7 +61,7 @@ struct Notify {
   ReleasedFn released;
 };
 
-// S02: the two series miracache_client_landing_pool_bytes{state="used"} and {state="free"} of a node come from ONE read
+// The two series miracache_client_landing_pool_bytes{state="used"} and {state="free"} of a node come from ONE read
 // of the pool, so used + free is the pool size in every scrape, under traffic too. The registry renders a family's
 // children in registration order under its one lock, and "used" is always registered first: its callback stores the
 // read here, the "free" callback derives from it and never reads the pool.
@@ -84,19 +84,19 @@ struct ClientCoreOptions {
   // Several memory nodes share one registry; a non-empty node_label tags every series with node="...".
   telemetry::Registry* registry = nullptr;
   std::string node_label;
-  // The core registers miracache_client_landing_pool_bytes{node_label} itself. False (bundle mode, review w3b Z02):
+  // The core registers miracache_client_landing_pool_bytes{node_label} itself. False (bundle mode):
   // several cores may share a node label in turn, so the Client points that series at one of them.
   bool pool_gauges = true;
-  // HR2 (class A, fabric.slice_bytes): the size a fetch READ is cut into, read once per key at its start so a change
+  // Class A (fabric.slice_bytes): the size a fetch READ is cut into, read once per key at its start so a change
   // reaches new fetches only. Null or 0 = one READ per block.
   std::function<std::uint64_t()> slice_bytes;
-  // RL3 test hook (sim audits): called with every landing-pool span the core gives back to the pool.
+  // Test hook (sim audits): called with every landing-pool span the core gives back to the pool.
   std::function<void(std::span<const std::byte>)> on_span_release;
-  // RL3 test hook (sim audits): called with every READ/WRITE completion as the core takes it, before it acts on it.
+  // Test hook (sim audits): called with every READ/WRITE completion as the core takes it, before it acts on it.
   std::function<void(const fabric::Completion&)> on_cqe;
 };
 
-// RL3 (multi-rail plan decisions 8, 9): a fetch READ's work-request tag, decoded. `group` names one block of one job
+// A fetch READ's work-request tag, decoded. `group` names one block of one job
 // (its payload slices and its state_gen READ share it); `seq` = the state_gen READ. Used by the sim audit.
 struct FetchTagInfo {
   std::uint64_t group = 0;
@@ -106,19 +106,19 @@ struct FetchTagInfo {
 class ClientCore {
  public:
   // `ex` runs segment decrypts (and may call back from any thread); `salts` feeds block salts.
-  // Q09: `fab`, `port`, `clock`, `ex` and `salts` must outlive the core (~ClientCore unbinds its metrics
+  // `fab`, `port`, `clock`, `ex` and `salts` must outlive the core (~ClientCore unbinds its metrics
   // from `port`). A wire port should release its endpoints (WirePort::release_endpoints) before the core
-  // goes, so no QP is left that could still DMA into the landing pool when it is unmapped (Q06).
+  // goes, so no QP is left that could still DMA into the landing pool when it is unmapped.
   static Expected<std::unique_ptr<ClientCore>> create(fabric::Fabric& fab, ServerPort& port, const Clock& clock,
                                                       Executor& ex, NonceSource& salts,
                                                       const ClientCoreOptions& opts = {});
   ~ClientCore();
 
-  // RL3: decodes a fetch READ tag (nullopt for a WRITE tag).
+  // Decodes a fetch READ tag (nullopt for a WRITE tag).
   static std::optional<FetchTagInfo> fetch_tag(std::uint64_t tag);
   // Fetch slices waiting for a fetch window (test hook).
   std::size_t slices_waiting() const { return waitq_.size(); }
-  std::uint64_t slices_reissued() const { return reissued_; }  // RL3 test hook
+  std::uint64_t slices_reissued() const { return reissued_; }  // Test hook
 
   // `keys` and `bufs` have equal size and stay valid until `released`. `deadline` is absolute
   // (Clock time). Never block; the returned Ticket identifies the job in the callbacks.
@@ -130,14 +130,14 @@ class ClientCore {
   Ticket probe(const ScopeKeys& sk, std::uint32_t group, std::span<const KeyRef> keys, Nanos deadline,
                ResultFn done);
   void cancel(Ticket t);
-  // Q05 watchdog support: RDMA ops / decrypt tasks of the job that have not completed yet.
+  // Watchdog support: RDMA ops / decrypt tasks of the job that have not completed yet.
   std::size_t outstanding_ops(Ticket t) const;
   // Last resort for a job whose completions never arrive: fails it (Timeout), abandons its ops and
   // finishes it. Returns the abandoned op count. Their pool spans stay quarantined until the
-  // endpoints that carried the ops are reaped (see client_core.cpp, N02).
+  // endpoints that carried the ops are reaped (see client_core.cpp).
   std::size_t force_fail(Ticket t);
-  std::size_t quarantined_bytes() const { return quarantined_bytes_; }  // N02 (tests, metric)
-  std::vector<std::span<std::byte>> quarantined_spans() const;          // N02 test hook
+  std::size_t quarantined_bytes() const { return quarantined_bytes_; }  // Tests, metric
+  std::vector<std::span<std::byte>> quarantined_spans() const;          // Test hook
   // Returns true if it processed any completion (a hint for idle back-off, not a guarantee).
   bool pump();
 
@@ -168,11 +168,11 @@ class ClientCore {
   void fetch_start_key(Job& j, std::size_t i);
   void fetch_on_cqe(Job& j, std::size_t i, std::uint32_t slice, std::uint32_t attempt, bool is_seq, const Status& st);
   void fetch_key_finished(Job& j, std::size_t i, FetchOutcome oc);
-  // RL3 slicing: post one payload slice / the seq READ (Busy = every fetch window is full: it waits in waitq_).
+  // Slicing: post one payload slice / the seq READ (Busy = every fetch window is full: it waits in waitq_).
   enum class Post { Posted, Busy, Failed };
   Post post_slice(Job& j, std::size_t i, std::uint32_t s);
   Post post_seq(Job& j, std::size_t i);
-  Post read_refused(const Status& st);  // R16: what a refused READ post means (Busy = it waits)
+  Post read_refused(const Status& st);  // What a refused READ post means (Busy = it waits)
   void slice_finished(Job& j, std::size_t i, bool ok);  // a payload slice is done for good (landed or given up)
   void data_complete(Job& j, std::size_t i);            // every payload slice is done: the seq rule's gate
   bool may_reissue(const Job& j, const Status& st) const;
@@ -188,7 +188,7 @@ class ClientCore {
   // put
   void put_begin_batch(Job& j);
   void put_on_write(Job& j, std::size_t i, const Status& st);
-  // R16: posts the WRITE of batch entry b (key j.batch[b]); Busy = its ingest QP's send queue is full (it waits).
+  // Posts the WRITE of batch entry b (key j.batch[b]); Busy = its ingest QP's send queue is full (it waits).
   Post put_post_write(Job& j, std::size_t b);
   void put_post_waiting(Job& j);
   void put_commit_batch(Job& j);
@@ -199,7 +199,7 @@ class ClientCore {
   // Session loss / reconnect (wire port): see sync_session in client_core.cpp.
   void sync_session();
   void fail_all_jobs();
-  // N02 quarantine: a span an abandoned op may still DMA into (see force_fail in client_core.cpp).
+  // Quarantine: a span an abandoned op may still DMA into (see force_fail in client_core.cpp).
   struct Quarantined {
     PoolSpan span;
     std::uint64_t reaped_at = 0;  // released once port_.session_reaped(this) ...
@@ -211,7 +211,7 @@ class ClientCore {
     std::vector<store::LookupEntry> entries;  // aligned with the request keys
     std::vector<store::LeaseId> leases;       // one per part that took a lease
     std::size_t answered = 0;                 // keys whose part got a well-formed reply
-    Nanos lease_expiry = Nanos::max();        // RL3: the earliest lease expiry of the parts (Clock time)
+    Nanos lease_expiry = Nanos::max();        // The earliest lease expiry of the parts (Clock time)
   };
   SplitAck lookup_split(const store::LookupReq& q, bool lease, Nanos deadline);
 
@@ -233,7 +233,7 @@ class ClientCore {
   fabric::Endpoint* ingest_ep_ = nullptr;
   std::uint64_t seen_down_ = 0;  // ServerPort::session_down_count() last acted on
   bool bound_ = true;            // fetch_ep_/ingest_ep_ are the live session's endpoints
-  // R16: READs / WRITEs posted and not completed yet (any endpoint). A send queue that is full (ResourceExhausted)
+  // READs / WRITEs posted and not completed yet (any endpoint). A send queue that is full (ResourceExhausted)
   // while some are outstanding is backpressure: the post waits for a completion instead of failing.
   std::uint64_t reads_out_ = 0, writes_out_ = 0;
   std::unique_ptr<LandingPool> pool_;
@@ -242,7 +242,7 @@ class ClientCore {
   std::optional<GcmCtx> gcm_;
   std::uint64_t next_job_ = 1;
   std::map<std::uint64_t, std::unique_ptr<Job>> jobs_;
-  std::vector<ServerPort::Renewed> renewed_;  // RL3 leftover: take_renewed scratch (pump)
+  std::vector<ServerPort::Renewed> renewed_;  // take_renewed scratch (pump)
   std::mutex qmu_;  // pipeline completions may arrive from executor threads
   std::deque<std::tuple<std::uint64_t, std::size_t, FetchOutcome>> fq_;
   std::vector<Quarantined> quarantine_;

@@ -151,7 +151,7 @@ struct World {
   explicit World(fabric::SimOptions so = {}, std::uint64_t seed = 1, std::function<std::int64_t()> wall = {})
       : rng(seed), net(clock, rng, {}, so), srv_fab(net.add_node(1)), cli(net.add_node(2)) {
     auto cfg = server_cfg();
-    cfg.wall_unix_ns = std::move(wall);  // FM1: a test-controlled wall clock (null = the real one)
+    cfg.wall_unix_ns = std::move(wall);  // A test-controlled wall clock (null = the real one)
     auto s = server::Server::create(cfg, srv_fab, clock, rng, sex);
     EXPECT_TRUE(s);
     server = std::move(*s);
@@ -417,7 +417,7 @@ TEST_P(EndpointDropMidPut, FailsCleanly) {
       if (f.st[i] != KeyStatus::Hit) EXPECT_TRUE(all_zero(out[i]));
   }
   if (GetParam() == 0) EXPECT_GT(aborted, 0u);
-  EXPECT_GT(aborted + committed, 0u) << "block " << GetParam() << " ran no key to an end";  // s11c review P3-7
+  EXPECT_GT(aborted + committed, 0u) << "block " << GetParam() << " ran no key to an end";
 }
 INSTANTIATE_TEST_SUITE_P(Blocks, EndpointDropMidPut, ::testing::Range(0, 6));
 
@@ -535,7 +535,7 @@ TEST(WireClient, OpenWireFacadeStoreThenFetch) {
   c.shutdown();
 }
 
-// ---- Fake memory node: scripted replies for failure-mode tests (review r3 W/S findings) ------
+// ---- Fake memory node: scripted replies for failure-mode tests ------
 // Speaks just enough wire v0 over a SimFabric node: HELLO (+ initial SEG_TABLE), PING -> PONG,
 // and a per-frame hook for everything else. `silent` ignores every frame except HELLO.
 struct Fake {
@@ -781,11 +781,11 @@ store::LookupReq one_key_req() {
   return q;
 }
 
-// W01: control RPCs honour the job deadline; a dead control plane costs ~deadline once, later
+// Control RPCs honour the job deadline; a dead control plane costs ~deadline once, later
 // jobs fail fast, and everything recovers when the server answers again.
 TEST(WireFailure, UnansweredLookupHonoursJobDeadlineThenFailsFastThenRecovers) {
   FW w;
-  w.rpc_timeout = milliseconds(50);  // R02: only a wait that used the whole rpc_timeout makes control suspect
+  w.rpc_timeout = milliseconds(50);  // Only a wait that used the whole rpc_timeout makes control suspect
   ASSERT_TRUE(w.open_core());
   w.fake.hook = [](Fake& f, const Fake::Rx& rx) {
     if (rx.h.type == static_cast<std::uint16_t>(proto::Op::LOOKUP)) FW::reply_lookup(f, rx, 0, 0, 0, false);
@@ -821,7 +821,7 @@ TEST(WireFailure, UnansweredLookupHonoursJobDeadlineThenFailsFastThenRecovers) {
   EXPECT_EQ(r3.st[0], KeyStatus::Miss);
 }
 
-// G12: a single-rail port sends at most one PING per keepalive period, however often it ticks (a node's thread ticks
+// A single-rail port sends at most one PING per keepalive period, however often it ticks (a node's thread ticks
 // every 5 ms while it waits on a planned rebuild); keepalive_ms 0 keeps the old "every tick".
 TEST(WireFailure, SingleRailPingsOncePerKeepalivePeriod) {
   FW w;
@@ -842,7 +842,7 @@ TEST(WireFailure, SingleRailPingsOncePerKeepalivePeriod) {
   w.port->release_endpoints();
 }
 
-// S01/S02 (client part): an idle client polls on keepalive ticks, so five unsolicited
+// Client part: an idle client polls on keepalive ticks, so five unsolicited
 // SEG_TABLE pushes (a 2-slot fetch endpoint on real NICs) are consumed, and PINGs are answered.
 // (SimFabric has no receive-slot limit: "consumed" is what the idle poll changes.)
 TEST(WireFailure, IdleKeepaliveConsumesUnsolicitedPushes) {
@@ -868,7 +868,7 @@ TEST(WireFailure, IdleKeepaliveConsumesUnsolicitedPushes) {
   EXPECT_GE(w.port->pongs_received(), 5u);
 }
 
-// S01: the Client's keepalive thread PINGs at the configured period and shuts down cleanly.
+// The Client's keepalive thread PINGs at the configured period and shuts down cleanly.
 TEST(WireClient, KeepaliveThreadPingsAtConfiguredRate) {
   FW w;
   Client::Env env;
@@ -876,10 +876,10 @@ TEST(WireClient, KeepaliveThreadPingsAtConfiguredRate) {
   env.clock = &w.clock;
   env.executor = &w.cex;
   env.salts = &w.salts;
-  // G12: the port sends one PING per keepalive period of ITS clock, so that clock follows real time here (an idle
-  // Up node's thread drives the sim once per tick (R12, env.drive_when_up below), which moves the SimClock by at most
+  // The port sends one PING per keepalive period of ITS clock, so that clock follows real time here (an idle
+  // Up node's thread drives the sim once per tick (env.drive_when_up below), which moves the SimClock by at most
   // 1 ms a tick: with that clock nearly every tick would fall inside the first period).
-  // Q13: the sim (network, SimClock) is single-threaded by contract. The test thread used to call w.clock.advance_to
+  // The sim (network, SimClock) is single-threaded by contract. The test thread used to call w.clock.advance_to
   // itself while the keepalive thread posted PINGs: SimEndpoint::submit reads net.now() twice, and an advance between
   // the reads made `due - now` negative and tripped MIRACACHE_CHECK(delay >= 0) in SimNetwork::schedule(). Now nothing
   // moves the SimClock during the run; the client (port, keepalive) gets its own clock that follows real time.
@@ -893,7 +893,7 @@ TEST(WireClient, KeepaliveThreadPingsAtConfiguredRate) {
   } follow(w.clock.now());
   env.clock = &follow;
   env.drive = [&] { w.drive(); };
-  env.drive_when_up = true;  // R12: this test thread never touches the sim while the client runs
+  env.drive_when_up = true;  // This test thread never touches the sim while the client runs
   auto wo = w.opts();
   wo.keepalive_ms = 20;
   auto cl = Client::open_wire(env, wo);
@@ -904,8 +904,8 @@ TEST(WireClient, KeepaliveThreadPingsAtConfiguredRate) {
   EXPECT_GE(sent, 5u);
   EXPECT_LE(sent, 25u);
   EXPECT_GE((*cl)->keepalive_ticks(), 5u);
-  // R12 (review s11): the PONGs come back. The idle Up node's keepalive tick drives the sim itself (the test thread may
-  // not, Q13), so its PINGs reach the server and the answers arrive. Polled (A-2): a slow tsan run may not have the
+  // The PONGs come back. The idle Up node's keepalive tick drives the sim itself (the test thread may
+  // not), so its PINGs reach the server and the answers arrive. Polled: a slow tsan run may not have the
   // first PONG back after the fixed 400 ms above.
   const auto pong_cap = std::chrono::steady_clock::now() + seconds(5);
   while ((*cl)->wire_port()->pongs_received() < 1u && std::chrono::steady_clock::now() < pong_cap)
@@ -931,7 +931,7 @@ TEST(WireClient, KeepaliveZeroStartsNoThread) {
   EXPECT_EQ((*cl)->keepalive_ticks(), 0u);
 }
 
-// W02: a smaller array in a newer SEG_TABLE (arriving between the lookup and the data READ
+// A smaller array in a newer SEG_TABLE (arriving between the lookup and the data READ
 // completion) must not send the seq READ past the new array: miss, endpoint stays healthy.
 TEST(WireFailure, SeqReadRechecksGenSlotAgainstCurrentArray) {
   FW w;
@@ -951,7 +951,7 @@ TEST(WireFailure, SeqReadRechecksGenSlotAgainstCurrentArray) {
   EXPECT_TRUE(s) << (s ? "" : s.error().context);
 }
 
-// W03: a decoded LOOKUP_ACK that is rejected still has its lease RELEASEd.
+// A decoded LOOKUP_ACK that is rejected still has its lease RELEASEd.
 TEST(WireFailure, RejectedLookupAckReleasesTheLease) {
   FW w;
   w.open_port();
@@ -967,7 +967,7 @@ TEST(WireFailure, RejectedLookupAckReleasesTheLease) {
       EXPECT_EQ(proto::decode_release(rx.h, rx.body)->lease_id, 77u);
 }
 
-// W05: stored_len >= 4 GiB is a malformed reply: miss, lease released, no INVALIDATE.
+// stored_len >= 4 GiB is a malformed reply: miss, lease released, no INVALIDATE.
 TEST(WireFailure, HugeStoredLenIsAMalformedReplyNotAHit) {
   FW w;
   w.open_port();
@@ -982,7 +982,7 @@ TEST(WireFailure, HugeStoredLenIsAMalformedReplyNotAHit) {
   EXPECT_EQ(w.fake.count(proto::Op::INVALIDATE), 0u);
 }
 
-// W06: presence probes send LOOKUP flags=0 and never RELEASE.
+// Presence probes send LOOKUP flags=0 and never RELEASE.
 TEST(WireFailure, ProbeSendsNoLeaseAndNoRelease) {
   FW w;
   ASSERT_TRUE(w.open_core());
@@ -1004,7 +1004,7 @@ TEST(WireFailure, ProbeSendsNoLeaseAndNoRelease) {
   EXPECT_EQ(w.fake.count(proto::Op::RELEASE), 0u);
 }
 
-// W04: a SEG_TABLE with a segment id beyond the clamp is malformed and ignored.
+// A SEG_TABLE with a segment id beyond the clamp is malformed and ignored.
 TEST(WireFailure, OversizedSegIdTableIsRejected) {
   FW w;
   w.open_port();
@@ -1022,7 +1022,7 @@ TEST(WireFailure, OversizedSegIdTableIsRejected) {
   EXPECT_EQ(w.port->table_gen(), 10u);
 }
 
-// W07: PUT_DONE counts only from the ingest endpoint; a duplicate live put_id is refused.
+// PUT_DONE counts only from the ingest endpoint; a duplicate live put_id is refused.
 TEST(WireFailure, PutDoneOnlyFromIngestAndDuplicateCommitRefused) {
   FW w;
   w.open_port();
@@ -1233,7 +1233,7 @@ TEST(WireReconnect, InFlightPutIsRefusedWhenIngestDies) {
   for (auto s : w.put(sk, ch, data)) EXPECT_TRUE(s == KeyStatus::Committed || s == KeyStatus::Skipped);
 }
 
-// r6 A1: the GOAWAY drain_ms is a deadline, not the first delay. A GOAWAY from a node that keeps
+// The GOAWAY drain_ms is a deadline, not the first delay. A GOAWAY from a node that keeps
 // serving (Upgrade, no drain) is followed by a normal-backoff reconnect, well before a long hint.
 TEST(WireReconnect, GoawayReconnectsWithNormalBackoffNotAfterTheHint) {
   World w(sliced(1024, false), 33);
@@ -1264,7 +1264,7 @@ void restart_server(World& w) {
   ASSERT_TRUE(w.server->start());
 }
 
-// r6 A1 + A8: SIGTERM with a 60 s drain window; the draining node refuses connects (no ticket
+// SIGTERM with a 60 s drain window; the draining node refuses connects (no ticket
 // redeemed), so the client backs off; the node restarts after 2 s, long before drain_ms. The client
 // is back within the backoff bound (reconnect_max_ms = 5 s by default), not after 60 s.
 TEST(WireReconnect, NodeRestartedBeforeDrainMsIsFoundWithinTheBackoffBound) {
@@ -1290,7 +1290,7 @@ TEST(WireReconnect, NodeRestartedBeforeDrainMsIsFoundWithinTheBackoffBound) {
   EXPECT_EQ(metric(w.core->metrics_text(), "miracache_client_reconnect_total{reason=\"goaway\"}"), 1);
 }
 
-// r6 A3/A9: the drain starts while a reconnect attempt is in flight. `at_conns` = 3: all endpoints are
+// The drain starts while a reconnect attempt is in flight. `at_conns` = 3: all endpoints are
 // admitted and control already said HELLO, so the late GOAWAY arrives inside connect_all() while the
 // ingest HELLO joins the existing session. `at_conns` = 1: control's HELLO is still out, so it starts
 // a new session and is answered Draining. Either way the attempt counts as failed: the session never
@@ -1371,7 +1371,7 @@ TEST(WireReconnect, MemnodeDownThreeSecondsBacksOffThenRecovers) {
   EXPECT_EQ(out[0], data[0]);
 }
 
-// r8 N06: go_down -> on_down_tickets (the admin ticket source's reset_backoff in Client::open) fires once
+// go_down -> on_down_tickets (the admin ticket source's reset_backoff in Client::open) fires once
 // per Up -> Down, never on a failed reconnect attempt, and again on the next Up -> Down.
 TEST(WireReconnect, OnDownTicketsFiresOncePerSessionLoss) {
   World w(sliced(1024, false), 34);
@@ -1602,8 +1602,7 @@ TEST(WireFailure, ControlEndpointErrorsAreCountedInRdmaErrors) {
   EXPECT_GT(metric(w.core->metrics_text(), "miracache_client_rdma_errors_total{kind=\"flush\"}"), 0);
 }
 
-// ---- review r4 -------------------------------------------------------------------------------
-// R02: a control RPC cut short by the job's own (tiny) deadline says nothing about the server.
+// A control RPC cut short by the job's own (tiny) deadline says nothing about the server.
 TEST(WireFailure, ShortDeadlineTimeoutDoesNotMakeControlSuspect) {
   FW w;  // rpc_timeout 5 s
   ASSERT_TRUE(w.open_core());
@@ -1622,7 +1621,7 @@ TEST(WireFailure, ShortDeadlineTimeoutDoesNotMakeControlSuspect) {
   EXPECT_GT(w.fake.count(proto::Op::LOOKUP), lookups) << "the next job must send its LOOKUP, not fail fast";
 }
 
-// R02: while suspect, a reply that already arrived is read before the call fails fast.
+// While suspect, a reply that already arrived is read before the call fails fast.
 TEST(WireFailure, FailFastReadsALateReplyFirst) {
   FW w;
   w.rpc_timeout = milliseconds(50);
@@ -1642,7 +1641,7 @@ TEST(WireFailure, FailFastReadsALateReplyFirst) {
   EXPECT_GT(w.fake.count(proto::Op::LOOKUP), lookups) << "the late PONG must be read before failing fast";
 }
 
-// Q15 (B) (run #293): a reply that lands in the client's CQ in the very drive tick that reaches rpc_timeout is taken by
+// A reply that lands in the client's CQ in the very drive tick that reaches rpc_timeout is taken by
 // the last non-blocking poll, not dropped as "no reply" (and, being taken, it is not RELEASEd as a late ack either).
 TEST(WireFailure, ReplyLandingInTheDeadlineTickIsTakenNotTimedOut) {
   FW w;
@@ -1655,7 +1654,7 @@ TEST(WireFailure, ReplyLandingInTheDeadlineTickIsTakenNotTimedOut) {
     held = rx;
     held_at = w.clock.now();
   };
-  // s11c review P3-4: the reply goes out once the clock reaches held_at + rpc_timeout. lookup() starts its rpc_timeout
+  // The reply goes out once the clock reaches held_at + rpc_timeout. lookup() starts its rpc_timeout
   // (t0) before its LOOKUP reaches the fake, so t0 <= held_at and that tick is at or past lookup()'s own deadline.
   // (Measured: the sim's delivery moves the clock by a few µs between the call and held_at, so a deadline taken before
   // the call could fall short of t0 + rpc_timeout.)
@@ -1669,7 +1668,7 @@ TEST(WireFailure, ReplyLandingInTheDeadlineTickIsTakenNotTimedOut) {
   const store::LookupAck a = w.port->lookup(one_key_req());
   ASSERT_TRUE(sent) << "the scripted reply must go out in the deadline tick";
   // lookup() returned with the reply at a time >= held_at + rpc_timeout >= t0 + rpc_timeout: past its own deadline, where
-  // only the last non-blocking poll can take a reply (without Q15 (B) it is "no reply"). A reply taken by an ordinary
+  // only the last non-blocking poll can take a reply (without that it is "no reply"). A reply taken by an ordinary
   // slice before the deadline would fail this.
   EXPECT_GE(w.clock.now(), held_at + w.rpc_timeout) << "the reply must be taken at lookup()'s deadline, by the last poll";
   ASSERT_EQ(a.entries.size(), 1u) << "the reply was in the CQ at the deadline: it must be used, not a timeout";
@@ -1681,14 +1680,14 @@ TEST(WireFailure, ReplyLandingInTheDeadlineTickIsTakenNotTimedOut) {
   EXPECT_EQ(w.fake.count(proto::Op::RELEASE), 0u) << "the ack was taken once, not also handled as a late reply";
 }
 
-// s11c review P3-5: the control endpoint dies in the very drive tick that reaches rpc_timeout; the last poll files its
+// The control endpoint dies in the very drive tick that reaches rpc_timeout; the last poll files its
 // flush. That is an abort (endpoint down), not a full timeout of a live server: control must not be marked suspect.
 TEST(WireFailure, EndpointDyingInTheDeadlineTickIsAnAbortNotASuspectTimeout) {
   FW w;
   w.rpc_timeout = milliseconds(50);
   w.open_port();
   bool held = false;  // the LOOKUP is never answered
-  Nanos held_at{-1};  // >= lookup()'s t0 (as in the Q15 (B) test above): held_at + rpc_timeout is at or past its deadline
+  Nanos held_at{-1};  // >= lookup()'s t0 (as in the test above): held_at + rpc_timeout is at or past its deadline
   w.fake.hook = [&held, &held_at, &w](Fake&, const Fake::Rx& rx) {
     if (rx.h.type != static_cast<std::uint16_t>(proto::Op::LOOKUP)) return;
     held = true;
@@ -1708,7 +1707,7 @@ TEST(WireFailure, EndpointDyingInTheDeadlineTickIsAnAbortNotASuspectTimeout) {
   w.after_step = nullptr;
 }
 
-// R04: a LOOKUP_ACK that arrives after its waiter gave up has its lease RELEASEd.
+// A LOOKUP_ACK that arrives after its waiter gave up has its lease RELEASEd.
 TEST(WireFailure, LateLookupAckReleasesItsLease) {
   FW w;
   w.rpc_timeout = milliseconds(50);
@@ -1728,7 +1727,7 @@ TEST(WireFailure, LateLookupAckReleasesItsLease) {
   EXPECT_EQ(w.port->late_acks_released(), 1u);
 }
 
-// R01: a node that swallows connects. Jobs must fail at once (not wait behind the reconnect),
+// A node that swallows connects. Jobs must fail at once (not wait behind the reconnect),
 // the reconnect must give up after reconnect_connect_ms, shutdown must not wait it out, and the
 // client must recover when the node comes back.
 struct Blackhole {
@@ -1835,7 +1834,7 @@ TEST(WireReconnect, BlackholedNodeFailsJobsAtOnceAndRecoversWhenItReturns) {
   b.cl->shutdown();
 }
 
-// ---- A2.2: several memory nodes, static weighted-rendezvous placement ---------------------------
+// ---- Several memory nodes, static weighted-rendezvous placement ---------------------------
 // Three memory nodes (sim ids 1..3), one client fabric node per memory node. keepalive_ms = 0 and one
 // worker keep the (non-thread-safe) sim single-threaded; the test ticks the keepalive by hand.
 struct MultiWorld {
@@ -1848,7 +1847,7 @@ struct MultiWorld {
   }
   void start(unsigned i, unsigned node_id = 0) {
     auto sc = server_cfg();
-    sc.rails = {fabric::RailAddr{"10.0.0." + std::to_string(i), 7471}};  // learn_spec dials this; a spec with no address takes the first listener (G08)
+    sc.rails = {fabric::RailAddr{"10.0.0." + std::to_string(i), 7471}};  // learn_spec dials this; a spec with no address takes the first listener
     sc.store.node_id = node_id != 0 ? node_id : i;  // != i: HELLO_ACK node_id differs from the client's nodes[].id
     sc.store.principal_default.max_scopes = 64;
     auto s = server::Server::create(sc, *sfab[i - 1], clock, rng, sex);
@@ -1860,13 +1859,13 @@ struct MultiWorld {
     const bool progressed = net.step();
     if (!progressed) {
       clock.advance_by(milliseconds(1));
-      // A wait on a frozen server ends at its sim-time deadline (WirePort, review w5 U2-26: no call-count cap). But the
+      // A wait on a frozen server ends at its sim-time deadline (WirePort, no call-count cap). But the
       // sim clock is shared: a waiter on a frozen node advances it on every idle call, so on a fast build it burns
       // through the other jobs' deadlines (an engine store's 5 s, a hung leg's 5 s rpc_timeout) before they get their
       // turns (WireReplicas.AsyncHungReplica... and AsyncShutdownDrains... failed under load without this). While a
       // node is frozen an idle step therefore also costs 100 us of real time: a throttle on the shared clock, not a
       // cap. (membership_test's World needs none: its held jobs are the only waiters.)
-      // s12: also while a test holds a leg stuck some other way (dropped completions, `stuck_leg`): that leg spins the
+      // Also while a test holds a leg stuck some other way (dropped completions, `stuck_leg`): that leg spins the
       // shared clock too, and without the throttle it ran 3 s of sim time in ~11 ms of real time on a loaded VM, past
       // a healthy leg's 2 s deadline before that leg's thread got the CPU (gate 2026-11-16, WatchdogForceFailsAStuck-
       // LegOnTheReplicator: the engine's store on the healthy primary came back Timeout).
@@ -1874,7 +1873,7 @@ struct MultiWorld {
       for (unsigned i = 0; i < 3 && !throttle; ++i) throttle = frozen[i].load();
       if (throttle) std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
-    {  // review r9 S01: count the calls and the idle advances (1 ms of virtual time each) of every calling thread
+    {  // Count the calls and the idle advances (1 ms of virtual time each) of every calling thread
       std::lock_guard lk(thr_mu);
       auto& c = by_thread[std::this_thread::get_id()];
       ++c.calls;
@@ -2042,7 +2041,7 @@ std::string slurp_file(const std::string& p) {
   return ss.str();
 }
 
-// s12 (tpu-sync cross-check C1): node 3 stops answering (frozen: its LOOKUPs are never answered), so every fetch sent to
+// Node 3 stops answering (frozen: its LOOKUPs are never answered), so every fetch sent to
 // it holds a runtime worker until the fetch's deadline. Submits 4 such fetches, then one to healthy node 1, and returns
 // the healthy fetch's status and how many of node 3's fetches had completed before it. The stuck fetches get a long
 // (sim) deadline so the healthy one can never lose the race by sim-clock speed alone.
@@ -2123,7 +2122,7 @@ TEST(WirePlacement, FrozenNodeHoldsOnlyItsOwnWorkersAndHealthyNodesRunAtOnce) {
   auto [st, before] = healthy_fetch_behind_frozen_node(prod);
   EXPECT_EQ(st, KeyStatus::Hit);
   EXPECT_EQ(before, 0) << "the healthy node's fetch waited for the frozen node's jobs";
-  // Teeth: the pre-s12 runtime (2 workers, no lanes) shows the stall: the healthy fetch runs only after node 3's
+  // Teeth: the runtime without lanes (2 workers) shows the stall: the healthy fetch runs only after node 3's
   // first two fetches gave their workers back at their deadline.
   RuntimeOptions old;
   old.workers = 2;
@@ -2179,7 +2178,7 @@ TEST(WireLearnedIds, UnreachedNodeOwnsNoScopesAndLearnedIdsJoinLater) {
   EXPECT_NE(m.find("miracache_client_node_info{node=\"10.0.0.1:7471\",node_id=\"1001\""), std::string::npos) << m;
   EXPECT_NE(m.find("node_id=\"1002\""), std::string::npos);
   EXPECT_EQ(m.find("node_id=\"1003\""), std::string::npos);
-  // H08: series lines of `family` (no HELP/TYPE) whose labels contain `needle`.
+  // Series lines of `family` (no HELP/TYPE) whose labels contain `needle`.
   auto stale = [](const std::string& text, const std::string& family, const std::string& needle) {
     std::size_t n = 0, at = 0;
     while (at < text.size()) {
@@ -2205,13 +2204,13 @@ TEST(WireLearnedIds, UnreachedNodeOwnsNoScopesAndLearnedIdsJoinLater) {
   EXPECT_EQ(c.wire_port(2)->node_id(), 1003u);
   m = c.metrics_text();
   EXPECT_NE(m.find("node_id=\"1003\""), std::string::npos) << m;
-  // H08: once the ID is learned, the "unknown" breaker series (and any rail series of ID 0) are gone, not left at 0.
+  // Once the ID is learned, the "unknown" breaker series (and any rail series of ID 0) are gone, not left at 0.
   EXPECT_EQ(stale(m, "miracache_client_breaker_state", "node_id=\"unknown\""), 0u) << m;
   EXPECT_EQ(stale(m, "miracache_client_breaker_trips_total", "node_id=\"unknown\""), 0u) << m;
   EXPECT_EQ(stale(m, "miracache_client_rail_state", "node_id=\"0\""), 0u) << m;
   EXPECT_EQ(stale(m, "miracache_client_slices_reissued_total", "node_id=\"0\""), 0u) << m;
   EXPECT_GT(stale(m, "miracache_client_breaker_state", "node_id=\"1003\""), 0u) << m;
-  // F3 (K09, S2): no series of any node keeps an unknown/0 ID or an empty hostname once every ID is learned.
+  // No series of any node keeps an unknown/0 ID or an empty hostname once every ID is learned.
   for (const char* fam : {"miracache_client_rail_state", "miracache_read_window", "miracache_client_rail_fetch_qps",
                           "miracache_client_fetch_rail_bytes_total", "miracache_client_slices_reissued_total",
                           "miracache_client_rail_unpaired", "miracache_client_breaker_state",
@@ -2221,7 +2220,7 @@ TEST(WireLearnedIds, UnreachedNodeOwnsNoScopesAndLearnedIdsJoinLater) {
     EXPECT_EQ(stale(m, fam, "hostname=\"\""), 0u) << fam << "\n" << m;
     EXPECT_EQ(stale(m, fam, "hostname=\"unknown\""), 0u) << fam << "\n" << m;  // F5: HELLO_ACK named the node
   }
-  // F5: static/lab mode has no admin source; the hostname comes in HELLO_ACK (here the sim nodes' own log::hostname()).
+  // static/lab mode has no admin source; the hostname comes in HELLO_ACK (here the sim nodes' own log::hostname()).
   // node_info never says "" or "unknown", and the series that did are gone once the hostname is known.
   for (const char* id : {"1001", "1002", "1003"}) {
     std::size_t both = 0;
@@ -2317,7 +2316,7 @@ TEST(WireLearnedIds, DuplicateIdExcludesTheLaterNodeAndNamesBothAddresses) {
   EXPECT_EQ(logtext.find("duplicate node id", first + 1), std::string::npos) << logtext;
 }
 
-// ---- A2.10: best-effort replicas (placement.replicas = 2 over three nodes) ----------------------
+// ---- best-effort replicas (placement.replicas = 2 over three nodes) ----------------------
 // Value of the series `name` whose label set contains every string of `parts` (0 if absent).
 double metric_value(const std::string& text, const std::string& name, std::initializer_list<std::string> parts) {
   std::size_t pos = 0;
@@ -2333,7 +2332,7 @@ double metric_value(const std::string& text, const std::string& name, std::initi
   }
   return 0;
 }
-// Review r9 S05 (+ S09). Two memory nodes come back with new IDs. Node 2's reconnect learns its new ID from the HELLO
+// Two memory nodes come back with new IDs. Node 2's reconnect learns its new ID from the HELLO
 // and then fails (its fetch ticket is withheld); node 1's reconnect completes and publishes placement. Node 2 is not Up,
 // so it must stay in placement under its OLD ID: a publish by another node must not expose the ID it has only learned.
 // The identity series follow: the old ID reads 1 until the node is back in placement, the new one reads 0 until then.
@@ -2409,11 +2408,11 @@ TEST(WireLearnedIds, TwoInterleavedReconnectsWithNewIdsPublishEachIdOnlyWhenItsS
     ASSERT_EQ(sc.status.size(), 1u);
     EXPECT_EQ(sc.status[0], KeyStatus::Committed) << "scope " << s << " went to the node that is still down (its learned ID was published early)";
   }
-  EXPECT_EQ(gauge("1002"), 1);  // S09: node 2 is still in placement under its old ID
+  EXPECT_EQ(gauge("1002"), 1);  // node 2 is still in placement under its old ID
   EXPECT_EQ(gauge("2002"), 0);  //      and the new series waits for the publish
   EXPECT_EQ(gauge("2001"), 1);
   EXPECT_EQ(gauge("1001"), 0);
-  // r9b T06: node 3 comes back under 1002, the ID node 2 still has in placement (node 2 is down and has learned 2002).
+  // Node 3 comes back under 1002, the ID node 2 still has in placement (node 2 is down and has learned 2002).
   // The duplicate check must count the published ID too: node 2 leaves placement and node 3 takes 1002. Before the fix
   // both were in placement under 1002, and the scopes the tie gave to node 2 were refused.
   auto gauge_of = [&](unsigned i, const char* id) {
@@ -2505,7 +2504,7 @@ struct RepRig {
     return place_order(nodes, std::span<const std::uint8_t, 32>(sk.scopes[0].b), reps);
   }
   // Waits for the async replicator to finish its legs (sync: nothing is ever pending).
-  // Run #269: bounded in SIM time, not real time. Every leg ends on the sim clock: at its deadline (store deadlines are
+  // Bounded in SIM time, not real time. Every leg ends on the sim clock: at its deadline (store deadlines are
   // clamped to deadline.put_max_ms, 2.5 s after the submit) or at the watchdog (deadline + grace). A leg on a frozen node
   // is then the only thread that drives the sim, one idle 1 ms step per call, and each step runs the healthy servers'
   // run_once (a full tick) plus the 100 us throttle: about 4 ms of real time per step in asan on an idle VM, so its 2.5 s
@@ -2733,7 +2732,7 @@ TEST(WireReplicas, AsyncStoreLandsOnBothFromTheReplicatorsCopyAndSurvivesThePrim
   }
 }
 
-// Review r9 S01. The old version measured the shared virtual clock, which the hung leg's own RPC wait drives by 1 ms per
+// The old version measured the shared virtual clock, which the hung leg's own RPC wait drives by 1 ms per
 // idle call: it measured replicator spin, not a stall. The rig now counts the idle advances of every calling thread; an
 // engine store that waited for the hung replica would sit in drive() on the worker thread until the 60 s job timeout
 // (60000 idle advances), one that does not needs a few dozen. The bound is on the WORKER's own count.
@@ -2777,7 +2776,7 @@ TEST(WireReplicas, AsyncHungReplicaNeverStallsTheEngineStore) {
     const auto i0 = idle_of();
     put60(sc[i], static_cast<int>(i) + 1);
     if (i == 1) {
-      // r9b T05: the engine store completed while node 3's replica leg is still pending (queued or running). A worker
+      // The engine store completed while node 3's replica leg is still pending (queued or running). A worker
       // that blocked (future, condvar) on the replicator would drive nothing and pass the idle bound, but its store
       // would complete only after the hung leg ended: node 3 would then show a second leg result already.
       EXPECT_GE(r.cl->replicator_pending(), 1u) << "the store waited for the replica leg";
@@ -2800,12 +2799,12 @@ TEST(WireReplicas, AsyncHungReplicaNeverStallsTheEngineStore) {
             5);
 }
 
-// Review r9 S02. Node 3 hangs; the copies queued for it must not use up the pool the healthy node 2 needs. With the old
+// Node 3 hangs; the copies queued for it must not use up the pool the healthy node 2 needs. With the old
 // single global counter, hung copies could use the whole pool and made node 2's replicas skipped_full. Now a node holds at most
 // its share (a third of the pool: one copy here), so node 2's replicas keep committing.
 TEST(WireReplicas, AsyncOneFrozenNodeDoesNotStarveTheOtherNodesReplicas) {
   RepRig::Opts o = async_opts();
-  o.buf = 3 * 8192;  // three copies of the test block (5000 bytes, counted at its 8 KiB size class, r9b T10); a third per node
+  o.buf = 3 * 8192;  // three copies of the test block (5000 bytes, counted at its 8 KiB size class); a third per node
   RepRig r(/*up=*/7, /*replicas=*/2, o);
   ASSERT_TRUE(r.cl);
   std::vector<int> hung, ok;  // hung: replica = node 3; ok: primary node 1, replica node 2
@@ -3013,7 +3012,7 @@ TEST(WireReplicas, OpenRejectsTooFewNodesForTheReplicaCount) {
   EXPECT_FALSE(Client::open_wire_nodes(env, std::move(specs2)));
 }
 
-// N10: the build inside Client::open keeps the fabric default connect timeout; the later builds of a node
+// The build inside Client::open keeps the fabric default connect timeout; the later builds of a node
 // that was unreachable at open (its keepalive thread) use the short one, like a reconnect: a blackholed
 // address may not hold the keepalive thread for the default connect time.
 TEST(WirePlacement, BackgroundBuildsOfAnUnreachableNodeUseTheShortConnectTimeout) {
@@ -3046,7 +3045,7 @@ TEST(WirePlacement, BackgroundBuildsOfAnUnreachableNodeUseTheShortConnectTimeout
   c.shutdown();
   std::lock_guard lk(mu);
   ASSERT_GE(seen.size(), 2u);  // one at open, at least one more from the keepalive ticks
-  // Q01: the build inside Client::open keeps the fabric default; only the keepalive-thread builds are short.
+  // The build inside Client::open keeps the fabric default; only the keepalive-thread builds are short.
   EXPECT_EQ(seen[0].timeout, fabric::ConnParams{}.timeout);
   for (std::size_t i = 1; i < seen.size(); ++i) EXPECT_EQ(seen[i].timeout, milliseconds(250)) << "background build " << i;
 }
@@ -3073,7 +3072,7 @@ TEST(WireReconnect, ShutdownDuringABlockedConnectIsPrompt) {
 }
 
 
-// ---- r5 (Q02/Q04/Q05): background builds, half-dead peers, stuck jobs --------------------------------
+// ---- Background builds, half-dead peers, stuck jobs --------------------------------
 struct BuildSetup {
   explicit BuildSetup(unsigned up) : w(up) {
     env.clock = &w.clock;
@@ -3099,8 +3098,8 @@ struct BuildSetup {
   Client::Env env;
 };
 
-// Q02: a background build (memnode unreachable at open) uses the short connect on ALL three endpoints:
-// the earlier endpoints connect, then the address of `blocked` is blackholed. N10: once with fetch
+// A background build (memnode unreachable at open) uses the short connect on ALL three endpoints:
+// the earlier endpoints connect, then the address of `blocked` is blackholed. Once with fetch
 // blackholed, once with ingest (control and fetch accepted), so the ingest connect is observed too.
 TEST(WireBuild, BackgroundBuildUsesTheShortConnectOnEveryEndpoint) {
   for (const fabric::EpClass blocked : {fabric::EpClass::Fetch, fabric::EpClass::Ingest}) {
@@ -3141,7 +3140,7 @@ TEST(WireBuild, BackgroundBuildUsesTheShortConnectOnEveryEndpoint) {
 }
 
 
-// Q01: the first Client::open build keeps the fabric default connect timeout (reconnect_connect_ms is
+// The first Client::open build keeps the fabric default connect timeout (reconnect_connect_ms is
 // for builds and reconnects that run on the keepalive thread).
 TEST(WireBuild, FirstOpenKeepsTheDefaultConnectTimeout) {
   BuildSetup b(/*up=*/2);
@@ -3161,7 +3160,7 @@ TEST(WireBuild, FirstOpenKeepsTheDefaultConnectTimeout) {
   for (auto t : seen) EXPECT_EQ(t, fabric::ConnParams{}.timeout);
 }
 
-// Q02: a HELLO to a memnode that accepted the control connect but never answers is cut at the short RPC
+// A HELLO to a memnode that accepted the control connect but never answers is cut at the short RPC
 // cap (not rpc_timeout = 30 s), and a shutdown during it aborts the build at once.
 struct HelloBlackhole : BuildSetup {
   HelloBlackhole()
@@ -3215,7 +3214,7 @@ TEST(WireBuild, ShutdownAbortsABackgroundBuildInFlight) {
   h.on_poll = nullptr;
 }
 
-// Q04: a memnode that fails HELLO (server node_id != nodes[].id) must not leak endpoints across the
+// A memnode that fails HELLO (server node_id != nodes[].id) must not leak endpoints across the
 // first-build retries, and the retries back off.
 TEST(WireBuild, FailedFirstBuildsReleaseTheirEndpointsAndBackOff) {
   BuildSetup b(/*up=*/1);
@@ -3243,7 +3242,7 @@ TEST(WireBuild, FailedFirstBuildsReleaseTheirEndpointsAndBackOff) {
   c.shutdown();
 }
 
-// Q05: a job whose completion never arrives is force-failed after deadline + grace, so jobs_inside
+// A job whose completion never arrives is force-failed after deadline + grace, so jobs_inside
 // drains and shutdown returns.
 TEST(WireBuild, WatchdogForceFailsAJobWhoseCompletionNeverArrives) {
   BuildSetup b(/*up=*/1);
@@ -3280,7 +3279,7 @@ TEST(WireBuild, WatchdogForceFailsAJobWhoseCompletionNeverArrives) {
   EXPECT_NE(fc.status[0], KeyStatus::Hit);
   EXPECT_EQ(c.watchdog_trips(), 1u);
 
-  // Q02: the trip took the session down; it reconnects and the same key hits again (the dropped READ's
+  // The trip took the session down; it reconnects and the same key hits again (the dropped READ's
   // endpoint drained, so its quarantined spans came back and the pool is not exhausted).
   dropper.drop_completion = nullptr;  // the worker is idle: the fetch above was released
   WirePort* wp = c.wire_port(0);
@@ -3314,9 +3313,9 @@ TEST(WireBuild, WatchdogForceFailsAJobWhoseCompletionNeverArrives) {
 }
 
 
-// ---- r5b (N01-N05): metrics unbind, watchdog quarantine, per-node build abort ---------------------------
+// ---- Metrics unbind, watchdog quarantine, per-node build abort ---------------------------
 
-// N01: a build whose control endpoint connects but whose link dies before the HELLO reply fails after
+// A build whose control endpoint connects but whose link dies before the HELLO reply fails after
 // ClientCore::init bound its metrics into the port and (through on_metrics) the ticket source. Both outlive
 // the dead core: nothing may keep its ClientMetrics. The on_metrics/prepare pair below is what the admin
 // ticket source does (wire_open.cpp): prepare() writes the cache gauge before every keepalive build.
@@ -3342,13 +3341,13 @@ TEST(WireBuild, FailedBuildUnbindsItsMetricsFromPortAndTicketSource) {
   };
   s2.wopts.prepare = [&] {
     ++prepares;
-    if (held) held->ticket_cache[0]->set(7), ++gauge_writes;  // a dangling pointer here is the N01 bug
+    if (held) held->ticket_cache[0]->set(7), ++gauge_writes;  // a dangling pointer here is the bug
   };
   auto cl = b.open({b.bg_spec(1, b.w.cfab[0]), std::move(s2)});
   ASSERT_TRUE(cl) << cl.error().context;
   Client& c = **cl;
   EXPECT_EQ(c.wire_port(1), nullptr) << "node 2 must have failed its first build";
-  EXPECT_GE(binds, 1) << "the failed build never bound its metrics: the test does not reach the N01 path";
+  EXPECT_GE(binds, 1) << "the failed build never bound its metrics: the test does not reach the failed-build path";
   EXPECT_EQ(held, nullptr) << "the failed build left its ClientMetrics bound";
   for (int i = 0; i < 200000 && prepares < 3; ++i) tick_ms(c, b.w);  // keepalive builds: prepare, bind, fail
   EXPECT_GE(prepares, 3);
@@ -3402,7 +3401,7 @@ class HoldingFabric final : public fabric::Fabric {
   std::function<bool(const fabric::Completion&)> hold;
   std::function<void()> step;
   std::deque<fabric::Completion> held;
-  std::set<fabric::EndpointId> stuck;  // Q01: endpoints whose completion is gone for good
+  std::set<fabric::EndpointId> stuck;  // Endpoints whose completion is gone for good
   bool deliver = false;
   int released = 0;
 
@@ -3439,7 +3438,7 @@ struct HoldWorld {
 
 bool is_read(const fabric::Completion& c) { return !c.is_recv && c.op == fabric::CompletionOp::Read; }
 
-// N02: a force-failed fetch whose READ completion never came keeps its spans out of the pool until the
+// A force-failed fetch whose READ completion never came keeps its spans out of the pool until the
 // wedged endpoint is aborted, drained and reaped. The test holds the READ completion, so the endpoint
 // cannot drain; meanwhile it scribbles over the quarantined spans on every poll (a late DMA landing at any
 // time). The session reconnects and new fetches still hit with the right bytes: no span was reused. Then
@@ -3504,7 +3503,7 @@ TEST(WireWatchdog, ForceFailQuarantinesSpansUntilTheWedgedEndpointIsReaped) {
   w.check();
 }
 
-// N05: the late READ completion arrives right after force_fail, while the job still waits for its decrypt
+// The late READ completion arrives right after force_fail, while the job still waits for its decrypt
 // task (fetch_on_cqe's abandoned-op guard): no crash, the buffer is zeroed, the pool accounting is exact.
 TEST(WireWatchdog, LateReadCompletionAfterForceFailIsIgnored) {
   HoldWorld h;
@@ -3542,9 +3541,9 @@ TEST(WireWatchdog, LateReadCompletionAfterForceFailIsIgnored) {
   w.check();
 }
 
-// N05/N08: store variant. One WRITE of a two-key batch never completes: force_fail quarantines only its
+// Store variant. One WRITE of a two-key batch never completes: force_fail quarantines only its
 // span and gives the completed WRITE's span back at once. (The put_cancel it sends is usually flushed by
-// the ingest abort that follows, Q07; the server's put TTL frees the put then. Not asserted.)
+// the ingest abort that follows; the server's put TTL frees the put then. Not asserted.)
 TEST(WireWatchdog, StoreForceFailReleasesCompletedWritesAndQuarantinesTheRest) {
   HoldWorld h;
   ASSERT_TRUE(h.w.core);
@@ -3568,7 +3567,7 @@ TEST(WireWatchdog, StoreForceFailReleasesCompletedWritesAndQuarantinesTheRest) {
   for (auto s : r.st) EXPECT_EQ(s, KeyStatus::Timeout);
   EXPECT_GT(w.core->quarantined_bytes(), 0u);
   EXPECT_LT(w.core->quarantined_bytes(), before) << "the completed WRITE's span must not be quarantined";
-  EXPECT_EQ(w.core->pool_bytes_in_use(), w.core->quarantined_bytes()) << "N08: completed-WRITE span leaked";
+  EXPECT_EQ(w.core->pool_bytes_in_use(), w.core->quarantined_bytes()) << "completed-WRITE span leaked";
   EXPECT_FALSE(w.port->session_up()) << "the trip marks the ingest endpoint dead";
   h.hf.hold = nullptr;
   h.hf.deliver = true;
@@ -3579,7 +3578,7 @@ TEST(WireWatchdog, StoreForceFailReleasesCompletedWritesAndQuarantinesTheRest) {
   w.check();
 }
 
-// ---- r5c (Q01/Q02/Q06): per-session quarantine release, the untested force_fail paths ----------------
+// ---- per-session quarantine release, the untested force_fail paths ----------------
 
 // Submits a fetch whose READ completions the HoldingFabric holds, and runs until it is past its deadline.
 Ticket held_fetch(HoldWorld& h, const ScopeKeys& sk, const Chain& ch, std::vector<BufRef>& fb, Res& r) {
@@ -3592,7 +3591,7 @@ Ticket held_fetch(HoldWorld& h, const ScopeKeys& sk, const Chain& ch, std::vecto
   return t;
 }
 
-// Q01: trip 1's READ completion is lost for good, so its fetch endpoint never drains and the fabric never
+// Trip 1's READ completion is lost for good, so its fetch endpoint never drains and the fabric never
 // releases it. That must hold back only trip 1's spans: trip 2, on the next session, gets its spans back
 // once its own endpoints are reaped. The old single `reaped_down` counter never moved past trip 1.
 TEST(WireWatchdog, NeverDrainingZombieHoldsBackOnlyItsOwnTrip) {
@@ -3631,7 +3630,7 @@ TEST(WireWatchdog, NeverDrainingZombieHoldsBackOnlyItsOwnTrip) {
   h.hf.hold = nullptr;
   h.hf.deliver = true;  // trip 2's completion arrives late: its endpoints drain and are reaped
   ASSERT_TRUE(h.tick_until([&] { return w.port->session_up() && w.core->quarantined_bytes() == qb1; }))
-      << "Q01: trip 1's never-draining endpoint blocks the release of trip 2's spans";
+      << "trip 1's never-draining endpoint blocks the release of trip 2's spans";
   EXPECT_EQ(w.core->pool_bytes_in_use(), qb1);
   EXPECT_EQ(h.m("miracache_client_watchdog_trips_total"), 2);
   EXPECT_EQ(h.m("miracache_client_quarantined_bytes"), static_cast<double>(qb1));
@@ -3641,7 +3640,7 @@ TEST(WireWatchdog, NeverDrainingZombieHoldsBackOnlyItsOwnTrip) {
   w.check();
 }
 
-// Q02: the session already went Down (here: control died) while the fetch's READ completion was missing.
+// The session already went Down (here: control died) while the fetch's READ completion was missing.
 // The job (timed out at its deadline already) stays reported as is; the later force_fail still quarantines
 // the outstanding READ's spans, does not take the (new) session down again, and the spans come back once the
 // old endpoints are reaped.
@@ -3684,7 +3683,7 @@ TEST(WireWatchdog, ForceFailAfterTheSessionWentDownQuarantinesWithoutAnotherDown
   w.check();
 }
 
-// Q02: two stuck jobs of one session trip back to back. The first takes the session down; the second sees
+// Two stuck jobs of one session trip back to back. The first takes the session down; the second sees
 // it already ended (one Down in all), and both jobs' spans stay quarantined until that session is reaped.
 TEST(WireWatchdog, TwoTripsInOneSessionGoDownOnceAndReleaseBoth) {
   HoldWorld h;
@@ -3724,7 +3723,7 @@ TEST(WireWatchdog, TwoTripsInOneSessionGoDownOnceAndReleaseBoth) {
   w.check();
 }
 
-// Q02/Q06: a Client is destroyed while a span is still quarantined behind an endpoint that never drains
+// A Client is destroyed while a span is still quarantined behind an endpoint that never drains
 // (the READ completion is held forever). Teardown must give every other endpoint back to the fabric before
 // the core unmaps its landing pool, and leave only the stuck one, aborted (ERR: no DMA), in the fabric.
 // The old teardown released none: the live session's three endpoints stayed registered. asan: nothing
@@ -3773,12 +3772,12 @@ TEST(WireWatchdog, ClientDestroyWithQuarantinedSpansReleasesEndpointsFirst) {
   EXPECT_GE(b.w.cfab[0]->endpoint_count(), 4u) << "the new session's three endpoints plus the stuck one";
 
   cl->reset();  // ~Client with the span still quarantined
-  EXPECT_EQ(b.w.cfab[0]->endpoint_count(), 1u) << "Q06: teardown must release every endpoint that can drain";
+  EXPECT_EQ(b.w.cfab[0]->endpoint_count(), 1u) << "teardown must release every endpoint that can drain";
   for (int i = 0; i < 2000; ++i) b.w.drive();
   EXPECT_EQ(hf.held.size(), 1u);
 }
 
-// N03 + N05 (cross-thread abort): two memnodes accept the control connect and then go silent, so both
+// Cross-thread abort: two memnodes accept the control connect and then go silent, so both
 // nodes' keepalive threads sit in a background HELLO at the same time. shutdown() on the test thread must
 // abort both builds (one `building` per node), not only the last one that registered. Each node lives in
 // its own sim world, touched only by its own keepalive thread (env.drive is unset: real time).
@@ -3863,7 +3862,7 @@ TEST(WireBuild, ShutdownAbortsTheBackgroundBuildsOfEveryDarkNode) {
   EXPECT_EQ(c.wire_port(2), nullptr);
 }
 
-// ---- FM1 (run #203): spec §10 failure matrix, rows with no earlier test -------------------------------------------
+// ---- Spec §10 failure matrix, rows with no earlier test -------------------------------------------
 // The failure matrix maps every row to its test; the three below close rows that had none.
 
 // §10 "Ticket or certificate expiry during a partition": existing QPs keep working, new connects fail (counted as
@@ -4168,7 +4167,7 @@ TEST(FailureMatrix, WallClockJumpsDoNotTouchLeasesTicketsOrData) {
   w.check();
 }
 
-// ---- Review s9 K03/K04: block size limit from HELLO_ACK, local refusal, loud refusals --------------------------------
+// ---- Block size limit from HELLO_ACK, local refusal, loud refusals --------------------------------
 // The log lines written while it lives (log::set_sink_fd to a temporary file).
 struct LogCapture {
   LogCapture() : f(std::tmpfile()) {
@@ -4198,12 +4197,12 @@ std::size_t occurrences(const std::string& text, const std::string& what) {
   return n;
 }
 
-// J08 (review s8 wave15, fixed in run #267): a failure entry (node, rail, cause) a planned rebuild opened and another
+// A failure entry (node, rail, cause) a planned rebuild opened and another
 // attempt (a rail rejoin) then failed with too. Withdrawing the rebuild settles only the rebuild's share: the entry stays
 // open while the rejoin still owns it, so the rejoin's next failure is not logged as a new "first failure" and no
 // "withdrawn" line claims it settled. Before the fix the settle erased the entry (a "withdrawn" line) and the next
 // rejoin failure logged a second first-failure line. (Driven through the Client's hooks: the end-to-end path needs a
-// bundle-mode multi-rail rig; the bookkeeping is what J08 changed.)
+// bundle-mode multi-rail rig; the bookkeeping is what that fix changed.)
 TEST(WireClient, WithdrawnRebuildKeepsAFailureEntryAnotherAttemptStillOwns) {
   FW w;
   Client::Env env;
@@ -4227,16 +4226,16 @@ TEST(WireClient, WithdrawnRebuildKeepsAFailureEntryAnotherAttemptStillOwns) {
   (*cl)->test_endpoint_failure(0, 1, e, /*rebuild=*/false);  // the rejoin fails again
   EXPECT_EQ(occurrences(cap.text(), failed), 1u) << "a second first-failure line for an entry that never closed\n"
                                                  << cap.text();
-  // Control: an entry only the rebuild owns is closed by the settle (H06), with its one line.
+  // Control: an entry only the rebuild owns is closed by the settle, with its one line.
   (*cl)->test_endpoint_failure(0, 0, e, /*rebuild=*/true);
   EXPECT_EQ(occurrences(cap.text(), failed), 2u);
   EXPECT_EQ((*cl)->test_settle_rebuild_failures(0), 1u);
   EXPECT_EQ(occurrences(cap.text(), withdrawn), 1u) << cap.text();
 }
 
-// K03: the node's run_bytes arrives in HELLO_ACK; a block whose stored form (payload + 64 B header + 16 B per 64 KiB
+// The node's run_bytes arrives in HELLO_ACK; a block whose stored form (payload + 64 B header + 16 B per 64 KiB
 // segment) is longer is refused here, before any PUT_BEGIN is sent (the node never sees it), with the batch aborted as
-// the node would have; K04: counted per reason with the node's identity and logged once per minute.
+// the node would have; counted per reason with the node's identity and logged once per minute.
 TEST(WirePort, OversizedPutIsRefusedLocallyCountedAndLoggedOnce) {
   World w;
   ASSERT_TRUE(w.open());
@@ -4274,7 +4273,7 @@ TEST(WirePort, OversizedPutIsRefusedLocallyCountedAndLoggedOnce) {
   w.check();
 }
 
-// K03: an older node sends no TLV 0x0003: the limit is unknown (0), the PUT_BEGIN goes out. K04: the node's Malformed
+// An older node sends no TLV 0x0003: the limit is unknown (0), the PUT_BEGIN goes out. The node's Malformed
 // error reply (what a node refuses a too-large block with) is no longer silent: counted with reason "malformed", logged
 // with the wire status, once per minute.
 TEST(WireFailure, MalformedPutBeginReplyIsCountedAndLogged) {
@@ -4314,7 +4313,7 @@ TEST(WireFailure, MalformedPutBeginReplyIsCountedAndLogged) {
   EXPECT_NE(log.find("hostname=unknown"), std::string::npos) << "a node that sends no hostname TLV is unknown\n" << log;
 }
 
-// ---- F3 (K06, K09, S2) ----------------------------------------------------------------------------------------------
+// ---- F3 ----------------------------------------------------------------------------------------------
 // Number of series lines of `family` whose labels contain `needle`.
 std::size_t series_with(const std::string& text, const std::string& family, const std::string& needle) {
   std::size_t n = 0, at = 0;
@@ -4327,7 +4326,7 @@ std::size_t series_with(const std::string& text, const std::string& family, cons
   return n;
 }
 
-// K06: one rail and fetch_qps = 1 is the non-mux path: the READ bytes that landed still count per rail.
+// One rail and fetch_qps = 1 is the non-mux path: the READ bytes that landed still count per rail.
 TEST(WireTelemetry, SingleRailFetchCountsRailBytes) {
   World w(sliced(1024, false), 11);
   ASSERT_TRUE(w.open());
@@ -4341,12 +4340,12 @@ TEST(WireTelemetry, SingleRailFetchCountsRailBytes) {
   const double bytes = metric_value(w.core->metrics_text(), "miracache_client_fetch_rail_bytes_total", {"rail=\"0\""});
   EXPECT_GE(bytes, static_cast<double>(kSeg + 3000)) << w.core->metrics_text();
   EXPECT_EQ(w.port->rail_read_bytes(0), static_cast<std::uint64_t>(bytes));
-  // K20: the lend-check count is exported (and stays 0 here).
+  // The lend-check count is exported (and stays 0 here).
   EXPECT_NE(w.core->metrics_text().find("miracache_client_lend_violations_total 0"), std::string::npos) << w.core->metrics_text();
 }
 
-// K09 + S2: learn mode on one node. After HELLO no rail or breaker series keeps node_id "unknown"/"0" or an empty
-// hostname; the series carry the learned ID and the hostname HELLO_ACK brought (F5).
+// Learn mode on one node. After HELLO no rail or breaker series keeps node_id "unknown"/"0" or an empty
+// hostname; the series carry the learned ID and the hostname HELLO_ACK brought.
 TEST(WireTelemetry, LearnedIdLeavesNoUnknownRailSeriesAndRebindStartsFresh) {
   World w(sliced(1024, false), 11);
   WireOptions wo = w.wire_opts();
@@ -4368,7 +4367,7 @@ TEST(WireTelemetry, LearnedIdLeavesNoUnknownRailSeriesAndRebindStartsFresh) {
     EXPECT_EQ(series_with(m, fam, "node_id=\"0\""), 0u) << fam << "\n" << m;
     EXPECT_EQ(series_with(m, fam, "hostname=\"\""), 0u) << fam << "\n" << m;
   }
-  // F5: HELLO_ACK names the node (TLV 0x0004): the rail series carry its hostname, none says "unknown".
+  // HELLO_ACK names the node (TLV 0x0004): the rail series carry its hostname, none says "unknown".
   for (const char* fam : {"miracache_client_rail_state", "miracache_read_window", "miracache_client_rail_fetch_qps",
                           "miracache_client_fetch_rail_bytes_total", "miracache_client_slices_reissued_total",
                           "miracache_client_rail_unpaired", "miracache_client_breaker_state",
@@ -4389,7 +4388,7 @@ TEST(WireTelemetry, LearnedIdLeavesNoUnknownRailSeriesAndRebindStartsFresh) {
   w.port->bind_metrics(&w.core->metrics());
 }
 
-// L03: the hostname of a HELLO_ACK is learned only after the boot-nonce / node-ID checks accept it. A HELLO_ACK whose
+// The hostname of a HELLO_ACK is learned only after the boot-nonce / node-ID checks accept it. A HELLO_ACK whose
 // node ID is not the expected one is rejected and must not relabel the node.
 TEST(WireTelemetry, RejectedHelloAckDoesNotLearnItsHostname) {
   World w(sliced(1024, false), 12);
@@ -4416,7 +4415,7 @@ TEST(WireTelemetry, AcceptedHelloAckLearnsItsHostname) {
   EXPECT_GE(learned.load(), 1);
 }
 
-// ---- Q15 (review s10): Client::open with a node whose first build fails --------------------------------------------
+// ---- Client::open with a node whose first build fails --------------------------------------------
 // Node 2's first ticket draw finds the cache empty (siw0 under load: the open-time admin fetch had failed), the rest
 // work. Without the open-time retry the open returned with node 2 pending (the caller saw node id 0 for it, or placed
 // scopes without it); with Env::open_settle it is retried inside the open and every node is connected at return.
@@ -4519,7 +4518,7 @@ TEST(WireOpen, NodeStillDownAfterTheSettleIsReportedPending) {
   c.shutdown();
 }
 
-// R14 (review s11): open_settle is a bound. Nodes 2 and 3 black-hole for the whole open (they stop answering). The
+// open_settle is a bound. Nodes 2 and 3 black-hole for the whole open (they stop answering). The
 // first round is the same with or without the settle (deterministic sim), so the open with a 2 s settle must return
 // within that first round + 2 s (+ a few ms of drive steps). Before the fix every pending node started one more retry
 // near the end of the settle and ran its full connect + HELLO caps (seconds) past it.
@@ -4549,7 +4548,7 @@ TEST(WireOpen, SettleIsABoundWhenTwoOfThreeNodesBlackhole) {
       << "open() ran " << ms(with_settle) << " ms; first round " << ms(first_round) << " ms + settle 2000 ms";
 }
 
-// R20 (review s11): a transient failure on EVERY node (each node's first ticket draw fails) is retried inside the
+// A transient failure on EVERY node (each node's first ticket draw fails) is retried inside the
 // settle like one on N-1 nodes; before the fix the open failed at once. Without a settle it still fails (one round).
 TEST(WireOpen, AllNodesFailingTheirFirstBuildAreRetriedInsideTheOpen) {
   for (const Nanos settle : {Nanos{0}, Nanos{std::chrono::seconds(2)}}) {
@@ -4574,7 +4573,7 @@ TEST(WireOpen, AllNodesFailingTheirFirstBuildAreRetriedInsideTheOpen) {
   }
 }
 
-// R19 (review s11): node 2's ticket source backs off after a failed admin fetch (its cache is empty until `ready`).
+// Node 2's ticket source backs off after a failed admin fetch (its cache is empty until `ready`).
 // With tickets_ready_at the settle waits for it: ONE failed build is counted (the first round's), and the retry at
 // `ready` connects. Control (the behaviour before the fix): without the hook the settle retried on the 100 ms build
 // backoff and every retry failed on the cached admin error, inflating the counter.
@@ -4604,7 +4603,7 @@ TEST(WireOpen, SettleWaitsForTheTicketSourceSoTheFailureCounterStaysHonest) {
   EXPECT_EQ(up_ctl, 3u);
 }
 
-// B-1 (review s11): a retry the end of the settle would cut short is no verdict on the node. Node 2's ticket source is
+// A retry the end of the settle would cut short is no verdict on the node. Node 2's ticket source is
 // ready only 300 ms before the settle ends (2 s settle, so a 500 ms floor) and node 2 is slow (frozen: it does not
 // answer). Before the fix the retry started with 300 ms left, ran into `until` and was booked as a second build failure
 // against the node (counter, streak, doubled backoff); now it does not start and only the first round's real failure
@@ -4642,7 +4641,7 @@ TEST(WireOpen, SettleRetryCutShortByTheDeadlineIsNoBuildFailure) {
   c.shutdown();
 }
 
-// Review s9b L08: the engine's start-up block size check says how many of the nodes it covered ("2 of 3"), and a node
+// The engine's start-up block size check says how many of the nodes it covered ("2 of 3"), and a node
 // that connects after it is checked when its session comes up (an ERROR naming it when the block does not fit).
 TEST(WireOpen, BlockSizeCheckCoversNodesThatConnectLater) {
   MultiWorld w(/*up=*/2);
@@ -4675,9 +4674,9 @@ TEST(WireOpen, BlockSizeCheckCoversNodesThatConnectLater) {
   c.shutdown();
 }
 
-// ---- R16: the send-queue cap (sq_depth) is backpressure, never a miss ------------------------------------------------
+// ---- The send-queue cap (sq_depth) is backpressure, never a miss ------------------------------------------------
 // A fabric whose QPs refuse a post past `cap` outstanding send-queue work requests (SEND + READ + WRITE) with
-// ResourceExhausted, as VerbsCmFabric::post_wr does at sq_depth since run #270. The sim fabric has no such limit.
+// ResourceExhausted, as VerbsCmFabric::post_wr does at sq_depth. The sim fabric has no such limit.
 class SqCapFabric final : public fabric::Fabric {
  public:
   SqCapFabric(fabric::Fabric& in, std::size_t cap) : in_(in), cap_(cap) {}
@@ -4756,7 +4755,7 @@ class SqCapFabric final : public fabric::Fabric {
   std::vector<std::unique_ptr<Ep>> eps_;
 };
 
-// R16: many tiny blocks in one store and one fetch, over QPs whose send queue holds 8 work requests. Before the fix a
+// Many tiny blocks in one store and one fetch, over QPs whose send queue holds 8 work requests. Before the fix a
 // post past the cap failed the key (puts Aborted, fetches a silent Miss); now it waits for a completion: every key is
 // committed and hits, and miracache_client_sq_full_total{node_id, hostname, rail, addr} counts the waits.
 // fetch_qps 1 = the single-rail path (ClientCore maps the refusal); 2 = the mux, with its own cap below the provider's

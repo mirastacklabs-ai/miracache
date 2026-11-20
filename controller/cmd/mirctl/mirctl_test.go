@@ -66,7 +66,7 @@ func TestFirstPublishNeedsSecKey(t *testing.T) {
 		if !strings.HasPrefix(b.Body.Author, "mirctl") || len(b.Sec.Principals) != 1 || b.Body.Membership.Epoch != 1 {
 			t.Fatalf("unexpected bundle: author=%q epoch=%d", b.Body.Author, b.Body.Membership.Epoch)
 		}
-		// P33: IDs came from the node, never from the source; the key_id is computed.
+		// IDs came from the node, never from the source; the key_id is computed.
 		if b.Body.Membership.Nodes[0].NodeID < 1000 || b.Envelope.KeyID != bundle.KeyID(pubOf(testPub)) {
 			t.Fatal("ids not computed")
 		}
@@ -77,7 +77,7 @@ func TestFirstPublishNeedsSecKey(t *testing.T) {
 	}
 }
 
-// Q06 + P11: sec comes from the node with the highest sec_generation; the next generation is above
+// Sec comes from the node with the highest sec_generation; the next generation is above
 // every applied one; a publish-only bundle keeps sec_generation.
 func TestSecFromHighestAndNextGeneration(t *testing.T) {
 	r := newRig(t, 2)
@@ -108,7 +108,7 @@ func TestSecFromHighestAndNextGeneration(t *testing.T) {
 	}
 }
 
-// Q12: a source whose principals differ, without --sec-key, is an error naming the difference.
+// A source whose principals differ, without --sec-key, is an error naming the difference.
 func TestSourceDiffersNeedsSecKey(t *testing.T) {
 	r := newRig(t, 2)
 	mustRun(t, r, r.publishArgs(r.source("c.toml", r.nodes, testPrincipals), "--sec-key", r.secPath)...)
@@ -259,7 +259,7 @@ func TestUnreachable(t *testing.T) {
 	}
 }
 
-// Q12: drop_before later than now + 300 s is rejected by the publisher.
+// Drop_before later than now + 300 s is rejected by the publisher.
 func TestDropBeforeSkew(t *testing.T) {
 	r := newRig(t, 1)
 	extra := strings.Replace(testPrincipals, "max_scopes = 100", "max_scopes = 100\ndrop_before = \"2026-11-12T09:10:00Z\"", 1)
@@ -268,7 +268,7 @@ func TestDropBeforeSkew(t *testing.T) {
 	mustRun(t, r, r.publishArgs(r.source("c2.toml", r.nodes, ok), "--sec-key", r.secPath)...)
 }
 
-// Q06: a push rejected for its sec section stops the publish and names the node with the highest sec.
+// A push rejected for its sec section stops the publish and names the node with the highest sec.
 func TestSecRejectStops(t *testing.T) {
 	r := newRig(t, 2)
 	src := r.source("c.toml", r.nodes, testPrincipals)
@@ -277,7 +277,7 @@ func TestSecRejectStops(t *testing.T) {
 	wantFail(t, r, 1, "publishing is stopped after a sec reject", r.publishArgs(src, "--allow-unreachable")...)
 }
 
-// Q07: bundle status exits 2 when a node is below the highest sec_generation seen.
+// Bundle status exits 2 when a node is below the highest sec_generation seen.
 func TestStatusAlert(t *testing.T) {
 	r := newRig(t, 2)
 	src := r.source("c.toml", r.nodes, testPrincipals)
@@ -432,7 +432,7 @@ func TestUsage(t *testing.T) {
 	_ = time.Second
 }
 
-// U2-31: a seed file readable by group or others is refused.
+// A seed file readable by group or others is refused.
 func TestReadSeedRefusesOpenMode(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "key")
 	if err := os.WriteFile(p, []byte(strings.Repeat("ab", 32)), 0o644); err != nil {
@@ -447,7 +447,7 @@ func TestReadSeedRefusesOpenMode(t *testing.T) {
 	}
 }
 
-// U2-35: the throw-away store directory goes away on SIGTERM.
+// The throw-away store directory goes away on SIGTERM.
 func TestPlanTempDirRemovedOnSignal(t *testing.T) {
 	dir, err := os.MkdirTemp("", "mirctl-sig-")
 	if err != nil {

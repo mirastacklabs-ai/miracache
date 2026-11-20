@@ -19,8 +19,8 @@ segment_bytes = 1073741824
 #   refuse to start when one engine block cannot fit, and the client refuses oversized puts locally
 #   (miracache_client_put_refused_total{reason="too_large"}). Rule: a power of two >= 4 x the largest stored block
 #   (<= 256 MiB; segment_bytes >= 2 x run_bytes). The code default is 256 KiB, which refuses 1 MiB blocks.
-#   32 MiB fits the M1 gate (1 MiB blocks, 31 per run) and typical vLLM blocks (8B: 2 MiB, 15 per run; 70B: 5 MiB, 6 per run).
-#   SGLANG RUNS MUST SIZE PER THE RUNBOOK TABLE (the hardware runbook's memnode store sizing table): a page holds every layer,
+#   32 MiB fits the transport gate (1 MiB blocks, 31 per run) and typical vLLM blocks (8B: 2 MiB, 15 per run; 70B: 5 MiB, 6 per run).
+#   SGLANG RUNS MUST SIZE run_bytes FOR A WHOLE PAGE: a page holds every layer,
 #   e.g. 8B at page 64 = 8 MiB -> run_bytes = 67108864. The node logs "store geometry max_stored_block_bytes=..." at start.
 run_bytes     = 33554432
 n_segments    = 16

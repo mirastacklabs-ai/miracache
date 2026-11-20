@@ -106,7 +106,7 @@ AddrList resolve_now(const std::string& host, const std::string& port, int flags
   return out;
 }
 
-// A03: a numeric address never touches the resolver; a name is resolved on a helper thread and
+// A numeric address never touches the resolver; a name is resolved on a helper thread and
 // the call gives up when the budget runs out (getaddrinfo has no timeout of its own).
 Expected<AddrList> resolve(const std::string& host, const std::string& port, const Budget& b) {
   AddrList l = resolve_now(host, port, AI_NUMERICHOST | AI_NUMERICSERV);
@@ -153,7 +153,7 @@ Expected<int> tcp_connect(const std::string& hp, const Budget& b) {
   return last;
 }
 
-// The peer leaf's spiffe:// URI SAN. A09: exactly one is accepted; none or several -> false.
+// The peer leaf's spiffe:// URI SAN. Exactly one is accepted; none or several -> false.
 bool peer_spiffe(SSL* ssl, std::string& out) {
   out.clear();
   X509* x = SSL_get1_peer_certificate(ssl);
@@ -174,7 +174,7 @@ bool peer_spiffe(SSL* ssl, std::string& out) {
   return n == 1;
 }
 
-// A01: OpenSSL's stock socket BIO writes with write(), which raises SIGPIPE on a reset peer. A
+// OpenSSL's stock socket BIO writes with write(), which raises SIGPIPE on a reset peer. A
 // library must not change the process's signal dispositions, so this BIO sends with MSG_NOSIGNAL.
 struct SockCtx {
   int fd;
@@ -382,7 +382,7 @@ Expected<std::shared_ptr<HttpsClient>> HttpsClient::create(HttpsOptions o) {
 HttpsClient::HttpsClient(HttpsOptions o, std::shared_ptr<ClientTlsCtx> tls, std::shared_ptr<SSL_CTX> ctx)
     : o_(std::move(o)), tls_(std::move(tls)), ctx_(std::move(ctx)) {}
 
-// HR4: the context for a NEW connection. After an applied reload this client rebuilds its own from the files; if that
+// The context for a NEW connection. After an applied reload this client rebuilds its own from the files; if that
 // build fails (the files changed again mid-way) the old context serves and the next request tries again.
 std::shared_ptr<SSL_CTX> HttpsClient::current_ctx() const {
   std::lock_guard<std::mutex> g(ctx_mu_);
@@ -408,7 +408,7 @@ Expected<HttpResponse> HttpsClient::request(const std::string& hostport, const s
   const int one = 1;
   ::setsockopt(sock.fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof one);
   SockCtx sctx{sock.fd};  // outlives ssl (declared first)
-  const std::shared_ptr<SSL_CTX> ctx = current_ctx();  // HR4: the context in force for this connection
+  const std::shared_ptr<SSL_CTX> ctx = current_ctx();  // The context in force for this connection
   std::unique_ptr<SSL, SslFree> ssl(SSL_new(ctx.get()));
   if (!ssl) return err(ErrorCode::ResourceExhausted, "admin: SSL_new");
   if (o_.test_after_connect) o_.test_after_connect(sock.fd);
@@ -466,7 +466,7 @@ Expected<HttpResponse> HttpsClient::request(const std::string& hostport, const s
   const auto hdr_end = resp.find("\r\n\r\n");
   if (hdr_end != std::string::npos) out.body = resp.substr(hdr_end + 4);
   else if (out.code == 200) return err(ErrorCode::Corrupt, "admin: bad response");
-  // X15: a body cut short by a dropped connection must be a transport error, never a (bad) bundle. Either the
+  // A body cut short by a dropped connection must be a transport error, never a (bad) bundle. Either the
   // Content-Length matches the bytes received, or the TLS connection closed cleanly (close_notify).
   if (hdr_end != std::string::npos) {
     std::string head = resp.substr(0, hdr_end);

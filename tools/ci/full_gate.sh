@@ -14,7 +14,7 @@
 #   up to 8 CPUs (the Mac's colima VM): 2 CPU / 3 GB per lane; more than 8 CPUs: CPUS = ncpu/4 (min 2), MEM = 22 % of memory
 #   (min 3 GiB). At most min(ncpu / CPUS, mem / MEM) lanes run at once (min 1); the rest queue in the order above.
 #   Overrides: MIRA_GATE_LANE_CPUS, MIRA_GATE_LANE_MEM_GIB, MIRA_GATE_PARALLEL=0 (one lane at a time), MIRA_GATE_NCPU (pretend
-#   ncpu), MIRA_GATE_CTEST_TSAN (ctest -j of the tsan lane; unset = J02's -j1 unless a lane has more than 2 CPUs, then
+#   ncpu), MIRA_GATE_CTEST_TSAN (ctest -j of the tsan lane; unset = -j1 unless a lane has more than 2 CPUs, then
 #   min(3, CPUS); when ncpu >= 24 AND CPUS >= 8, min(4, CPUS/2), i.e. 2 CPUs per tsan test, because the tsan lane's tail
 #   runs alone once the other lanes finish). With the default CPUS = ncpu/4 that needs 32+ CPUs (a 24-31 CPU host gets lanes
 #   of 6-7 CPUs and so min(3, CPUS)); MIRA_GATE_LANE_CPUS=8 enables it from 24 CPUs. CMAKE_BUILD_PARALLEL_LEVEL inside each
@@ -82,7 +82,7 @@ maxpar=$(( ncpu / CPUS ))
 if (( mem_gib > 0 && MEM_G > 0 )); then mp_mem=$(( mem_gib / MEM_G )); (( mp_mem < maxpar )) && maxpar=$mp_mem; fi
 (( maxpar < 1 )) && maxpar=1
 [[ ${MIRA_GATE_PARALLEL:-1} == 0 ]] && maxpar=1
-# R03: the tsan lane keeps J02's ctest -j1 unless asked for, or unless the lane has CPUs to spare.
+# The tsan lane keeps the default ctest -j1 unless asked for, or unless the lane has CPUs to spare.
 if [[ -n ${MIRA_GATE_CTEST_TSAN:-} ]]; then CT_TSAN=$MIRA_GATE_CTEST_TSAN
 elif (( ncpu >= 24 && CPUS >= 8 )); then CT_TSAN=$(( CPUS / 2 < 4 ? CPUS / 2 : 4 ))   # gate tail: 2 CPUs per tsan test
 elif (( CPUS > 2 )); then CT_TSAN=$(( CPUS < 3 ? CPUS : 3 ))
@@ -263,7 +263,7 @@ lane_product() {
 }
 
 # ---- scheduler: bash 3.2 (no wait -n, no associative arrays), so lanes are polled through bash's own job table ----
-# (R23) Liveness is `jobs -r -p` membership, never a bare `kill -0 $pid`: bash drops a reaped child from its job table, so a
+# Liveness is `jobs -r -p` membership, never a bare `kill -0 $pid`: bash drops a reaped child from its job table, so a
 # reused pid can't look alive or get its process tree killed. A signal that arrives while a lane is being launched is
 # deferred (launching=1, sigpend=NAME) and handled once pid + state are recorded, so no lane is left unkilled.
 cur=()      # lane names of the current set
@@ -321,7 +321,7 @@ reap() {  # $1 index: a lane that exited
     rc=1; failed="$failed $l"
     (( KEEP )) || abort=1
   fi
-  # B-2: rdma_test.sh's per-device R15 late-open counts (rxe0 in devrel, siw0), shown even for a green lane
+  # rdma_test.sh's per-device late-open counts (rxe0 in devrel, siw0), shown even for a green lane
   grep -E '^R15 [^:]+: ' "$log" 2>/dev/null | sed 's/^/       /'
   state[$1]=2
 }

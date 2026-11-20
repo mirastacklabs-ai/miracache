@@ -9,8 +9,7 @@ import (
 	"miracache/controller/rbac"
 )
 
-// route is one row of the code table that drives authorization and the route x role tests
-// (RBAC/audit plan decision 4).
+// route is one row of the code table that drives authorization and the route x role tests.
 type route struct {
 	need rbac.Need
 	h    func(s *Server, w http.ResponseWriter, r *http.Request, id string)
@@ -50,7 +49,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	id := Identity(r)
 	target := r.Method + " " + r.URL.Path
 	if id == "" {
-		// Decision 1: a certificate without a spiffe:// URI SAN gets 403.
+		// a certificate without a spiffe:// URI SAN gets 403.
 		s.deny(noIdentity, nil, target, "no spiffe:// URI SAN")
 		writeErr(w, http.StatusForbidden, "denied", "a client certificate with a spiffe:// URI SAN is required")
 		return

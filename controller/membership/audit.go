@@ -25,7 +25,7 @@ func (m *Monitor) auditor() Auditor {
 }
 
 // auditAuto records an automatic action of the Monitor: actor "local", reason = the rule, with the
-// node's ID, hostname and IP in the detail (V02, RBAC/audit decision 6).
+// node's ID, hostname and IP in the detail.
 func (m *Monitor) auditAuto(action, admin, result, reason string, gen *uint64) {
 	a := m.auditor()
 	if a == nil {
@@ -89,7 +89,7 @@ func (m *Monitor) auditAEAD(identity string, sum uint64) {
 }
 
 // flushAEAD audits AEAD sums that were held back by the one-a-minute limit once the minute is over,
-// so a burst followed by silence is still recorded (U2-28). Called on every tick.
+// so a burst followed by silence is still recorded. Called on every tick.
 func (m *Monitor) flushAEAD(now time.Time) {
 	type item struct {
 		id  string

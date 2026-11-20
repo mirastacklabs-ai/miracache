@@ -39,7 +39,7 @@ class TaskThread final : public JobControl {
     cv_.notify_one();
     return true;
   }
-  // Signals the stop without waiting (review r9 S12): a caller with several threads signals all of them, then
+  // Signals the stop without waiting: a caller with several threads signals all of them, then
   // joins each with stop(), so a hung task on one thread does not delay the stop signal of the others.
   void request_stop() noexcept {
     {

@@ -58,7 +58,7 @@ Status encode(const ExtentHeader& h, std::span<std::byte, kExtentHeaderSize> out
 Expected<ExtentHeader> decode_extent_header(std::span<const std::byte, kExtentHeaderSize> in);
 
 // Smallest stored_len that can hold this extent: 64 + plaintext_len + 16 * segments,
-// where segments = segment_count() (D17: an empty plaintext still has one segment). Corrupt on overflow or if
+// where segments = segment_count() (an empty plaintext still has one segment). Corrupt on overflow or if
 // log2_segment is out of range.
 Expected<std::uint64_t> min_stored_len(const ExtentHeader& h);
 
@@ -69,20 +69,20 @@ Status validate(const ExtentHeader& h, std::uint64_t block_capacity);
 inline constexpr std::size_t kAadSize = 80;
 inline constexpr std::size_t kNonceSize = 12;
 
-// D17: max(1, ceil(plaintext_len / 2^log2_segment)). log2 must be 16..20 (not checked here).
+// Max(1, ceil(plaintext_len / 2^log2_segment)). log2 must be 16..20 (not checked here).
 constexpr std::uint64_t segment_count(std::uint64_t plaintext_len, std::uint8_t log2_segment) {
   const std::uint64_t seg = std::uint64_t{1} << log2_segment;
   const std::uint64_t n = plaintext_len / seg + (plaintext_len % seg != 0 ? 1 : 0);
   return n == 0 ? 1 : n;
 }
 
-// D18: 80-byte AAD = ver u8, cipher u8, segment_log2 u8, 0 u8, kver u32 LE, scope_id[32],
+// 80-byte AAD = ver u8, cipher u8, segment_log2 u8, 0 u8, kver u32 LE, scope_id[32],
 // key_hash[32], plaintext_len u64 LE. Built from the caller's expectations (h is what the
 // client expects, not what it read); only block_salt is taken from the block.
 std::array<std::byte, kAadSize> build_aad(const ExtentHeader& h, const std::uint8_t (&scope_id)[32],
                                           const std::uint8_t (&key_hash)[32]);
 
-// D16: STREAM nonce of segment i = 0^56 || u32 i (BIG-endian, the only BE field) || u8 last.
+// STREAM nonce of segment i = 0^56 || u32 i (BIG-endian, the only BE field) || u8 last.
 std::array<std::byte, kNonceSize> stream_nonce(std::uint32_t i, bool last);
 
 }  // namespace miracache::proto

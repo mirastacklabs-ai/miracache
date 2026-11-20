@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB2: the C++ side of the signed cluster bundle. Byte-exact envelope rules 1-9, tamper, role
+// The C++ side of the signed cluster bundle. Byte-exact envelope rules 1-9, tamper, role
 // binding, schema, goldens (generated here with OpenSSL from the test seeds), and the cross-check
-// against MB1's Go-emitted envelope.
+// against the Go-emitted envelope.
 #include <gtest/gtest.h>
 
 #include <cctype>
@@ -48,7 +48,7 @@ std::string to_hex_s(const Sha256Digest& d) { return to_hex(d); }
 
 struct GoldenSet {
   std::string trust, valid, publish_only, sec, body, publish_only_body, expect, publish_only_expect, reject_upper_hex, reject_role_confusion;
-  // W01/W04: signed with the test seeds, only the content is invalid -> "schema". name -> envelope bytes.
+  // Signed with the test seeds, only the content is invalid -> "schema". name -> envelope bytes.
   std::vector<std::pair<std::string, std::string>> schema_rejects;
 };
 
@@ -95,7 +95,7 @@ GoldenSet fresh_goldens() {
       {"reject_dup_identity_two_principals.envelope", tu::make_envelope(two_principals, g.body)},
       {"reject_dup_identity_in_one_principal.envelope", tu::make_envelope(twice_in_one, g.body)},
       {"reject_dup_rbac_identity.envelope", tu::make_envelope(dup_rbac, g.body)},
-      // U2-02: parses and verifies (parsing is pure); refused at apply / publish time by check_drop_before_not_future.
+      // Parses and verifies (parsing is pure); refused at apply / publish time by check_drop_before_not_future.
       {"reject_future_drop_before.envelope", tu::make_envelope(tu::sec_toml(5, "2099-01-01T00:00:00Z"), g.body)},
       {"reject_bom_sec.envelope", tu::make_envelope(bom + g.sec, g.body)},
       {"reject_bom_body.envelope", tu::make_envelope(g.sec, bom + g.body)},
@@ -112,7 +112,7 @@ std::map<std::string, std::string> parse_expect(const std::string& text) {
     const std::string line = text.substr(pos, nl - pos);
     pos = nl + 1;
     if (line.empty() || line[0] == '#') continue;
-    auto c = line.find(": ");  // our files use "name: value", MB1's "name=value"
+    auto c = line.find(": ");  // our files use "name: value", the Go emitter's "name=value"
     std::size_t skip = 2;
     if (c == std::string::npos) {
       c = line.find('=');
@@ -315,7 +315,7 @@ TEST(BundleGolden, KeyIdIsFirstEightBytesOfSha256OfThePublicKey) {
 
 TEST(BundleGolden, VerifiesMb1GoEmittedEnvelope) {
   std::string env;
-  if (!tu::read_file(golden_dir() + "go_emitted.envelope", env)) GTEST_SKIP() << "go_emitted.envelope not merged yet (MB1)";
+  if (!tu::read_file(golden_dir() + "go_emitted.envelope", env)) GTEST_SKIP() << "go_emitted.envelope not merged yet";
   std::string tk;
   if (!tu::read_file(golden_dir() + "go_emitted.trust.toml", tk)) ASSERT_TRUE(tu::read_file(golden_dir() + "trust.toml", tk));
   auto t = parse_trust_keys(tk);
@@ -694,7 +694,7 @@ TEST(BundleSchema, UnknownConfigKeysAreIgnoredAndCounted) {
   ASSERT_TRUE(b.has_value()) << b.error().detail;
   EXPECT_EQ(b->body.unknown_keys, 3u);
   EXPECT_EQ(b->body.replicas, 2u);
-  // Everything outside config.* is strict, the top level included (same as MB1).
+  // Everything outside config.* is strict, the top level included (same as the Go side).
   EXPECT_EQ(verdict(tu::make_envelope(tu::sec_toml(), "future_field = 1\n" + tu::body_toml()), t), "schema");
   // But a known config table of the wrong type is an error.
   const std::string full = tu::body_toml();
@@ -776,7 +776,7 @@ TEST(BundleGolden, RejectGoldensAreRejectedWithTheirReason) {
   EXPECT_EQ(verdict(e2, t.value()), "key_role");
 }
 
-// J03/H09: with the floor's stored maxima, a drop_before up to the stored maximum is exempt from the "not future" rule.
+// With the floor's stored maxima, a drop_before up to the stored maximum is exempt from the "not future" rule.
 TEST(BundleSchema, DropBeforeNotFutureHonoursTheStoredMaximum) {
   const TrustKeys t = trust();
   auto opened = open_bundle(tu::make_envelope(tu::sec_toml(5, "2026-11-12T01:00:00Z"), tu::body_toml()), t);
@@ -798,12 +798,12 @@ TEST(BundleSchema, DropBeforeNotFutureHonoursTheStoredMaximum) {
 
 TEST(BundleSchema, NonAsciiOnlyInsideStringsAndComments) {
   const TrustKeys t = trust();
-  // UTF-8 in a string value is fine (MB1's golden has "caf\xC3\xA9").
+  // UTF-8 in a string value is fine (the Go side's golden has "caf\xC3\xA9").
   EXPECT_EQ(verdict(tu::make_envelope(tu::sec_toml(), replace_once(tu::body_toml(), "add hostD", "add h\xC3\xB6stD")), t), "ok");
   EXPECT_EQ(verdict(tu::make_envelope(tu::sec_toml(), "# caf\xC3\xA9\n" + tu::body_toml()), t), "ok");
   // Outside strings it is refused before toml++ sees it (toml++ 3.4.0 hits TOML_UNREACHABLE).
   EXPECT_EQ(verdict(tu::make_envelope(tu::sec_toml(), replace_once(tu::body_toml(), "weight = 2", "weight = 2\xC2\xA1")), t), "schema");
-  EXPECT_EQ(verdict(tu::make_envelope(replace_once(tu::sec_toml(), "prod-llama", "prod-\xC3\xA9"), tu::body_toml()), t), "schema");  // principal names are [A-Za-z0-9._-] (X19)
+  EXPECT_EQ(verdict(tu::make_envelope(replace_once(tu::sec_toml(), "prod-llama", "prod-\xC3\xA9"), tu::body_toml()), t), "schema");  // principal names are [A-Za-z0-9._-]
   EXPECT_FALSE(parse_trust_keys("[[key]]\xD2\x9A\n" + tu::trust_toml()).has_value());
   EXPECT_TRUE(parse_trust_keys("# \xC2\xA1\n" + tu::trust_toml()).has_value());
   EXPECT_TRUE(toml_text_ok("a = \"\"\"x\xC3\xA9\n\"y\"\"\"\nb = '''\xC3\xA9'''\n"));

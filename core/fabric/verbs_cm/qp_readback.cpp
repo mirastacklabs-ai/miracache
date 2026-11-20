@@ -55,7 +55,7 @@ void QpReadback::set_metrics(telemetry::Registry* reg, telemetry::Labels extra) 
     for (auto& [k, e] : entries_) {
       QpSite s{std::get<0>(k), std::get<1>(k), std::get<2>(k), std::get<3>(k)};
       if (reg_) publish_locked(s, e);
-      // L06: the line written while the identity was "unknown" is written once more with the real node ID and hostname.
+      // The line written while the identity was "unknown" is written once more with the real node ID and hostname.
       if (known && e.log_unknown && (e.have_attrs || e.failed)) {
         e.log_unknown = false;
         again.emplace_back(std::move(s), e);
@@ -70,7 +70,7 @@ bool QpReadback::claim(const QpSite& site) {
   return entries_.try_emplace(Key{site.role, site.device, site.port, site.addr}).second;
 }
 
-// F3 (K07, K08): publishes what the entry holds under the current registry and extra labels. An entry that was only
+// Publishes what the entry holds under the current registry and extra labels. An entry that was only
 // claimed (no attrs, no failure) publishes nothing and stays unpublished, so a bind between claim() and report() cannot
 // fix zeros. When the labels changed since the last publish into the same registry (node_id learned after HELLO), the
 // old series are hidden and the new ones published. A registry change leaves the old registry alone (it may be gone).
@@ -120,7 +120,7 @@ void QpReadback::publish_locked(const QpSite& s, Entry& e) {
 void QpReadback::count_once(Entry& e, telemetry::Counter& c, std::uint64_t by) {
   if (by == 0) return;
   const bool seen = std::find(e.counted.begin(), e.counted.end(), &c) != e.counted.end();
-  if (seen && c.value() >= by) return;  // L07: this series already holds this entry's count
+  if (seen && c.value() >= by) return;  // this series already holds this entry's count
   if (!seen) e.counted.push_back(&c);
   c.inc(by);
 }
@@ -129,7 +129,7 @@ void QpReadback::log_entry(const QpSite& site, const Entry& e, const telemetry::
   std::vector<std::pair<std::string, std::string>> kv{
       {"role", site.role}, {"device", site.device}, {"port", site.port}, {"addr", site.addr}};
   for (auto& x : extra) kv.push_back(x);
-  if (again) kv.emplace_back("identity", "learned");  // L06: the first line of this site said "unknown"
+  if (again) kv.emplace_back("identity", "learned");  // the first line of this site said "unknown"
   auto emit = [&](log::Level lvl, const char* msg, std::vector<std::pair<std::string, std::string>> more) {
     std::vector<log::Field> f;
     for (auto& x : kv) f.emplace_back(x.first, x.second);
@@ -169,7 +169,7 @@ void QpReadback::report(const QpSite& site, const QpAttrs* attrs, int err, const
       e.err = err;
     }
     e.want = want;
-    // L06: lines carry the identity known now; when it is still "unknown" they are written once more when it is learned.
+    // Lines carry the identity known now; when it is still "unknown" they are written once more when it is learned.
     e.log_unknown = identity_unknown(extra_) && !extra_.empty();
     publish_locked(site, e);
     snap = e;

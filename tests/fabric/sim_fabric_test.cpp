@@ -364,7 +364,7 @@ TEST(SimFabric, OverlappingReadUsesMemmove) {
   EXPECT_EQ(std::memcmp(r.remote_buf.data() + 50, expect.data(), 200), 0);
 }
 
-// r8b Q05: as on verbs, a connect to a node with no listener (or no node at all) is LinkDown.
+// As on verbs, a connect to a node with no listener (or no node at all) is LinkDown.
 TEST(SimFabric, ConnectWithoutListenerIsLinkDown) {
   Rig r;
   for (std::uint32_t node : {1u, 7u}) {  // node 1 (r.a) never listens; node 7 does not exist
@@ -374,7 +374,7 @@ TEST(SimFabric, ConnectWithoutListenerIsLinkDown) {
   }
 }
 
-// G08: as on verbs, a connect to an address the node is not listening on is refused, even with one listener.
+// As on verbs, a connect to an address the node is not listening on is refused, even with one listener.
 TEST(SimFabric, ConnectToAnAddressNobodyListensOnIsLinkDown) {
   SimClock clock;
   SeededRandom rng(1);
@@ -480,7 +480,7 @@ TEST(SimFabric, RegionInOtherPdIsNotUsable) {
   EXPECT_FALSE(c[0].status);
 }
 
-// S01: the sim follows the verbs listen/admission rules (class and PD from the Admission,
+// The sim follows the verbs listen/admission rules (class and PD from the Admission,
 // unknown PDs refused, max_pending_accepts must be positive).
 TEST(SimFabric, AdmissionChoosesClassAndPd) {
   SimClock clock;
@@ -642,7 +642,7 @@ TEST(SimFabric, AdmitCanReject) {
   EXPECT_FALSE(accepted);
 }
 
-// r7 R01/R02: the admit-error -> CM reject byte -> active-side error table. A "busy" refusal (a draining
+// The admit-error -> CM reject byte -> active-side error table. A "busy" refusal (a draining
 // node) must not read as AccessDenied, or the client burns ticket_attempts tickets per refused attempt.
 TEST(ProtocolRules, AdmitRejectMapping) {
   using namespace miracache::fabric::protocol;
@@ -653,7 +653,7 @@ TEST(ProtocolRules, AdmitRejectMapping) {
   EXPECT_EQ(reject_error(kRejectBusy).code, ErrorCode::Busy);
   EXPECT_EQ(reject_error(kRejectResources).code, ErrorCode::ResourceExhausted);
   EXPECT_EQ(reject_error(kRejectAdmit).code, ErrorCode::AccessDenied);
-  // r8 N01: no miracache byte (kernel REJ / ECONNREFUSED: host up, memory node gone) is LinkDown, not
+  // No miracache byte (kernel REJ / ECONNREFUSED: host up, memory node gone) is LinkDown, not
   // AccessDenied, so a client in the down window draws one ticket per attempt, not ticket_attempts.
   EXPECT_EQ(reject_error(kRejectNone).code, ErrorCode::LinkDown);
   EXPECT_EQ(reject_error(200).code, ErrorCode::LinkDown);  // unknown byte from a newer peer: backoff, one ticket
@@ -662,7 +662,7 @@ TEST(ProtocolRules, AdmitRejectMapping) {
     EXPECT_EQ(reject_error(admit_reject_code(c)).code, c);
 }
 
-// The sim maps admit errors through the same table (R01): Busy stays Busy, an expired ticket
+// The sim maps admit errors through the same table: Busy stays Busy, an expired ticket
 // (Timeout from the ticket table) reads as AccessDenied exactly as on verbs.
 TEST(SimFabric, AdmitErrorsGoThroughTheRejectTable) {
   SimClock clock;

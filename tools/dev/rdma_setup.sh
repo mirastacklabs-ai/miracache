@@ -27,9 +27,9 @@ modprobe dummy numdummies=0 2>/dev/null || true
 ip link show "$iwdev" >/dev/null 2>&1 || ip link add "$iwdev" type dummy
 ip -4 addr show dev "$iwdev" | grep -q 'inet 10.99.0.1/' || ip addr add 10.99.0.1/24 dev "$iwdev"
 ip link set "$iwdev" up
-# RL1/RL4 (multi-rail plan decision 11): a second IPv4 address on each RDMA netdev, so one device can serve two rails
+# a second IPv4 address on each RDMA netdev, so one device can serve two rails
 # (rdma_cm maps both addresses to the same device). Failing a rail in a lab = `ip addr del` of its address; the container cannot
-# do that, so the RL4 test asks tools/dev/rail_fault_agent.sh on the host (10.98.0.1/24 is the only address it touches).
+# do that, so the multi-rail test asks tools/dev/rail_fault_agent.sh on the host (10.98.0.1/24 is the only address it touches).
 ip -4 addr show dev "$netdev" | grep -q 'inet 10.98.0.1/' || ip addr add 10.98.0.1/24 dev "$netdev"
 ip -4 addr show dev "$iwdev" | grep -q 'inet 10.99.0.2/' || ip addr add 10.99.0.2/24 dev "$iwdev"
 # Move siw0 off a shared netdev if an earlier setup put it there.

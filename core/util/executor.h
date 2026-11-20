@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Work offload seam shared by the store (A1.4: extent CRC) and the client (A1.5: segment
+// Work offload seam shared by the store (extent CRC) and the client (segment
 // decrypt). core/ never spawns threads: production pools live outside core/, and the
 // simulator schedules on virtual time with a Random delay.
 //
@@ -9,7 +9,7 @@
 // pipeline locks for this). Owners that require `done` on their own thread (the
 // single-threaded store) must be given an executor that marshals `done` back to that
 // thread — tests use InlineExecutor or the sim executor; the production memory-node server
-// (A1.4 S7) must supply a marshalling executor. Callers must not hold locks across post():
+// must supply a marshalling executor. Callers must not hold locks across post():
 // an inline executor may run both callbacks before returning.
 #pragma once
 

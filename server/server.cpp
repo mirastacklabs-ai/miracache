@@ -40,7 +40,7 @@ constexpr const char* kIssueFailNames[] = {"unknown_identity", "invalid", "limit
 constexpr const char* kClassNames[] = {"control", "fetch", "ingest"};
 constexpr std::size_t kMaxPrincipalGauges = 64;
 constexpr Nanos kPublishEvery = std::chrono::milliseconds(250);
-constexpr Nanos kRailPollEvery = std::chrono::milliseconds(500);  // RL1: rail health refresh
+constexpr Nanos kRailPollEvery = std::chrono::milliseconds(500);  // rail health refresh
 
 #ifndef MIRACACHE_VERSION_STR
 #define MIRACACHE_VERSION_STR "unknown"
@@ -65,7 +65,7 @@ int op_index(std::uint16_t type) {
 }
 }  // namespace
 
-// Every metric the memory node exports (A3.5 M1). Registered once, in exposition order; the
+// Every metric the memory node exports. Registered once, in exposition order; the
 // hot path only bumps the pointers below. No label carries a scope, session, key or token.
 struct Server::Mx {
   Mx(telemetry::Registry& r, const ServerConfig& cfg) : reg(r) {
@@ -101,7 +101,7 @@ struct Server::Mx {
     for (std::size_t i = 0; i < store::kEvictReasons; ++i)
       sm.evict_blocks[i] = &r.counter("miracache_evict_blocks_total", "Blocks evicted, by reason.", {{"reason", kEvictNames[i]}});
     scope_open = &r.gauge("miracache_scope_open", "Open scopes of configured principals.");
-    // QT1 gauges (U2-15) and QT2 throttle counters. The registry has integer gauges only: occupancy is in ppm.
+    // Retention gauges and put-throttle counters. The registry has integer gauges only: occupancy is in ppm.
     sm.occupancy_ratio_ppm = &r.gauge("miracache_store_occupancy_ratio_ppm", "Committed + zombie + in-flight bytes over registered capacity, in parts per million.");
     sm.evict_backlog_blocks = &r.gauge("miracache_evict_backlog_blocks", "Blocks of expired or dropped scopes still waiting to be freed.");
     for (std::size_t i = 0; i < 2; ++i)
@@ -180,13 +180,13 @@ Expected<std::unique_ptr<Server>> Server::create(const ServerConfig& cfg, fabric
 Expected<std::unique_ptr<Server>> Server::create(const ServerConfig& cfg, std::vector<fabric::Fabric*> fabrics,
                                                  const Clock& clock, Random& rng, Executor& exec, Random* ticket_rng) {
   ServerConfig resolved = cfg;
-  // store.max_bytes not set (0): this node's n_segments x segment_bytes (K02; the same rule dyn_from_server_config uses).
+  // store.max_bytes not set (0): this node's n_segments x segment_bytes (the same rule dyn_from_server_config uses).
   if (resolved.store.principal_default.max_bytes == 0) resolved.store.principal_default.max_bytes = backing_bytes(resolved.store);
   if (auto st = resolved.store.validate(); !st) return st.error();
   // One SEG_TABLE frame carries at most kMaxSegEntries segments; more could never be announced.
   if (cfg.store.n_segments > proto::kMaxSegEntries)
     return Error{ErrorCode::InvalidArgument, "server: n_segments exceeds the SEG_TABLE limit"};
-  // RL1 (decisions 1 and 2): 1..4 rails (the wire carries 4), each on one of the fabrics.
+  // 1..4 rails (the wire carries 4), each on one of the fabrics.
   if (fabrics.empty() || std::find(fabrics.begin(), fabrics.end(), nullptr) != fabrics.end())
     return Error{ErrorCode::InvalidArgument, "server: no fabric"};
   if (cfg.rails.size() > proto::kMaxRails)
@@ -200,16 +200,16 @@ Expected<std::unique_ptr<Server>> Server::create(const ServerConfig& cfg, std::v
   auto a = store::Arena::open(resolved.store);
   if (!a) return a.error();
   resolved.store.node_id = (*a)->superblock().node_id;
-  if (resolved.max_conns_per_principal == 0)  // not set: computed from this node's rails and profile (G02)
+  if (resolved.max_conns_per_principal == 0)  // not set: computed from this node's rails and profile
     resolved.max_conns_per_principal = default_max_conns(resolved.rails.size(), resolved.fetch_qps);
-  if (resolved.ticket_max_per_identity == 0)  // not set: computed from the same inputs (H07)
+  if (resolved.ticket_max_per_identity == 0)  // not set: computed from the same inputs
     resolved.ticket_max_per_identity = default_ticket_max(resolved.rails.size(), resolved.fetch_qps);
   const std::size_t nf = fabrics.size();
   std::unique_ptr<Server> s(new Server(resolved, std::move(fabrics), clock, rng, exec, ticket_rng ? *ticket_rng : rng));
   s->arena_ = std::move(*a);
   s->slab_ = std::make_unique<store::SlabAllocator>(*s->arena_);
   s->store_ = std::make_unique<store::Store>(*s->arena_, *s->slab_, clock, rng);
-  // A3.1: scope records carry wall-clock ms; the store runs on Clock ns. Converted once (a later jump is not followed).
+  // Scope records carry wall-clock ms; the store runs on Clock ns. Converted once (a later jump is not followed).
   s->store_->set_wall_offset_ns(s->wall_now_ns() - clock.now().count());
   if (auto st = s->restart(); !st) return st.error();
   std::vector<store::MrManager::DeviceSpec> devs;
@@ -231,7 +231,7 @@ Expected<std::unique_ptr<Server>> Server::create(const ServerConfig& cfg, std::v
       });
   s->store_->set_metrics(&s->mx_->sm);
   s->puts_->set_metrics(&s->mx_->sm);
-  {  // SC1: the CRC runs on the executor; the log line carries the node identity (design rule: ID + hostname + addr).
+  {  // the CRC runs on the executor; the log line carries the node identity (design rule: ID + hostname + addr).
     const std::string addr = listen_addr_string(resolved), id = std::to_string(resolved.store.node_id);
     s->scrub_ = std::make_unique<store::Scrubber>(
         *s->store_, *s->arena_, exec, clock, &s->mx_->sm, [addr, id](const store::Extent& e) {
@@ -243,7 +243,7 @@ Expected<std::unique_ptr<Server>> Server::create(const ServerConfig& cfg, std::v
   }
   if (!cfg.lab_identity.empty()) s->tickets_.principals().add(cfg.lab_identity, cfg.lab_principal);
   for (const auto& id : cfg.lab_identities) s->tickets_.principals().add(id, cfg.lab_principal);
-  // H02: one boot nonce per process, through Random (seedable in the sim, real in production). Drawn last, so the draws
+  // One boot nonce per process, through Random (seedable in the sim, real in production). Drawn last, so the draws
   // above keep their order. 0 is reserved.
   s->boot_nonce_ = rng.next_u64();
   if (s->boot_nonce_ == 0) s->boot_nonce_ = 1;
@@ -282,7 +282,7 @@ Status Server::restart() {
                 {"discarded_blocks", std::to_string(sh.blocks)}, {"discarded_bytes", std::to_string(sh.bytes)},
                 {"reason", "shared_scope_id"}});
   }
-  // H05: a torn scope record whose principal or scope_id reads as zero makes the whole scan blind (safe: cold). One
+  // A torn scope record whose principal or scope_id reads as zero makes the whole scan blind (safe: cold). One
   // line per such slot, at most 8 (a crash tears few records); the blocks are counted under reason="torn_record".
   const auto& blind = r->blind_record_slots;
   for (std::size_t i = 0; i < blind.size() && i < 8; ++i)
@@ -332,7 +332,7 @@ void Server::count_issue_fail(ErrorCode c) {
 }
 
 Status Server::check_issue_capacity(const std::string& identity, std::uint32_t total) {
-  if (refusing_sessions()) {  // r7 R01: admit() refuses every new session now; do not hand out tickets for it
+  if (refusing_sessions()) {  // admit() refuses every new session now; do not hand out tickets for it
     count_issue_fail(ErrorCode::Busy);
     return Error{ErrorCode::Busy, "server: draining"};
   }
@@ -377,9 +377,9 @@ std::int64_t Server::wall_now_ns() const { return cfg_.wall_unix_ns ? cfg_.wall_
 namespace {
 constexpr std::int64_t kNsPerSec = 1'000'000'000;
 
-// QT3 (v1 quota plan, decision 2). Stateless, from the bundle alone:
+// Per-principal byte cap. Stateless, from the bundle alone:
 //   active node      floor(quota * w_self / sum(w_active))
-//   non-active node  floor(quota * w_self / (sum(w_active) + w_self))   (P38: a draining/readonly/removed node)
+//   non-active node  floor(quota * w_self / (sum(w_active) + w_self))   (a draining/readonly/removed node)
 // A node the bundle does not list counts as non-active with weight 1. The cap is at least 1 byte (the store
 // requires a positive cap; 1 byte admits nothing).
 std::uint64_t quota_cap(std::uint64_t quota, std::uint64_t w_self, std::uint64_t sum_active, bool self_active) {
@@ -403,7 +403,7 @@ void Server::load_drop_before_floor(const std::map<std::string, std::int64_t>& m
   apply_drop_before();
 }
 
-// drop_before (P15/C19): monotonic per principal name, re-applied on EVERY apply and at load, so a node that
+// drop_before: monotonic per principal name, re-applied on EVERY apply and at load, so a node that
 // missed the bundle which carried it still drops. The store compares it with each scope's opened_at and frees
 // the blocks incrementally (Store::sweep_step, bounded per turn); lookups of such scopes miss at once.
 void Server::apply_drop_before() {
@@ -414,7 +414,7 @@ void Server::apply_drop_before() {
       __int128 age = static_cast<__int128>(wall) - static_cast<__int128>(secs) * kNsPerSec;  // ns since drop_before
       const __int128 lim = static_cast<__int128>(1) << 61;
       age = std::clamp(age, -lim, lim);
-      // Y18: converted ONCE per rise (a later wall-clock jump is not re-followed); a future drop_before is clamped to
+      // Converted ONCE per rise (a later wall-clock jump is not re-followed); a future drop_before is clamped to
       // now, so it drops what exists and never kills scopes opened after the apply.
       c = {secs, std::min(clock_.now().count(), clock_.now().count() - static_cast<std::int64_t>(age))};
       if (c.second == 0) c.second = -1;  // 0 marks "unset" above
@@ -423,7 +423,7 @@ void Server::apply_drop_before() {
   }
 }
 
-// A bundle principal's policy: the default (idle TTL, put buckets: live through HR1) with the QT3 byte cap and the
+// A bundle principal's policy: the default (idle TTL, put buckets: live through hot reload) with the byte cap and the
 // bundle's scope cap. Needs caps_ filled.
 store::PrincipalPolicy Server::policy_of(const control::PrincipalView& p) const {
   store::PrincipalPolicy pol = cfg_.store.principal_default;
@@ -514,7 +514,7 @@ void Server::apply_principals(const control::BundleView& v) {
   if (revoked > 0)
     registry_.counter("miracache_bundle_identities_revoked_total", "Identities unbound by an applied bundle.").inc(revoked);
 
-  // Quota (QT3).
+  // Quota.
   std::uint64_t w_self = 1, sum_active = 0;
   bool self_active = false;
   for (const auto& n : v.body.nodes) {
@@ -544,12 +544,12 @@ void Server::apply_principals(const control::BundleView& v) {
       continue;
     }
     auto& g = cap_gauges_[p->name];
-    if (!g) g = &registry_.gauge("miracache_principal_cap_bytes", "Per-node byte cap of a principal (QT3).", {{"principal", p->name}});
+    if (!g) g = &registry_.gauge("miracache_principal_cap_bytes", "Per-node byte cap of a principal.", {{"principal", p->name}});
     g->set(static_cast<std::int64_t>(std::min<std::uint64_t>(caps_[p->id], INT64_MAX)));
   }
   if (other > 0 || cap_gauges_.count("_other")) {
     auto& g = cap_gauges_["_other"];
-    if (!g) g = &registry_.gauge("miracache_principal_cap_bytes", "Per-node byte cap of a principal (QT3).", {{"principal", "_other"}});
+    if (!g) g = &registry_.gauge("miracache_principal_cap_bytes", "Per-node byte cap of a principal.", {{"principal", "_other"}});
     g->set(static_cast<std::int64_t>(std::min<std::uint64_t>(other, INT64_MAX)));
   }
   registry_.gauge("miracache_bundle_principals", "Principals in the applied bundle.").set(static_cast<std::int64_t>(v.sec.principals.size()));
@@ -564,7 +564,7 @@ void Server::apply_bundle(const control::BundleView& v) {
   applied_bundle_.replicas = v.body.replicas;
   applied_bundle_.body_hash = v.body_hash;
   applied_bundle_.sec_hash = v.sec_hash;
-  // Member state: derived fresh from this bundle, never from the previous state or the SIGTERM latch (P08).
+  // Member state: derived fresh from this bundle, never from the previous state or the SIGTERM latch.
   const MemberState before = applied_bundle_.member_state;
   MemberState ms = MemberState::Removed;
   for (const auto& n : v.body.nodes)
@@ -573,7 +573,7 @@ void Server::apply_bundle(const control::BundleView& v) {
            : n.state == control::MemberState::Draining ? MemberState::Draining
                                                        : MemberState::Readonly;
   applied_bundle_.member_state = ms;
-  // MB4: the current-view placement, computed once here with the same functions the client uses (C2).
+  // The current-view placement, computed once here with the same functions the client uses.
   place_view_ = control::view_from_bundle(v.body);
   place_r_ = std::clamp<std::uint32_t>(v.body.replicas, 1, 3);
   self_id_text_ = std::to_string(cfg_.store.node_id);
@@ -581,7 +581,7 @@ void Server::apply_bundle(const control::BundleView& v) {
     log::write(log::Level::Info, "bundle", "member state changed",
                {{"from", std::to_string(static_cast<int>(before))}, {"to", std::to_string(static_cast<int>(ms))},
                 {"generation", std::to_string(v.body.generation)}, {"node_id", self_id_text_}});
-  if (ms == MemberState::Removed && before != MemberState::Removed) {  // decision 10 step 4: GOAWAY, no new sessions
+  if (ms == MemberState::Removed && before != MemberState::Removed) {  // GOAWAY, no new sessions
     log::write(log::Level::Info, "bundle", "removed from the membership: GOAWAY",
                {{"generation", std::to_string(v.body.generation)}, {"epoch", std::to_string(v.body.epoch)},
                 {"node_id", self_id_text_}});
@@ -680,7 +680,7 @@ Status Server::start() {
   return {};
 }
 
-// RL1: per-rail health (decision 11) and the rail gauges. A rail is up when its device port is ACTIVE, its listener
+// per-rail health and the rail gauges. A rail is up when its device port is ACTIVE, its listener
 // is alive and the device has had no fatal async event in the last 10 s.
 void Server::refresh_rail_health() {
   last_rail_poll_ = clock_.now();
@@ -736,7 +736,7 @@ std::size_t Server::principal_conns(store::PrincipalId p) const {
 }
 
 Expected<fabric::Admission> Server::admit(std::span<const std::byte> priv, std::size_t listener) {
-  if (refusing_sessions()) {  // r6 A8: no new session during the drain (or once removed, MB4); refused before redeem, so no ticket is spent
+  if (refusing_sessions()) {  // no new session during the drain (or once removed); refused before redeem, so no ticket is spent
     mx_->tk_reject[4]->inc();
     return Error{ErrorCode::Busy, "server: draining"};
   }
@@ -854,7 +854,7 @@ void Server::send_body(fabric::EndpointId id, Op op, std::uint64_t rid, std::siz
   if (it == conns_.end() || it->second.dead) return;
   FrameHeader h = proto::header_for(op, rid);
   h.flags |= extra;
-  if (view_) {  // MB4: every reply carries the node's epoch and bundle generation (bundle mode only)
+  if (view_) {  // every reply carries the node's epoch and bundle generation (bundle mode only)
     h.epoch = applied_bundle_.epoch;
     h.bundle_gen_lo = static_cast<std::uint32_t>(applied_bundle_.generation);
   }
@@ -871,7 +871,7 @@ void Server::send_error(fabric::EndpointId id, const FrameHeader& req, WireStatu
   auto it = conns_.find(id);
   if (it == conns_.end() || it->second.dead) return;
   FrameHeader stamped = req;
-  if (view_) {  // MB4: a refusal tells the sender where this node is (StaleEpoch above all)
+  if (view_) {  // a refusal tells the sender where this node is (StaleEpoch above all)
     stamped.epoch = applied_bundle_.epoch;
     stamped.bundle_gen_lo = static_cast<std::uint32_t>(applied_bundle_.generation);
   }
@@ -900,7 +900,7 @@ void Server::send_seg_table(Conn& c) {
     }
   for (std::uint32_t i = 0; i < nseg; ++i) {
     m->e[i].seg_id = i;
-    // Q2: block offsets are relative to the segment base, so `base` stays the segment base; the registered MR is
+    // Block offsets are relative to the segment base, so `base` stays the segment base; the registered MR is
     // only the data runs, so `len` ends where they end (the NIC refuses anything outside the MR, whatever a client
     // does with this table).
     const fabric::MemRegion v = mrs_->segment_view(i, rail_dev(0));
@@ -926,7 +926,7 @@ void Server::goaway(proto::GoawayReason why, std::uint32_t drain_ms) {
 
 void Server::begin_drain(proto::GoawayReason why, std::uint32_t drain_ms) {
   draining_ = true;
-  scrub_->stop();  // SC1: a draining node starts no new scrub checks
+  scrub_->stop();  // a draining node starts no new scrub checks
   drain_deadline_ = clock_.now() + std::chrono::milliseconds(drain_ms);
   goaway(why, drain_ms);
 }
@@ -938,7 +938,7 @@ bool Server::admin_drain(std::uint32_t drain_ms) {
 }
 
 Status Server::drop_principal_local(const std::string& name, std::int64_t drop_before_unix_s) {
-  // U2-02: a cutoff ahead of the wall clock would be stored max-only but converted once (clamped to now): a later real
+  // A cutoff ahead of the wall clock would be stored max-only but converted once (clamped to now): a later real
   // cutoff below it would silently do nothing. Same rule and skew as a bundle's drop_before.
   if (drop_before_unix_s > wall_now_ns() / kNsPerSec + control::kDropBeforeSkewSeconds)
     return Error{ErrorCode::InvalidArgument, "server: drop_before is later than now + 300 s"};
@@ -954,20 +954,20 @@ Status Server::drop_principal_local(const std::string& name, std::int64_t drop_b
 }
 
 Status Server::shutdown_clean() {
-  // r8b Q04: with drain_ms == 0 begin_drain never ran; the fence loop below polls, so no new session
+  // With drain_ms == 0 begin_drain never ran; the fence loop below polls, so no new session
   // may be admitted while it runs.
   draining_ = true;
-  scrub_->stop();  // SC1: no new checks (in-flight ones were finished by the caller draining the executor)
+  scrub_->stop();  // no new checks (in-flight ones were finished by the caller draining the executor)
   admitted_.clear();
   std::vector<fabric::EndpointId> ids;
   for (auto& [id, c] : conns_) ids.push_back(id);
   for (auto id : ids) drop_conn(id);
   puts_->tick();  // retries fences that failed earlier (limbo)
-  // r7 R08: one failed fence must not cost the warm restart. Retry a few times (bounded: a handful of
+  // One failed fence must not cost the warm restart. Retry a few times (bounded: a handful of
   // polls), letting the dropped QPs' flushes land in between.
-  // r8 N05: each retry polls up to 10 ms (returns early on a completion), at most ~150 ms in all, so the
+  // Each retry polls up to 10 ms (returns early on a completion), at most ~150 ms in all, so the
   // flushes have time to land instead of 8 retries back to back (µs).
-  // r8b Q01: the 150 ms clock is the bound. A poll returns as soon as it has a completion, so flushes
+  // The 150 ms clock is the bound. A poll returns as soon as it has a completion, so flushes
   // trickling in one per poll may take many iterations; only idle ones (nothing polled) count against
   // the frozen-clock guard (the sim ignores the poll budget), plus a hard cap for a frozen clock with
   // completions that never stop.
@@ -993,7 +993,7 @@ Nanos Server::next_wake_in() const {
 std::size_t Server::run_once(fabric::PollBudget budget) {
   std::size_t work = 0;
   std::array<fabric::Completion, 32> out;
-  // RL1: one fabric per device, polled round robin; the busy-spin budget is shared between them.
+  // one fabric per device, polled round robin; the busy-spin budget is shared between them.
   const std::size_t nf = fabrics_.size();
   fabric::PollBudget share = budget;
   share.busy = budget.busy / static_cast<std::int64_t>(nf);
@@ -1044,8 +1044,8 @@ std::size_t Server::run_once(fabric::PollBudget budget) {
 }
 
 void Server::tick() {
-  store_->tick();  // QT1: reaping, drop_before, cap-cut convergence and pressure under one budget (<= 64 blocks per turn)
-  scrub_->step();  // SC1: <= 16 blocks per turn at scrub.bytes_per_s; the CRC runs on the executor
+  store_->tick();  // reaping, drop_before, cap-cut convergence and pressure under one budget (<= 64 blocks per turn)
+  scrub_->step();  // <= 16 blocks per turn at scrub.bytes_per_s; the CRC runs on the executor
   puts_->tick();
   const Nanos now = clock_.now();
   if (last_sweep_ < Nanos{0} || now - last_sweep_ >= cfg_.sweep_interval) {
@@ -1079,7 +1079,7 @@ Status Server::check_invariants() const {
   if (auto s = store_->check_invariants(); !s) return s;
   if (auto s = slab_->check_invariants(); !s) return s;
   if (auto s = puts_->check_invariants(); !s) return s;
-  if (epoch_violations_ != 0)  // NoPutOnReadOnly, RootPutAtReplica (MB4)
+  if (epoch_violations_ != 0)  // NoPutOnReadOnly, RootPutAtReplica
     return Error{ErrorCode::Corrupt, "server: a PUT_BEGIN was accepted against the epoch / member state / owner set rules"};
   return mrs_->check_invariants();
 }
@@ -1156,9 +1156,9 @@ void Server::on_hello(Conn& c, const FrameHeader& h, std::span<const std::byte> 
                                                                                           : WireStatus::Unsupported);
   decltype(c.conn_id) conn_id;
   std::memcpy(conn_id.data(), m->conn_id, 16);
-  // r6 A8: during the drain a HELLO that would start a new session is refused (an endpoint admitted
+  // During the drain a HELLO that would start a new session is refused (an endpoint admitted
   // just before begin_drain). Endpoints of a session that already exists still join it.
-  // r7 R10: the refused connection keeps no conn_id (it never joined a session).
+  // The refused connection keeps no conn_id (it never joined a session).
   if (refusing_sessions() && !sessions_.count({c.grant.principal, conn_id})) return send_error(id, h, WireStatus::Draining);
   c.conn_id = conn_id;
   auto& sref = sessions_[{c.grant.principal, c.conn_id}];
@@ -1179,7 +1179,7 @@ void Server::on_hello(Conn& c, const FrameHeader& h, std::span<const std::byte> 
   a.node_id = cfg_.store.node_id;
   a.mtu = cfg_.mtu;
   std::memcpy(a.conn_id, m->conn_id, 16);
-  // H02: the boot nonce as a non-critical TLV (an older client skips it; CRITICAL_EXT stays clear). K03: then the largest
+  // The boot nonce as a non-critical TLV (an older client skips it; CRITICAL_EXT stays clear). Then the largest
   // stored block this node places (store.run_bytes), non-critical too, so the client refuses an oversized put locally and
   // the engine adapters refuse at start-up.
   std::array<std::byte, proto::kBootNonceTlvSize + proto::kMaxStoredBlockTlvSize + proto::kMaxHostnameTlvSize> tl{};
@@ -1188,7 +1188,7 @@ void Server::on_hello(Conn& c, const FrameHeader& h, std::span<const std::byte> 
     tn += *t;
   if (auto t = proto::encode_max_stored_block_tlv(cfg_.store.run_bytes, std::span<std::byte>(tl).subspan(tn)); t)
     tn += *t;
-  // F5: then the node's hostname (the value its own logs carry), so a static/lab-mode client can name it. Left out when it
+  // Then the node's hostname (the value its own logs carry), so a static/lab-mode client can name it. Left out when it
   // cannot be encoded (empty, over 255 B, not printable): the client then says "unknown".
   if (auto t = proto::encode_hostname_tlv(log::hostname(), std::span<std::byte>(tl).subspan(tn)); t) tn += *t;
   a.tlvs = std::span<const std::byte>(tl.data(), tn);
@@ -1202,7 +1202,7 @@ void Server::on_hello(Conn& c, const FrameHeader& h, std::span<const std::byte> 
     const Nanos left = std::max(Nanos{0}, drain_deadline_ - clock_.now());
     g.drain_ms = static_cast<std::uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(left).count());
     if (auto gn = proto::encode_goaway(g, body_buf_)) send_body(id, Op::GOAWAY, 0, *gn);
-  } else if (refusing_sessions() && c.grant.cls == fabric::EpClass::Control) {  // removed (MB4): same, reason Epoch
+  } else if (refusing_sessions() && c.grant.cls == fabric::EpClass::Control) {  // removed: same, reason Epoch
     proto::Goaway g;
     g.reason = static_cast<std::uint32_t>(proto::GoawayReason::Epoch);
     g.drain_ms = cfg_.goaway_drain_ms;
@@ -1280,7 +1280,7 @@ void Server::on_renew(Conn& c, const FrameHeader& h, std::span<const std::byte> 
       add_lease(m->lease_id, rec);
     }
   } else {
-    a.status = 1;  // EXPIRED (D3)
+    a.status = 1;  // EXPIRED
   }
   auto n = proto::encode_renew_ack(a, body_buf_);
   if (n) send_body(id, Op::RENEW_ACK, h.request_id, *n);
@@ -1316,7 +1316,7 @@ void Server::on_put_begin(Conn& c, const FrameHeader& h, std::span<const std::by
   for (std::size_t i = 0; i < m->n; ++i) any_root = any_root || is_zero16(m->e[i].parent_hash);
   store::ScopeId scope_id;
   std::memcpy(scope_id.data(), m->scope_id, 32);
-  if (view_) {  // MB4, decision 8 (bundle mode only; lab mode is unchanged below)
+  if (view_) {  // Epoch and owner checks (bundle mode only; lab mode is unchanged below)
     const std::uint32_t mine = applied_bundle_.epoch;
     if (h.epoch != mine) {  // lower: the sender is behind, retry 0; higher: this node lags, retry in 50 ms
       count_epoch_refusal("stale_epoch");
@@ -1348,7 +1348,7 @@ void Server::on_put_begin(Conn& c, const FrameHeader& h, std::span<const std::by
   for (std::size_t i = 0; i < m->n; ++i) {
     if (m->e[i].stored_len <= cfg_.store.run_bytes) continue;
     registry_.counter("miracache_put_too_large_total", "PUT_BEGINs refused because a block is larger than store.run_bytes.").inc();
-    // K10: a mis-sized engine sends this on every put; log it once per (principal, size class) per minute, with the
+    // A mis-sized engine sends this on every put; log it once per (principal, size class) per minute, with the
     // count of refusals dropped since the last line. Size class = bit width of stored_len (a power-of-two bucket).
     const std::uint64_t len = m->e[i].stored_len;
     const std::string key = std::to_string(c.grant.principal) + "/" + std::to_string(std::bit_width(len));
@@ -1381,11 +1381,11 @@ void Server::on_put_begin(Conn& c, const FrameHeader& h, std::span<const std::by
     k.stored_len = e.stored_len;
     q.keys.push_back(k);
   }
-  q.device = rail_dev(c.grant.rail);  // RL1: the put's write MRs are registered on its ingest rail's device
+  q.device = rail_dev(c.grant.rail);  // the put's write MRs are registered on its ingest rail's device
   auto ack = puts_->put_begin(id, q);
   if (ack.status == store::BeginStatus::Malformed) return send_error(id, h, WireStatus::Malformed);
-  if (view_ && ack.status == store::BeginStatus::Ok && ack.put_id != 0) {  // ghost: what was accepted must pass decision 8
-    // Independent of the gate (review w4 V11): nothing here calls the gate's helpers or reads applied_bundle_; the
+  if (view_ && ack.status == store::BeginStatus::Ok && ack.put_id != 0) {  // ghost: what was accepted must pass the epoch and owner checks
+    // Independent of the gate: nothing here calls the gate's helpers or reads applied_bundle_; the
     // state, epoch and owner set are recomputed from the applied bundle itself and the frame fields.
     bool listed = false, active = false, draining = false;
     for (const auto& bn : view_->body.nodes)
@@ -1436,7 +1436,7 @@ bool Server::bundle_owns(const control::BundleView& v, std::uint32_t node_id, co
 }
 
 void Server::count_epoch_refusal(const char* reason) {
-  registry_.counter("miracache_put_epoch_refused_total", "PUT_BEGINs refused or skipped by epoch, member state or owner set (MB4).",
+  registry_.counter("miracache_put_epoch_refused_total", "PUT_BEGINs refused or skipped by epoch, member state or owner set.",
                     {{"reason", reason}})
       .inc();
 }

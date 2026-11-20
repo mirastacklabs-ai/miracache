@@ -44,7 +44,7 @@ between the two jobs for the same host.
   panels and the p99 alert therefore come from the client histogram `miracache_client_fetch_seconds`
   (`stage="total"`), per client host. Put latency is shown both ways (server `put_commit_seconds`, client `put_seconds`).
 - The fetch p99 alert uses 5 ms (spec section 12, 16 MB on 1x100G); the 1 MB target is 900 us. Tune it to your block size.
-- Per-rail memory-node metrics (`miracache_rail_state`, `miracache_qp_active`) are registered since RL1 and shown in the "Memory node rails" row of the fabric dashboard. No CQ metric is registered yet. The fabric dashboard
+- Per-rail memory-node metrics (`miracache_rail_state`, `miracache_qp_active`) are registered and shown in the "Memory node rails" row of the fabric dashboard. No CQ metric is registered yet. The fabric dashboard
   shows what exists; extend it when those land.
 - Our CI fails when a dashboard or alert uses a `miracache_*` name the code does not register.
 - OTLP tracing and the metering stream are deferred (spec section 15).

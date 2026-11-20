@@ -1,5 +1,5 @@
-// Package publish is the controller's publish pipeline and reconcile loop (membership plan
-// decisions 10 and 12; MB8a): the mTLS client to the memory nodes' admin APIs, publish with the
+// Package publish is the controller's publish pipeline and reconcile loop:
+// the mTLS client to the memory nodes' admin APIs, publish with the
 // next-generation rules, join with the new node first, the reconcile loop and --recover-from.
 package publish
 
@@ -28,7 +28,7 @@ type Rail struct {
 	Addr     string `json:"addr"`
 	Subnet   string `json:"subnet"`
 	Protocol string `json:"protocol"`
-	// Health (MB9): up is the node's own verdict (port ACTIVE, listener alive, no fatal async event
+	// Health: up is the node's own verdict (port ACTIVE, listener alive, no fatal async event
 	// in the last 10 s); port_state and listener_ok are informational.
 	Up         bool   `json:"up"`
 	PortState  string `json:"port_state,omitempty"`

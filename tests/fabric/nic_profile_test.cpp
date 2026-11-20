@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// A3.3 NIC profile registry: parse, match, clamp, override, log. Golden probe fixtures (no hardware).
+// NIC profile registry: parse, match, clamp, override, log. Golden probe fixtures (no hardware).
 // Provenance per fixture: [D] documented (R/13, rdma-core, kernel), [A] assumed typical value, to be
 // replaced by a real capture (spec 13.6). The profile values themselves are checked against
 // profiles/nic-profiles.toml, which is the source of truth.

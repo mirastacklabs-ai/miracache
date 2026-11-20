@@ -161,7 +161,7 @@ struct Rec {
 class ReconnectTraffic : public ::testing::TestWithParam<std::tuple<std::string, int, int>> {  // device, nodes, signal
  protected:
   void TearDown() override {
-    stop_watcher();  // Q06: joined on every path, including an ASSERT_* that returned early
+    stop_watcher();  // Joined on every path, including an ASSERT_* that returned early
     stop_traffic();
     stop_dispatcher();
     if (cl_) cl_->shutdown();
@@ -189,7 +189,7 @@ class ReconnectTraffic : public ::testing::TestWithParam<std::tuple<std::string,
   bool start(int i) {  // node index, node id i + 1
     const std::string log = dir_ + "/memnode" + std::to_string(i + 1) + ".log";
     (void)std::remove(log.c_str());
-    // Q07: posix_spawn, not fork(): this process is multithreaded and holds live RDMA memory regions.
+    // posix_spawn, not fork(): this process is multithreaded and holds live RDMA memory regions.
     const std::string cfg = dir_ + "/node" + std::to_string(i + 1) + ".toml";
     posix_spawn_file_actions_t fa;
     posix_spawn_file_actions_init(&fa);
@@ -232,7 +232,7 @@ class ReconnectTraffic : public ::testing::TestWithParam<std::tuple<std::string,
   int owner(int s) const {
     return static_cast<int>(place_owner(places_, std::span<const std::uint8_t, 32>(scope_keys(s).scopes[0].b)));
   }
-  // Q10: byte 0 = the version (0 before the memnode restart, 1 after), the rest depends on scope and version.
+  // Byte 0 = the version (0 before the memnode restart, 1 after), the rest depends on scope and version.
   static Bytes payload(int s, int ver) {
     Bytes d(kLen);
     for (std::size_t j = 0; j < d.size(); ++j)
@@ -278,7 +278,7 @@ class ReconnectTraffic : public ::testing::TestWithParam<std::tuple<std::string,
     KeyRef ref;
     ref.raw = std::span<const std::byte>(name, 2);
     const std::array<KeyRef, 1> refs{ref};
-    // Q13: the client holds a BufRef into this buffer until the job is released; on a hang run_op returns
+    // The client holds a BufRef into this buffer until the job is released; on a hang run_op returns
     // early, so the buffer is heap-owned and parked in quarantine_ (never freed while the Client lives).
     auto bufp = std::make_shared<Bytes>(op == kPut ? payload(s, version_.load()) : Bytes(kLen, std::byte{0xAA}));
     Bytes& buf = *bufp;
@@ -376,9 +376,9 @@ class ReconnectTraffic : public ::testing::TestWithParam<std::tuple<std::string,
   std::atomic<bool> disp_run_{false}, run_{false};
   std::vector<std::thread> workers_;
   std::vector<Rec> recs_[kThreads];
-  std::atomic<int> version_{0};  // Q10: payload version, bumped to 1 right before the memnode restart
-  std::vector<std::shared_ptr<Bytes>> quarantine_;  // Q13: buffers of ops that hung (guarded by mu_)
-  std::thread watcher_;                              // Q06: fixture member, joined in TearDown
+  std::atomic<int> version_{0};  // Payload version, bumped to 1 right before the memnode restart
+  std::vector<std::shared_ptr<Bytes>> quarantine_;  // Buffers of ops that hung (guarded by mu_)
+  std::thread watcher_;                              // Fixture member, joined in TearDown
   std::atomic<bool> watch_{false};
   std::atomic<std::int64_t> down_seen_us_{-1};
   std::atomic<int> state_seen_{0};  // bit0 Down, bit1 Connecting
@@ -478,7 +478,7 @@ TEST_P(ReconnectTraffic, KillMemnodeMidTrafficThenRestartIt) {
 
   // ---- kill / stop the memnode mid-traffic ----
   const std::int64_t t_kill = now_us();
-  start_watcher(static_cast<std::size_t>(victim));  // Q06: member thread, joined in TearDown on every path
+  start_watcher(static_cast<std::size_t>(victim));  // Member thread, joined in TearDown on every path
   stop(victim, sig);
   const std::int64_t t_stopped = now_us();
   if (sig == SIGTERM) {
@@ -510,7 +510,7 @@ TEST_P(ReconnectTraffic, KillMemnodeMidTrafficThenRestartIt) {
   // ---- restart on the same port (empty cache; the state file is deleted, so it is a replaced node with a new ID) ----
   std::filesystem::remove(dir_ + "/state" + std::to_string(victim + 1) + "/node-id");
   const std::int64_t t_win1 = now_us();
-  version_ = 1;  // Q10: every put from here on carries v1; a v0 hit on the victim's scopes would be a stale read
+  version_ = 1;  // Every put from here on carries v1; a v0 hit on the victim's scopes would be a stale read
   const std::int64_t t_bump = now_us();
   ASSERT_TRUE(start(victim));
   const std::int64_t t_listening = now_us();
@@ -521,9 +521,9 @@ TEST_P(ReconnectTraffic, KillMemnodeMidTrafficThenRestartIt) {
   ASSERT_EQ(cl_->wire_port(static_cast<std::size_t>(victim))->session(), WirePort::Session::Up) << "no reconnect after the restart";
   stop_watcher();
   std::cout << "[RT] recovery_ms=" << (t_up - t_listening) / 1000.0 << " (memnode listening -> session Up, no reopen)\n";
-  // N11: no EXPECT_LT(recovery, kRecoverCap) here: the wait loop above already stops at kRecoverCap and the
+  // No EXPECT_LT(recovery, kRecoverCap) here: the wait loop above already stops at kRecoverCap and the
   // ASSERT_EQ(Up) is the real check; the measured recovery_ms is printed for the report.
-  // Q11: the watcher saw the session go Down AND pass through Connecting (not a tautology).
+  // The watcher saw the session go Down AND pass through Connecting (not a tautology).
   EXPECT_EQ(state_seen_.load(), 3) << "Down and Connecting must both have been observed (bit0 Down, bit1 Connecting)";
   std::this_thread::sleep_for(seconds(2));  // traffic keeps running after recovery
   stop_traffic();
@@ -600,11 +600,11 @@ TEST_P(ReconnectTraffic, KillMemnodeMidTrafficThenRestartIt) {
       else EXPECT_EQ(r.st, KeyStatus::Hit) << "other-node fetch " << r.scope;
       if (r.start_us < t_kill) lat_before_other.push_back(r.lat_us);
       else if (in_win) lat_during_other.push_back(r.lat_us);
-      // Q09: the whole transition, kill -> Up again, includes detection and recovery (reconnect on the
+      // The whole transition, kill -> Up again, includes detection and recovery (reconnect on the
       // victim's keepalive thread, restart of the process) which the outage window alone leaves out.
       if (r.start_us >= t_kill && r.start_us <= t_up) lat_trans_other.push_back(r.lat_us);
     }
-    // Q10: a victim-owned fetch that started after the restart can only hit v1 data.
+    // A victim-owned fetch that started after the restart can only hit v1 data.
     if (is_victim && r.op == kFetch && r.st == KeyStatus::Hit && r.start_us >= t_bump && r.ver != 1) ++stale;
   }
   EXPECT_EQ(stale, 0u) << "a fetch served v0 data from a node whose cache was emptied by the restart";

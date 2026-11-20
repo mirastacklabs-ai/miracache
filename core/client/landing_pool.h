@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Landing pool (A1.5 S3): remote-writable memory that RDMA READs land in. One sub-pool per
+// Landing pool: remote-writable memory that RDMA READs land in. One sub-pool per
 // (memory node, rail); each sub-pool is one MR registered in the given PD. Contents are
 // untrusted until the decrypt pipeline has verified them.
 #pragma once

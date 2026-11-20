@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// Connection tickets and the principal table (spec 3.3, 9.2; design/03 R22).
+// Connection tickets and the principal table (spec 3.3, 9.2).
 //
 // A ticket is {class, random 128-bit id} (proto::Ticket, 20 B in the CM private data). The
 // memory node holds no ticket key: IssueTicket records each id in memory as
@@ -71,7 +71,7 @@ class TicketTable {
               std::size_t max_per_identity = 1024)
       : clock_(clock), rng_(rng), ttl_(ttl), max_live_(max_live), max_per_identity_(max_per_identity) {}
 
-  // HR1: new tickets use the new TTL; live ones keep their expiry. Limits apply to the next issue().
+  // New tickets use the new TTL; live ones keep their expiry. Limits apply to the next issue().
   void set_limits(Nanos ttl, std::size_t max_per_identity) {
     ttl_ = ttl;
     max_per_identity_ = max_per_identity;

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-/* C ABI test (A1.6 L4): plain C, links libmiracache.so only through miracache.h. */
+/* C ABI test: plain C, links libmiracache.so only through miracache.h. */
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,7 +72,7 @@ static void test_basics(void) {
   mira_client_close(NULL);
 }
 
-/* A3.5 M2: size negotiation and content of mira_client_metrics (after 3 puts, 3 hits, 3 misses). */
+/* Size negotiation and content of mira_client_metrics (after 3 puts, 3 hits, 3 misses). */
 static void test_metrics(mira_client* c) {
   CHECK((mira_abi_version() & 0xffffu) >= 1u);
   size_t need = 0;
@@ -97,7 +97,7 @@ static void test_metrics(mira_client* c) {
   CHECK(strstr(buf, "miracache_client_lookup_keys_total{result=\"hit\"} 3\n") != NULL);
   CHECK(strstr(buf, "miracache_client_inflight{op=\"fetch\"} 0\n") != NULL);
   CHECK(mira_client_metrics(NULL, buf, 10, &got) == MIRA_E_INVALID);
-  /* ABI 1.2 (review s9 K03): the loopback node is not a wire node, so it reports no block limit. */
+  /* ABI 1.2: the loopback node is not a wire node, so it reports no block limit. */
   size_t checked = 99;
   CHECK(mira_check_block_size(c, 1u << 20, &checked) == MIRA_OK && checked == 0);
   CHECK(mira_check_block_size(NULL, 1, &checked) == MIRA_E_INVALID);
@@ -194,7 +194,7 @@ static void test_close_with_inflight(void) {
   free(buf);            /* only after close: no op touches it any more */
 }
 
-/* V05: a status_buf too small for the first completion is a distinct error, not 0. */
+/* A status_buf too small for the first completion is a distinct error, not 0. */
 static void test_poll_small_status_buf(void) {
   mira_client* c = NULL;
   CHECK(mira_client_open_loopback(NULL, &c) == MIRA_OK);

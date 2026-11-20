@@ -3,7 +3,7 @@
 
 [scope]
 provider    = "static"
-secret_file = "/run/miracache/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600
+secret_file = "/etc/miracache/keys/secret"   # text lines "current = 1" and "1 = <64 hex>"; mode 0600
 
 [[nodes]]
 rails    = ["10.0.0.10:7471"]                 # RDMA CM address of host A

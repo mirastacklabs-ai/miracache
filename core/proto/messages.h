@@ -6,7 +6,7 @@
 //
 // encode_*: writes the body (no frame header; wrap with encode_frame) and returns its
 // length; validates the same field rules as decode. decode_*: takes the parsed frame
-// header (direction flags, D11) and the body; checks, in order: frame type/direction
+// header (direction flags) and the body; checks, in order: frame type/direction
 // flags, fixed-part length, reserved-zero and ranges, then the TLV tail (frame.h).
 // Decoded structs borrow the TLV tail from the input span.
 #pragma once
@@ -23,29 +23,29 @@
 
 namespace miracache::proto {
 
-// Frame header skeleton for an op: type set, RESPONSE set for acks/PUT_DONE (D1/D15).
+// Frame header skeleton for an op: type set, RESPONSE set for acks/PUT_DONE.
 FrameHeader header_for(Op op, std::uint64_t request_id = 0);
 
 struct Renew { std::uint64_t lease_id = 0; std::span<const std::byte> tlvs; };           // != 0
 struct RenewAck {
   std::uint64_t lease_id = 0;
   std::uint32_t ttl_ms = 0;   // clamped to lease.max_ms by the server
-  std::uint8_t status = 0;    // 0 OK, 1 EXPIRED (D3)
+  std::uint8_t status = 0;    // 0 OK, 1 EXPIRED
   std::span<const std::byte> tlvs;
 };
 struct Release { std::uint64_t lease_id = 0; std::span<const std::byte> tlvs; };
 struct Invalidate {
   std::uint8_t scope_id[32] = {};
   std::uint8_t key_hash[32] = {};
-  std::uint64_t gen = 1;  // 1..2^56-1 (D14)
+  std::uint64_t gen = 1;  // 1..2^56-1
   std::span<const std::byte> tlvs;
 };
-struct InvalidateAck { std::span<const std::byte> tlvs; };  // 0 B body (D4)
+struct InvalidateAck { std::span<const std::byte> tlvs; };  // 0 B body
 
 struct CommitEntry {
-  std::uint16_t key_index = 0;  // strictly ascending across entries (D6)
+  std::uint16_t key_index = 0;  // strictly ascending across entries
   std::uint32_t crc32c = 0;
-  std::uint64_t stored_len = 0;  // must equal the PUT_BEGIN value (D7; checked by the server)
+  std::uint64_t stored_len = 0;  // must equal the PUT_BEGIN value (checked by the server)
 };
 struct PutCommit {
   std::uint64_t put_id = 0;
@@ -86,15 +86,15 @@ struct Hello {
   std::span<const std::byte> tlvs;
 };
 using HelloAck = Hello;
-// H02: the boot-nonce TLV of a HELLO_ACK (kTlvTagBootNonce). encode writes kBootNonceTlvSize bytes at out[0..];
+// The boot-nonce TLV of a HELLO_ACK (kTlvTagBootNonce). encode writes kBootNonceTlvSize bytes at out[0..];
 // find returns the nonce of a decoded tail (nullopt: the node sent none, or the entry is not 8 B).
 WireResult<std::size_t> encode_boot_nonce_tlv(std::uint64_t nonce, std::span<std::byte> out);
 std::optional<std::uint64_t> find_boot_nonce(std::span<const std::byte> tlvs);
-// K03: the max-stored-block TLV of a HELLO_ACK (kTlvTagMaxStoredBlock), same shape as the boot nonce. find returns
+// The max-stored-block TLV of a HELLO_ACK (kTlvTagMaxStoredBlock), same shape as the boot nonce. find returns
 // nullopt when the node sent none, the entry is not 8 B, or the value is 0 (all mean "unknown").
 WireResult<std::size_t> encode_max_stored_block_tlv(std::uint64_t bytes, std::span<std::byte> out);
 std::optional<std::uint64_t> find_max_stored_block(std::span<const std::byte> tlvs);
-// F5: the hostname TLV of a HELLO_ACK (kTlvTagHostname). encode writes the TLV (4 B header + name, padded to 8 B; at most
+// The hostname TLV of a HELLO_ACK (kTlvTagHostname). encode writes the TLV (4 B header + name, padded to 8 B; at most
 // kMaxHostnameTlvSize bytes) at out[0..] and fails Malformed for an empty, too long or non-printable name; find returns
 // the name of a decoded tail, nullopt when absent or invalid (all mean "unknown").
 WireResult<std::size_t> encode_hostname_tlv(std::string_view name, std::span<std::byte> out);
@@ -139,7 +139,7 @@ struct Lookup {
   std::array<KeyHash, kMaxLookupKeys> key_hash{};
   std::span<const std::byte> tlvs;
 };
-struct LookupAckEntry {  // MISS entries are all-zero (D5)
+struct LookupAckEntry {  // MISS entries are all-zero
   std::uint8_t status = 0;  // 0 MISS, 1 HIT
   std::uint32_t seg_id = 0;
   std::uint64_t offset = 0, stored_len = 0;
@@ -147,7 +147,7 @@ struct LookupAckEntry {  // MISS entries are all-zero (D5)
   std::uint64_t gen_slot = 0;
 };
 struct LookupAck {
-  std::uint64_t lease_id = 0;  // 0 = none (D2)
+  std::uint64_t lease_id = 0;  // 0 = none
   std::uint32_t ttl_ms = 0;
   std::uint16_t n = 0;         // 1..128
   std::array<LookupAckEntry, kMaxLookupKeys> e{};

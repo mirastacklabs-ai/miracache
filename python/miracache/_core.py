@@ -1,4 +1,4 @@
-"""ctypes binding over the miracache C ABI (client/include/miracache/miracache.h, A1.6 L5).
+"""ctypes binding over the miracache C ABI (client/include/miracache/miracache.h).
 
 Pure Python: loads ``libmiracache.so``. ctypes drops the GIL for the duration of every
 foreign call and ``wait_event`` blocks in ``select.poll``, so other Python threads run while
@@ -140,7 +140,7 @@ def _check(rc: int) -> None:
 
 
 def block_size_refusal(client: Any, block_bytes: int, what: str, log: Any) -> Optional[str]:
-    """Review s9 K03, shared by the engine adapters at start-up: the refusal text when a
+    """Shared by the engine adapters at start-up: the refusal text when a
     connected memory node cannot store one ``block_bytes`` block (``what`` names the engine's
     block), else None. A client without the check (a test fake, a library older than ABI 1.2)
     or with no node reporting a limit is logged and passes: the node still refuses oversized
@@ -163,7 +163,7 @@ def block_size_refusal(client: Any, block_bytes: int, what: str, log: Any) -> Op
                  "checked now (the client checks each node when it connects and logs an ERROR for "
                  "one that cannot store it)", what, block_bytes)
     else:
-        # Review s9b L08: the client logs "checked N of M" itself; nodes still connecting (or added
+        # The client logs "checked N of M" itself; nodes still connecting (or added
         # later) are checked by the client when their session comes up.
         log.info("miracache: %s size %d B fits the %d connected memory node(s) that report a limit "
                  "(nodes that connect later are checked by the client then)", what, block_bytes, n)
@@ -233,13 +233,13 @@ class Client:
         self._h = ctypes.c_void_p(handle)
         self._mu = threading.Lock()
         # Guards only the handle against close() for metrics(): a scrape must never wait for the
-        # data-path lock _mu (M01). close() takes _mu, then this one; metrics() takes just this one.
+        # data-path lock _mu. close() takes _mu, then this one; metrics() takes just this one.
         self._metrics_mu = threading.Lock()
         self._regions: Dict[int, Tuple[Any, int, int]] = {}  # id -> (ctypes view, len, block_bytes)
         self._default_region: Optional[int] = None
         self._inflight: Dict[int, Tuple[str, list, Any]] = {}  # ticket -> (kind, keys, extra)
         self._lookups: Dict[Any, Any] = {}  # (scope.serial, key) -> "PENDING" | "HIT" | "MISS"
-        # P01: when each HIT/MISS answer was parked; answers nobody re-asks for are dropped after
+        # When each HIT/MISS answer was parked; answers nobody re-asks for are dropped after
         # ``answer_ttl`` seconds (an engine that gave up on a request never consumes them).
         self._answered_at: Dict[Any, float] = {}
         self._clock = time.monotonic  # tests replace it with a fake clock
@@ -414,7 +414,7 @@ class Client:
 
     # -- completions --------------------------------------------------------
     def _sweep_answers(self) -> None:
-        """P01: drops HIT/MISS answers parked longer than ``answer_ttl`` (at most once a second)."""
+        """Drops HIT/MISS answers parked longer than ``answer_ttl`` (at most once a second)."""
         now = self._clock()
         with self._mu:
             if now < self._next_sweep:
@@ -482,7 +482,7 @@ class Client:
         p.register(self._efd, select.POLLIN)
         return bool(p.poll(None if timeout_ms < 0 else timeout_ms))
 
-    # -- start-up block size check (review s9 K03) ---------------------------
+    # -- start-up block size check ---------------------------
     def check_block_size(self, block_bytes: int) -> int:
         """Can every connected memory node store one block of ``block_bytes`` (one vLLM chunk
         slot / one SGLang page)? Returns how many nodes reported their limit (0: none did, e.g.
@@ -499,7 +499,7 @@ class Client:
             _check(fn(self._h, ctypes.c_uint64(int(block_bytes)), ctypes.byref(n)))
         return int(n.value)
 
-    # -- metrics (A3.5 M2) --------------------------------------------------
+    # -- metrics --------------------------------------------------
     def metrics(self) -> str:
         """This client's metrics as Prometheus text (exposition 0.0.4). Raises MiraError
         (E_UNSUPPORTED) when the loaded library predates ABI 1.1."""
@@ -511,7 +511,7 @@ class Client:
         for _ in range(8):  # the text can grow between the size probe and the copy
             buf = ctypes.create_string_buffer(cap)
             need = ctypes.c_size_t(0)
-            with self._metrics_mu:  # not _mu: a scrape must not queue behind the data path (M01)
+            with self._metrics_mu:  # not _mu: a scrape must not queue behind the data path
                 self._need_open()
                 rc = fn(self._h, buf, cap, ctypes.byref(need))
             if rc == OK:

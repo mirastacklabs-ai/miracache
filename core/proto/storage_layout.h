@@ -16,7 +16,7 @@ inline constexpr std::size_t kSuperblockSize = 4096;
 inline constexpr std::uint8_t kSuperblockMagic[8] = {'M', 'I', 'R', 'A', 'S', 'B', 0, 0};
 inline constexpr std::uint32_t kLayoutVersion = 0;
 inline constexpr std::uint8_t kRunLog2 = 28;
-inline constexpr std::uint32_t kSlotsPerRun = 4096;  // fixed (supersedes the A1.4 slot rule)
+inline constexpr std::uint32_t kSlotsPerRun = 4096;  // fixed (supersedes the earlier slot rule)
 
 namespace sb {
 inline constexpr std::size_t magic = 0, layout_version = 8, format_epoch = 12, seq = 16,
@@ -43,9 +43,9 @@ struct Superblock {
   std::uint64_t sg_slots = 0;
   std::uint64_t scope_off = 0;
   std::uint64_t scope_len = 0;
-  // s12 (tpu-sync cross-check C2): log2 of store.min_block_bytes at format time (12..28). The restart scan infers each
-  // run's block size from it, so a warm start under another value is refused (a STATIC change). 0 = written before
-  // s12 (the byte was reserved zero): the arena re-formats such a store once.
+  // Log2 of store.min_block_bytes at format time (12..28). The restart scan infers each
+  // run's block size from it, so a warm start under another value is refused (a STATIC change). 0 = written by an earlier release
+  // (the byte was reserved zero): the arena re-formats such a store once.
   std::uint8_t min_block_log2 = 0;
 };
 

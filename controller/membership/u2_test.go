@@ -18,7 +18,7 @@ func (r *rig) nodeIDInBundle(n *fakeNode) uint64 {
 	return 0
 }
 
-// U2-10: a replacement held in pending_removal is not copied by an unrelated publish.
+// A replacement held in pending_removal is not copied by an unrelated publish.
 func TestHeldReplacementIsNotCopiedByUnrelatedPublish(t *testing.T) {
 	r := newRig(t, hosts(6), "", nil) // budget 2
 	r.tick(0)
@@ -48,7 +48,7 @@ func TestHeldReplacementIsNotCopiedByUnrelatedPublish(t *testing.T) {
 	}
 }
 
-// U2-30: replacements persist in the store, so a restarted controller still counts them.
+// Replacements persist in the store, so a restarted controller still counts them.
 func TestReplacementWindowSurvivesRestart(t *testing.T) {
 	r := newRig(t, hosts(6), "", nil)
 	r.tick(0)
@@ -66,7 +66,7 @@ func TestReplacementWindowSurvivesRestart(t *testing.T) {
 	}
 }
 
-// U2-11: leaves and a failure in one tick never empty the view; the count is checked inside the Edit.
+// Leaves and a failure in one tick never empty the view; the count is checked inside the Edit.
 func TestLeavesAndFailureNeverEmptyTheView(t *testing.T) {
 	r := newRig(t, hosts(3), r1, nil)
 	r.tick(0)
@@ -115,7 +115,7 @@ func TestRemoveMatchingRefusesAnEmptyView(t *testing.T) {
 	}
 }
 
-// U2-12: without an audit log nothing automatic happens; the node is held.
+// Without an audit log nothing automatic happens; the node is held.
 func TestNoAuditorRefusesAutomaticActions(t *testing.T) {
 	r := newRig(t, hosts(3), r1, func(c *Config) { c.Audit = nil })
 	r.tick(0)
@@ -134,7 +134,7 @@ func TestNoAuditorRefusesAutomaticActions(t *testing.T) {
 	}
 }
 
-// U2-13: rule c alone holds the node, no publish.
+// Rule c alone holds the node, no publish.
 func TestRuleCNeverRemovesAutomatically(t *testing.T) {
 	r := newRig(t, hosts(4), "", nil)
 	r.tick(0)
@@ -152,7 +152,7 @@ func TestRuleCNeverRemovesAutomatically(t *testing.T) {
 	}
 }
 
-// U2-28: a held AEAD sum is audited on a later tick even if no more reports come.
+// A held AEAD sum is audited on a later tick even if no more reports come.
 func TestHeldAEADSumFlushedOnTick(t *testing.T) {
 	r, dir := auditRig(t, 3, "")
 	r.tick(0)

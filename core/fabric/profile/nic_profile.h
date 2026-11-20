@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-// A3.3 NIC profile registry (spec 4.3/4.4). `profiles/nic-profiles.toml` (compiled in, or a file)
-// is parsed into a Registry; `select()` matches a probe result (NicFacts, A1.3) to the most
+// NIC profile registry (spec 4.3/4.4). `profiles/nic-profiles.toml` (compiled in, or a file)
+// is parsed into a Registry; `select()` matches a probe result (NicFacts) to the most
 // specific profile and yields the fixed operating point. Pure functions of their inputs: no
 // hardware, no global state, so tests drive them from golden NicFacts fixtures.
 //

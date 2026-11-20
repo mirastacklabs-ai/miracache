@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-// MB3b: Server::apply_bundle in full. Principals (computed IDs, bindings, revocation), quota policies by the QT3
-// formula, member state apart from the SIGTERM latch (P08), drop_before (monotonic, opened_at, re-applied, at load).
-// Bundles are built directly as views (the signature path is MB2/MB3a's tests).
+// Server::apply_bundle in full. Principals (computed IDs, bindings, revocation), quota policies by the
+// formula, member state apart from the SIGTERM latch, drop_before (monotonic, opened_at, re-applied, at load).
+// Bundles are built directly as views (the signature path is covered by the bundle tests).
 #include <memory>
 #include <string>
 
@@ -133,7 +133,7 @@ TEST(BundleApply, NewIdentitiesGetTicketsRemovedOnesLoseThemAndTheirTickets) {
   EXPECT_EQ(f.server->tickets().live_for("spiffe://prod/a"), 0u);
 }
 
-TEST(BundleApply, QuotaShareFollowsWeights) {  // QT3: 1/1/2 -> 1/4, 1/4, 1/2
+TEST(BundleApply, QuotaShareFollowsWeights) {  // 1/1/2 -> 1/4, 1/4, 1/2
   const std::uint64_t quota = 4ull << 30;
   const std::uint32_t w[3][3] = {{1, 1, 2}, {1, 1, 2}, {1, 1, 2}};
   for (int me = 0; me < 3; ++me) {
@@ -150,7 +150,7 @@ TEST(BundleApply, QuotaShareFollowsWeights) {  // QT3: 1/1/2 -> 1/4, 1/4, 1/2
   }
 }
 
-TEST(BundleApply, DrainingNodeCapIsStatelessSelfShare) {  // P38: w_self / (sum w_active + w_self)
+TEST(BundleApply, DrainingNodeCapIsStatelessSelfShare) {  // w_self / (sum w_active + w_self)
   Fx f;
   const std::uint64_t quota = 4ull << 30;
   f.server->apply_bundle(f.bundle(1, {principal("prod", {"spiffe://prod/a"}, quota)},
@@ -175,7 +175,7 @@ TEST(BundleApply, CapReachesTheStoreAndAJoinCutIsBounded) {
   f.server->store().release_inflight(pid, (1 << 20) / 2);
 }
 
-TEST(BundleApply, MemberStateIsDerivedAndSeparateFromTheSigtermLatch) {  // P08
+TEST(BundleApply, MemberStateIsDerivedAndSeparateFromTheSigtermLatch) {
   Fx f;
   auto ps = [] { return std::vector<control::PrincipalView>{principal("prod", {"spiffe://prod/a"}, 1 << 20)}; };
   f.server->apply_bundle(f.bundle(1, ps(), {node(f.self, 1), node(f.self + 1, 1)}));
